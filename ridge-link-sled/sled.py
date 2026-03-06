@@ -81,17 +81,31 @@ class RigSled:
             os.system("pkill chrome || true")
 
     def sync_mods(self):
-        """Uses Robocopy to sync content from Admin PC"""
+        """Uses Robocopy to sync specific content from Admin PC"""
         admin_folder = CONFIG["admin_shared_folder"]
-        local_folder = CONFIG["local_ac_folder"]
-        print(f"Syncing mods from {admin_folder}...")
+        local_ac = CONFIG["local_ac_folder"]
+        
+        if os.name != 'nt':
+            print("Skipping robocopy on non-Windows system")
+            return True
+
+        # Sync Cars specifically
+        car_source = os.path.join(admin_folder, "cars")
+        car_target = os.path.join(local_ac, "content", "cars")
+        
+        # Sync Tracks specifically
+        track_source = os.path.join(admin_folder, "tracks")
+        track_target = os.path.join(local_ac, "content", "tracks")
+        
         try:
-            cmd = ["robocopy", admin_folder, local_folder, "/MIR", "/MT:8", "/Z"]
-            if os.name != 'nt':
-                return True
+            print(f"Syncing CARS from {car_source} to {car_target}...")
+            # /MIR mirrors, /MT:8 is 8 thread, /Z is restartable
+            subprocess.run(["robocopy", car_source, car_target, "/MIR", "/MT:8", "/Z"], check=False)
             
-            result = subprocess.run(cmd, check=False)
-            return result.returncode < 8
+            print(f"Syncing TRACKS from {track_source} to {track_target}...")
+            subprocess.run(["robocopy", track_source, track_target, "/MIR", "/MT:8", "/Z"], check=False)
+            
+            return True
         except Exception as e:
             print(f"Sync failed: {e}")
             return False
@@ -196,7 +210,9 @@ class RigSled:
             cfg_path = os.path.join(documents, 'Assetto Corsa', 'cfg', 'race.ini')
             os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
             
+            # Use absolute path for track/car if possible, but default to relative
             content = f"""[RACE]
+VERSION=1.1
 MODEL={car}
 TRACK={track}
 CONFIG_TRACK=
@@ -225,7 +241,7 @@ SPECTATOR_MODE=0
 NAME=Quick Race
 TYPE=3
 LAPS=10
-DURATION_MINUTES=0
+DURATION_MINUTES=20
 WAIT_TIME=0
 
 [REMOTE]
@@ -260,9 +276,7 @@ ACTIVE=0
                 f.write(content.strip())
             
             print(f"DEBUG: Successfully wrote race.ini to {cfg_path}")
-            print("--- INI CONTENT START ---")
-            print(content.strip())
-            print("--- INI CONTENT END ---")
+            print(f"--- PARAMS: CAR={car}, TRACK={track} ---")
             
             return cfg_path
         except Exception as e:
@@ -272,8 +286,11 @@ ACTIVE=0
     def launch_race(self, car, track):
         """Final stage: Triggered after user clicks 'Ready' and Admin clicks 'Start'"""
         self.kill_race()
-        self.status = "racing"
         
+        # Optional: Run sync here if needed, but user said skip at this step
+        # self.sync_mods()
+        
+        self.status = "racing"
         print(f"--- LAUNCHING ENGINE: {car} @ {track} ---")
         
         ac_path = CONFIG.get("ac_path")
@@ -286,7 +303,7 @@ ACTIVE=0
             if ini_path:
                 try:
                     ac_dir = os.path.dirname(ac_path)
-                    # Use -race flag which is specifically for starting a session from an INI
+                    # Use absolute path for the ini
                     cmd = [ac_path, f'-race={ini_path}']
                     print(f"Executing: {' '.join(cmd)}")
                     self.current_process = subprocess.Popen(cmd, cwd=ac_dir)
