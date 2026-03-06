@@ -52,19 +52,19 @@ class RigSled:
     def start_kiosk(self):
         self.stop_kiosk()
         rig_id = CONFIG.get("rig_id", "UNKNOWN")
-        url = f"http://{CONFIG['orchestrator_ip']}:5173/kiosk?rig_id={rig_id}" if CONFIG['orchestrator_ip'] != "255.255.255.255" else f"http://localhost:5173/kiosk?rig_id={rig_id}"
+        orchestrator_ip = CONFIG.get("orchestrator_ip", "127.0.0.1")
+        url = f"http://{orchestrator_ip}:5173/kiosk?rig_id={rig_id}"
         
-        # Simplified cross-platform browser launch
+        print(f"Launching Kiosk at: {url}")
+        
         import webbrowser
         if IS_WINDOWS:
-            # Use Edge in kiosk mode for a pro feel on Windows
             cmd = ["msedge.exe", "--kiosk", url, "--edge-kiosk-type=fullscreen"]
             try:
                 self.kiosk_process = subprocess.Popen(cmd)
             except:
                 webbrowser.open(url)
         else:
-            # Linux test: use google-chrome if available or default browser
             try:
                 self.kiosk_process = subprocess.Popen(["google-chrome", "--kiosk", "--app=" + url])
             except:
@@ -75,7 +75,7 @@ class RigSled:
             self.kiosk_process.terminate()
             self.kiosk_process = None
         if IS_WINDOWS:
-            os.system("taskkill /F /IM msedge.exe /T")
+            os.system("taskkill /F /IM msedge.exe /T 2>NUL")
         else:
             os.system("pkill chrome || true")
 
@@ -85,14 +85,11 @@ class RigSled:
         local_folder = CONFIG["local_ac_folder"]
         print(f"Syncing mods from {admin_folder}...")
         try:
-            # /MIR = Mirror, /MT = Multi-threaded, /Z = Restartable mode
             cmd = ["robocopy", admin_folder, local_folder, "/MIR", "/MT:8", "/Z"]
             if os.name != 'nt':
-                print("Skipping robocopy on non-Windows system")
                 return True
             
             result = subprocess.run(cmd, check=False)
-            # Robocopy codes < 8 are considered success or minor warnings
             return result.returncode < 8
         except Exception as e:
             print(f"Sync failed: {e}")
@@ -103,9 +100,9 @@ class RigSled:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             
-            # Periodically fetch car pool from Orchestrator via HTTP
+            orchestrator_ip = CONFIG.get("orchestrator_ip", "127.0.0.1")
+            orchestrator_url = f"http://{orchestrator_ip}:8000"
             import requests
-            orchestrator_url = f"http://{CONFIG['orchestrator_ip']}:8000" if CONFIG['orchestrator_ip'] != "255.255.255.255" else "http://127.0.0.1:8000"
 
             while True:
                 try:
@@ -118,8 +115,6 @@ class RigSled:
                     res_brand = requests.get(f"{orchestrator_url}/branding", timeout=2)
                     if res_brand.status_code == 200:
                         branding_data = res_brand.json()
-                        
-                        # Update a local state file for the kiosk to read
                         with open("kiosk_data.json", "w") as f:
                             json.dump({
                                 "car_pool": self.car_pool, 
@@ -128,7 +123,6 @@ class RigSled:
                                 "status": self.status
                             }, f)
                     
-                    # Read user's choice from kiosk
                     if os.path.exists("selected_car.json"):
                         with open("selected_car.json", "r") as f:
                             choice = json.load(f)
@@ -145,7 +139,7 @@ class RigSled:
                     "mod_version": CONFIG["mod_version"],
                     "selected_car": self.selected_car
                 }
-                sock.sendto(json.dumps(payload).encode('utf-8'), (CONFIG["orchestrator_ip"], CONFIG["heartbeat_port"]))
+                sock.sendto(json.dumps(payload).encode('utf-8'), (orchestrator_ip, CONFIG["heartbeat_port"]))
                 time.sleep(5)
         
         threading.Thread(target=run, daemon=True).start()
@@ -156,9 +150,8 @@ class RigSled:
         
         if action == "LAUNCH_RACE":
             self.stop_kiosk()
-            # Robocopy disabled per request (handled externally)
             car = payload.get("car") or self.selected_car
-            track = payload.get("track", "unknown")
+            track = payload.get("track", "monza")
             self.launch_race(car, track)
         elif action == "KILL_RACE":
             self.kill_race()
@@ -166,18 +159,15 @@ class RigSled:
         elif action == "SETUP_MODE":
             print("Entering Setup Mode...")
             self.status = "setup"
-            # Ensure selected_car.json 'ready' state is reset
             with open("selected_car.json", "w") as f:
                 json.dump({"selected_car": self.selected_car, "ready": False}, f)
 
     def generate_race_ini(self, car, track):
         """Generates a standard race.ini file for direct acs.exe launch"""
         try:
-            # On Windows, SHGetSpecialFolderPath is the safest way, but let's try environment first
             user_profile = os.environ.get('USERPROFILE') or os.path.expanduser('~')
             documents = os.path.join(user_profile, 'Documents')
             
-            # Check for OneDrive documents path which is common on modern Windows
             onedrive_docs = os.path.join(user_profile, 'OneDrive', 'Documents')
             if not os.path.exists(os.path.join(documents, 'Assetto Corsa')) and os.path.exists(onedrive_docs):
                  documents = onedrive_docs
@@ -185,8 +175,7 @@ class RigSled:
             cfg_path = os.path.join(documents, 'Assetto Corsa', 'cfg', 'race.ini')
             os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
             
-            content = f"""
-[RACE]
+            content = f"""[RACE]
 MODEL={car}
 TRACK={track}
 CONFIG_TRACK=
@@ -226,7 +215,7 @@ ACTIVE=0
 
 [LIGHTING]
 SPECULAR_MULT=1.0
-CLOUD_SPEED=0.2
+CLOUD_SPEED=0.5
 
 [WEATHER]
 NAME=3_clear
@@ -236,7 +225,12 @@ ACTIVE=0
 """
             with open(cfg_path, "w") as f:
                 f.write(content.strip())
+            
             print(f"DEBUG: Successfully wrote race.ini to {cfg_path}")
+            print("--- INI CONTENT START ---")
+            print(content.strip())
+            print("--- INI CONTENT END ---")
+            
             return cfg_path
         except Exception as e:
             print(f"Failed to generate race.ini: {e}")
@@ -259,8 +253,8 @@ ACTIVE=0
             if ini_path:
                 try:
                     ac_dir = os.path.dirname(ac_path)
-                    # Forcing the ini path is more reliable than hoping it reads the fallback
-                    cmd = [ac_path, f"-ini={ini_path}"]
+                    # Use double quotes for the ini path to handle spaces
+                    cmd = [ac_path, f'-ini={ini_path}']
                     print(f"Executing: {' '.join(cmd)}")
                     self.current_process = subprocess.Popen(cmd, cwd=ac_dir)
                     return
