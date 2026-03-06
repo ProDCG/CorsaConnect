@@ -11,6 +11,19 @@ IS_WINDOWS = os.name == 'nt'
 from telemetry import ACTelemetry
 
 # Configuration
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except:
+            return "127.0.0.1"
+
 RIG_ID = socket.gethostname()
 ORCHESTRATOR_IP = "192.168.9.35"  # Broadcast
 # Default Configuration
@@ -93,8 +106,15 @@ class RigSled:
         if self.kiosk_process:
             self.kiosk_process.terminate()
             self.kiosk_process = None
+        
+        # Windows: Clean up any browser ghosts that might prevent a fresh kiosk launch
         if IS_WINDOWS:
-            os.system("taskkill /F /IM msedge.exe /T 2>NUL")
+            for proc in psutil.process_iter(['name']):
+                try:
+                    if proc.info['name'] in ['msedge.exe', 'chrome.exe']:
+                        proc.kill()
+                except:
+                    pass
         else:
             os.system("pkill chrome || true")
 
@@ -163,6 +183,8 @@ class RigSled:
                                 "car_pool": self.car_pool, 
                                 "selected_car": self.selected_car,
                                 "branding": branding_data,
+                                "branding_url": f"http://{get_local_ip()}:5173/branding",
+                                "ui_port": 5173,
                                 "status": self.status
                             }, f)
                     
@@ -182,7 +204,7 @@ class RigSled:
 
                 # Periodic Status & Telemetry Push
                 try:
-                    local_ip = socket.gethostbyname(socket.gethostname())
+                    current_ip = get_local_ip()
                     payload = {
                         "rig_id": CONFIG["rig_id"],
                         "status": self.status,
@@ -190,7 +212,7 @@ class RigSled:
                         "mod_version": "1.4.2-telemetry",
                         "selected_car": self.selected_car,
                         "telemetry": self.telemetry_data,
-                        "ip": local_ip
+                        "ip": current_ip
                     }
                     requests.post(f"{orchestrator_url}/api/rigs/{CONFIG['rig_id']}/status", 
                                   json=payload, timeout=2)
@@ -234,6 +256,7 @@ class RigSled:
                         json.dump({"selected_car": self.selected_car, "ready": False}, f)
                 except Exception as e:
                     print(f"Warning: Could not reset selected_car.json: {e}")
+            self.start_kiosk()
 
     def generate_race_ini(self, params):
         """Generates a multi-session race.ini file for direct acs.exe launch"""

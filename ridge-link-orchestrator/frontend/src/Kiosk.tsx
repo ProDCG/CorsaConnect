@@ -51,10 +51,11 @@ export default function Kiosk() {
 
         const registerKiosk = async () => {
             try {
+                // Just check in, don't force a status. This preserves 'setup' if already set by Sled.
                 await fetch(`/api/rigs/${id}/status`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: 'idle' })
+                    body: JSON.stringify({})
                 })
             } catch (err) { console.error("Initial registration failed", err) }
         }
