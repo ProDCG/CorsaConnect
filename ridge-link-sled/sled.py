@@ -154,14 +154,10 @@ class RigSled:
         
         if action == "LAUNCH_RACE":
             self.stop_kiosk()
-            if self.sync_mods():
-                # Use user's selected car if available, otherwise fallback to payload or default
-                car = payload.get("car") or self.selected_car
-                track = payload.get("track", "unknown")
-                self.launch_race(car, track)
-            else:
-                print("Aborting race launch due to sync failure")
-                self.start_kiosk()
+            # Robocopy disabled per request (handled externally)
+            car = payload.get("car") or self.selected_car
+            track = payload.get("track", "unknown")
+            self.launch_race(car, track)
         elif action == "KILL_RACE":
             self.kill_race()
             self.start_kiosk()
