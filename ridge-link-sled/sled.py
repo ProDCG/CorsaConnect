@@ -170,12 +170,19 @@ class RigSled:
             with open("selected_car.json", "w") as f:
                 json.dump({"selected_car": self.selected_car, "ready": False}, f)
 
-    def launch_race(self, config):
+    def launch_race(self, car, track):
+        """Final stage: Triggered after user clicks 'Ready' and Admin clicks 'Start'"""
         self.kill_race()
         self.status = "racing"
         
-        print(f"Launching race: {config.get('car')} at {config.get('track')}")
-        # dummy process
+        print(f"Launching race: {car} at {track}")
+        
+        # --- PRO TIP: Launching Assetto Corsa ---
+        # 1. Update this path to your acs.exe or Content Manager
+        # ac_path = r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\acs.exe"
+        # 2. You would typically generate an 'ini' file here and pass it as an argument
+        # subprocess.Popen([ac_path, "cfg/race.ini"])
+
         self.current_process = subprocess.Popen(["sleep", "600"] if os.name != 'nt' else ["timeout", "/t", "600"])
 
     def kill_race(self):
