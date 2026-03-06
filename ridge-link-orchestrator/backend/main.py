@@ -43,6 +43,7 @@ class Command(BaseModel):
     action: str  # SETUP_MODE, LAUNCH_RACE, KILL_RACE
     track: Optional[str] = None
     car: Optional[str] = None
+    weather: Optional[str] = None
     session_time: Optional[int] = None
     server_ip: Optional[str] = None
 

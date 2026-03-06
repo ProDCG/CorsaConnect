@@ -181,8 +181,10 @@ class RigSled:
         if action == "LAUNCH_RACE":
             self.stop_kiosk()
             car = payload.get("car") or self.selected_car
+            car = payload.get("car") or self.selected_car
             track = payload.get("track", "monza")
-            self.launch_race(car, track)
+            weather = payload.get("weather", "3_clear")
+            self.launch_race(car, track, weather)
         elif action == "KILL_RACE":
             self.kill_race()
             self.start_kiosk()
@@ -197,7 +199,7 @@ class RigSled:
                 except Exception as e:
                     print(f"Warning: Could not reset selected_car.json: {e}")
 
-    def generate_race_ini(self, car, track):
+    def generate_race_ini(self, car, track, weather="3_clear"):
         """Generates a standard race.ini file for direct acs.exe launch"""
         try:
             user_profile = os.environ.get('USERPROFILE') or os.path.expanduser('~')
@@ -267,7 +269,7 @@ SPECULAR_MULT=1.0
 CLOUD_SPEED=0.5
 
 [WEATHER]
-NAME=3_clear
+NAME={weather}
 
 [BENCHMARK]
 ACTIVE=0
@@ -283,7 +285,7 @@ ACTIVE=0
             print(f"Failed to generate race.ini: {e}")
             return None
 
-    def launch_race(self, car, track):
+    def launch_race(self, car, track, weather="3_clear"):
         """Final stage: Triggered after user clicks 'Ready' and Admin clicks 'Start'"""
         self.kill_race()
         
@@ -291,7 +293,7 @@ ACTIVE=0
         # self.sync_mods()
         
         self.status = "racing"
-        print(f"--- LAUNCHING ENGINE: {car} @ {track} ---")
+        print(f"--- LAUNCHING ENGINE: {car} @ {track} (Weather: {weather}) ---")
         
         ac_path = CONFIG.get("ac_path")
         if not ac_path or not os.path.exists(ac_path):
@@ -299,7 +301,7 @@ ACTIVE=0
             ac_path = probable_path if os.path.exists(probable_path) else ac_path
 
         if ac_path and os.path.exists(ac_path):
-            ini_path = self.generate_race_ini(car, track)
+            ini_path = self.generate_race_ini(car, track, weather)
             if ini_path:
                 try:
                     ac_dir = os.path.dirname(ac_path)

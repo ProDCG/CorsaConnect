@@ -27,6 +27,7 @@ function App() {
     const [rigs, setRigs] = useState<Rig[]>([])
     const [selectedTrack, setSelectedTrack] = useState('monza')
     const [selectedCar, setSelectedCar] = useState('ks_ferrari_488_gt3')
+    const [selectedWeather, setSelectedWeather] = useState('3_clear')
     const [activeCarPool, setActiveCarPool] = useState<string[]>([])
     const [brandingFields, setBrandingFields] = useState<Branding>({
         logo_url: '/assets/ridge_logo.png',
@@ -135,6 +136,7 @@ function App() {
                     action,
                     track: selectedTrack,
                     car: carToLaunch,
+                    weather: selectedWeather,
                     session_time: 20,
                     server_ip: "192.168.1.10"
                 })
@@ -321,8 +323,8 @@ function App() {
             </div>
 
             {/* Mission Packet Setup */}
-            <footer className="fixed bottom-0 left-0 right-0 p-8 pt-24 bg-gradient-to-t from-ridge-dark to-transparent pointer-events-none">
-                <div className="max-w-5xl mx-auto glass p-6 rounded-3xl border-white/5 pointer-events-auto flex items-center gap-8 shadow-2xl">
+            <footer className="fixed bottom-0 left-0 right-0 p-8 pt-24 bg-gradient-to-t from-ridge-dark to-transparent pointer-events-none z-50">
+                <div className="max-w-6xl mx-auto glass p-6 rounded-3xl border-white/5 pointer-events-auto flex items-center gap-8 shadow-2xl transition-all hover:border-white/10">
                     <div className="flex-1">
                         <label className="block text-[10px] uppercase tracking-widest font-black text-white/40 mb-2">Target Circuit</label>
                         <select
@@ -335,6 +337,7 @@ function App() {
                             <option value="nordschleife">Nürburgring Nordschleife</option>
                         </select>
                     </div>
+
                     <div className="flex-1">
                         <label className="block text-[10px] uppercase tracking-widest font-black text-white/40 mb-2">Default Class</label>
                         <select
@@ -347,14 +350,33 @@ function App() {
                             ))}
                         </select>
                     </div>
+
+                    <div className="flex-1">
+                        <label className="block text-[10px] uppercase tracking-widest font-black text-white/40 mb-2">Environment</label>
+                        <select
+                            value={selectedWeather}
+                            onChange={(e) => setSelectedWeather(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 outline-none focus:border-ridge-brand transition-colors appearance-none font-bold italic text-sm"
+                        >
+                            <option value="0_sun">01 - Clear Sun</option>
+                            <option value="1_nosun">02 - No Sun</option>
+                            <option value="2_clouds">03 - Overcast</option>
+                            <option value="3_clear">04 - Optimum</option>
+                            <option value="4_mid_clouds">05 - Mid Clouds</option>
+                            <option value="5_light_clouds">06 - Light Clouds</option>
+                            <option value="6_heavy_clouds">07 - Heavy Clouds</option>
+                        </select>
+                    </div>
+
                     <div className="w-px h-12 bg-white/10" />
-                    <div className="flex flex-col items-end">
+
+                    <div className="flex flex-col items-end min-w-[100px]">
                         <p className="text-[10px] uppercase tracking-widest font-black text-white/40">Active Rigs</p>
-                        <p className="text-3xl font-black italic">{rigs.length}</p>
+                        <p className="text-3xl font-black italic text-ridge-brand">{rigs.length}</p>
                     </div>
                 </div>
             </footer>
-        </div>
+        </div >
     )
 }
 
