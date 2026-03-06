@@ -214,36 +214,32 @@ CLOUD_SPEED=0.2
         self.kill_race()
         self.status = "racing"
         
-        print(f"--- ATTEMPTING GAME LAUNCH: {car} @ {track} ---")
+        print(f"--- LAUNCHING ENGINE: {car} @ {track} ---")
         
-        # Method 1: Content Manager CLI (Guerilla Mode)
-        cm_path = CONFIG.get("cm_path")
-        if cm_path and os.path.exists(cm_path):
-            print(f"[Method 1] Launching via Content Manager: {cm_path}")
-            # Dynamic arguments using double-dashes (most reliable for recent CM versions)
-            cmd = [cm_path, "--go", f"--car:{car}", f"--track:{track}"]
-            try:
-                # We don't wait for CM to finish, we just fire and forget the launcher
-                self.current_process = subprocess.Popen(cmd)
-                return
-            except Exception as e:
-                print(f"CM Launch failed: {e}")
-
-        # Method 2: Direct Engine Launch (Industry Standard Fallback)
+        # Methodology: Direct Engine Launch (Sim-Center Standard)
         ac_path = CONFIG.get("ac_path")
+        if not ac_path or not os.path.exists(ac_path):
+            # Try a common default if not specified
+            probable_path = r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\acs.exe"
+            ac_path = probable_path if os.path.exists(probable_path) else ac_path
+
         if ac_path and os.path.exists(ac_path):
-            print(f"[Method 2] Falling back to Direct Engine Launch: {ac_path}")
+            print(f"Executing Assetto Corsa Engine: {ac_path}")
             ini_path = self.generate_race_ini(car, track)
             if ini_path:
                 try:
-                    # acs.exe reads race.ini from the Documents folder by default
-                    self.current_process = subprocess.Popen([ac_path])
+                    # acs.exe automatically reads from Documents\Assetto Corsa\cfg\race.ini
+                    # We run it from its directory to ensure resource loading
+                    ac_dir = os.path.dirname(ac_path)
+                    self.current_process = subprocess.Popen([ac_path], cwd=ac_dir)
                     return
                 except Exception as e:
-                    print(f"Direct Launch failed: {e}")
+                    print(f"Engine launch failed: {e}")
+        else:
+            print(f"CRITICAL: acs.exe not found at {ac_path}")
 
-        print("CRITICAL: No valid launch method worked. Verify 'cm_path' or 'ac_path' in config.json.")
-        # Dummy process to maintain system state
+        print("ERROR: Could not find acs.exe. Please update config.json with the correct path.")
+        # Dummy process for state stability
         self.current_process = subprocess.Popen(["sleep", "600"] if os.name != 'nt' else ["timeout", "/t", "600"])
 
     def kill_race(self):
