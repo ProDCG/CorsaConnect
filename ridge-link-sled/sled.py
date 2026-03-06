@@ -8,6 +8,7 @@ import psutil
 import sys
 
 IS_WINDOWS = os.name == 'nt'
+from telemetry import ACTelemetry
 
 # Configuration
 RIG_ID = socket.gethostname()
@@ -41,7 +42,24 @@ class RigSled:
         self.car_pool = []
         self.file_lock = threading.Lock() # Fix permission issues
         self.selected_car = CONFIG.get("default_car", "ks_ferrari_488_gt3")
+        self.ac_telemetry = ACTelemetry()
+        self.telemetry_data = {}
+        self.telemetry_thread = threading.Thread(target=self.telemetry_loop, daemon=True)
+        self.telemetry_thread.start()
         self.start_kiosk()
+
+    def telemetry_loop(self):
+        """High-frequency telemetry reader loop."""
+        print("Starting telemetry acquisition thread...")
+        while True:
+            try:
+                data = self.ac_telemetry.get_data()
+                if data:
+                    self.telemetry_data = data
+                time.sleep(0.1) # 10Hz reading
+            except Exception as e:
+                print(f"Telemetry error: {e}")
+                time.sleep(1)
 
     def get_cpu_temp(self):
         try:
@@ -162,15 +180,22 @@ class RigSled:
                 except Exception as e:
                     pass
 
-                payload = {
-                    "rig_id": CONFIG["rig_id"],
-                    "status": self.status,
-                    "cpu_temp": self.get_cpu_temp(),
-                    "mod_version": CONFIG["mod_version"],
-                    "selected_car": self.selected_car
-                }
-                sock.sendto(json.dumps(payload).encode('utf-8'), (orchestrator_ip, CONFIG["heartbeat_port"]))
-                time.sleep(5)
+                # Periodic Status & Telemetry Push
+                try:
+                    payload = {
+                        "rig_id": CONFIG["rig_id"],
+                        "status": self.status,
+                        "cpu_temp": self.get_cpu_temp(),
+                        "mod_version": "1.4.2-telemetry",
+                        "selected_car": self.selected_car,
+                        "telemetry": self.telemetry_data
+                    }
+                    requests.post(f"{orchestrator_url}/rigs/{CONFIG['rig_id']}/status", 
+                                  json=payload, timeout=2)
+                except Exception as e:
+                    print(f"Heartbeat failed: {e}")
+                
+                time.sleep(1)
         
         threading.Thread(target=run, daemon=True).start()
 
@@ -189,7 +214,9 @@ class RigSled:
                 "qualy_time": payload.get("qualy_time", 10),
                 "race_laps": payload.get("race_laps", 10),
                 "race_time": payload.get("race_time", 0),
-                "allow_drs": payload.get("allow_drs", True)
+                "allow_drs": payload.get("allow_drs", True),
+                "use_server": payload.get("use_server", False),
+                "server_ip": payload.get("server_ip") or CONFIG.get("orchestrator_ip", "127.0.0.1")
             }
             self.launch_race(params)
         elif action == "KILL_RACE":
@@ -284,11 +311,16 @@ GUID=
 BALLAST=0
 RESTRICTOR=0
 SPECTATOR_MODE=0
-{"".join(sessions)}
+
+{"".join(sessions) if not params.get("use_server") else ""}
 [REMOTE]
-ACTIVE=0
-SERVER_IP=
-SERVER_PORT=
+ACTIVE={"1" if params.get("use_server") else "0"}
+SERVER_IP={params.get("server_ip")}
+SERVER_PORT=9600
+NAME={CONFIG["rig_id"]}
+TEAM=Ridge-Link
+GUID=
+PASS=ridge
 
 [LIGHTING]
 SPECULAR_MULT=1.0

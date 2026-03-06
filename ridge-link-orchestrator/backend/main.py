@@ -30,6 +30,8 @@ class Rig(BaseModel):
 class RigStatusUpdate(BaseModel):
     status: Optional[str] = None
     selected_car: Optional[str] = None
+    cpu_temp: Optional[float] = None
+    telemetry: Optional[dict] = None
 
 class Branding(BaseModel):
     logo_url: str = "/assets/ridge_logo.png"
@@ -59,14 +61,136 @@ class Command(BaseModel):
     race_laps: Optional[int] = 10
     race_time: Optional[int] = 0
     allow_drs: Optional[bool] = True
+    use_server: Optional[bool] = False
     session_time: Optional[int] = None # Legacy support
     server_ip: Optional[str] = None
+
+# --- Server Orchestration ---
+
+class ServerManager:
+    def __init__(self):
+        self.process = None
+        self.config_dir = os.path.join(os.getcwd(), "server_config")
+        os.makedirs(self.config_dir, exist_ok=True)
+
+    def generate_configs(self, rigs_list, settings: GlobalSettings):
+        """Generates server_cfg.ini and entry_list.ini"""
+        server_cfg = f"""
+[SERVER]
+NAME=Ridge-Link Racing
+CARS={",".join(set(r.get('selected_car', 'ks_ferrari_488_gt3') for r in rigs_list if r.get('selected_car')))}
+TRACK={settings.selected_track}
+CONFIG_TRACK=
+SUN_ANGLE=0
+MAX_CLIENTS=16
+RACE_OVER_TIME=60
+UDP_PORT=9600
+TCP_PORT=9600
+HTTP_PORT=8081
+PASSWORD=ridge
+ADMIN_PASSWORD=ridgeadmin
+PICKUP_MODE_ENABLED=1
+SLEEP_TIME=1
+CLIENT_SEND_INTERVAL_HZ=30
+SEND_BUFFER_SIZE=0
+RECV_BUFFER_SIZE=0
+
+[PRACTICE]
+NAME=Practice
+TIME={settings.practice_time}
+WAIT_TIME=0
+
+[QUALIFY]
+NAME=Qualifying
+TIME={settings.qualy_time}
+WAIT_TIME=0
+
+[RACE]
+NAME=Grand Prix
+LAPS={settings.race_laps}
+WAIT_TIME=0
+
+[DYNAMIC_TRACK]
+SESSION_START=100
+SESSION_TRANSFER=100
+RANDOMNESS=0
+LAP_GAIN=0
+"""
+        entry_list = ""
+        for i, rig in enumerate(rigs_list):
+            if rig.get('selected_car'):
+                entry_list += f"""
+[CAR_{i}]
+MODEL={rig['selected_car']}
+SKIN=0_official
+SPECTATOR_MODE=0
+DRIVER_NAME={rig['rig_id']}
+TEAM=
+GUID=
+BALLAST=0
+RESTRICTOR=0
+"""
+        with open(os.path.join(self.config_dir, "server_cfg.ini"), "w") as f:
+            f.write(server_cfg.strip())
+        with open(os.path.join(self.config_dir, "entry_list.ini"), "w") as f:
+            f.write(entry_list.strip())
+
+    def start(self, ac_path: str):
+        self.stop()
+        ac_dir = os.path.dirname(ac_path)
+        server_dir = os.path.join(ac_dir, "server")
+        server_exe = os.path.join(server_dir, "acServer.exe")
+        
+        if not os.path.exists(server_exe):
+             print(f"Server EXE not found at {server_exe}")
+             # We try a local development fallback
+             if os.path.exists("acServer.exe"):
+                 server_exe = os.path.abspath("acServer.exe")
+                 server_dir = os.getcwd()
+             else:
+                 return False
+        
+        # Copy generated configs to server/cfg
+        dest_cfg = os.path.join(server_dir, "cfg")
+        os.makedirs(dest_cfg, exist_ok=True)
+        
+        import shutil
+        try:
+            shutil.copy(os.path.join(self.config_dir, "server_cfg.ini"), os.path.join(dest_cfg, "server_cfg.ini"))
+            shutil.copy(os.path.join(self.config_dir, "entry_list.ini"), os.path.join(dest_cfg, "entry_list.ini"))
+        except Exception as e:
+            print(f"Failed to copy server configs: {e}")
+        
+        print(f"Starting Dedicated Server: {server_exe}")
+        try:
+            self.process = subprocess.Popen([server_exe], cwd=server_dir)
+            return True
+        except Exception as e:
+            print(f"Failed to start server: {e}")
+            return False
+
+    def stop(self):
+        if self.process:
+            self.process.terminate()
+            self.process = None
+        # Kill any lingering instances
+        import psutil
+        for proc in psutil.process_iter(['name']):
+            try:
+                if proc.info['name'] == 'acServer.exe':
+                    proc.kill()
+            except:
+                pass
+
+server_manager = ServerManager()
 
 # --- In-Memory Store ---
 rigs: Dict[str, dict] = {}
 car_pool = ["ks_ferrari_488_gt3", "ks_lamborghini_huracan_gt3", "ks_porsche_911_gt3_r"]
 branding = Branding()
 global_settings = GlobalSettings()
+server_status = "offline"
+leaderboard = []
 
 # --- API Endpoints ---
 
@@ -90,8 +214,27 @@ async def update_rig_status(rig_id: str, update: RigStatusUpdate):
     
     if update.status: rigs[rig_id]["status"] = update.status
     if update.selected_car: rigs[rig_id]["selected_car"] = update.selected_car
+    if update.cpu_temp: rigs[rig_id]["cpu_temp"] = update.cpu_temp
+    if update.telemetry: 
+        rigs[rig_id]["telemetry"] = update.telemetry
+        # Simple Logic to capture lap times for leaderboard
+        if update.telemetry.get("completed_laps", 0) > rigs[rig_id].get("last_lap_count", 0):
+             rigs[rig_id]["last_lap_count"] = update.telemetry["completed_laps"]
+             # In a real app we'd query the best lap from Graphics memory
+             # For now we'll just log that a lap was finished
+             leaderboard.append({
+                 "rig_id": rig_id,
+                 "car": rigs[rig_id].get("selected_car"),
+                 "timestamp": time.time(),
+                 "lap": update.telemetry["completed_laps"]
+             })
+
     rigs[rig_id]["last_seen"] = time.time()
     return {"status": "success"}
+
+@app.get("/api/leaderboard")
+async def get_leaderboard():
+    return leaderboard
 
 @app.get("/carpool")
 async def get_carpool():
@@ -112,6 +255,35 @@ async def update_branding(update: Branding):
     global branding
     branding = update
     return {"status": "success", "branding": branding}
+
+@app.get("/api/server/status")
+async def get_server_status():
+    global server_status
+    if server_manager.process and server_manager.process.poll() is None:
+        server_status = "online"
+    else:
+        server_status = "offline"
+    return {"status": server_status}
+
+@app.post("/api/server/start")
+async def start_server():
+    global server_status
+    ac_path = r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\acs.exe"
+    
+    server_manager.generate_configs(list(rigs.values()), global_settings)
+    success = server_manager.start(ac_path)
+    if success:
+        server_status = "online"
+        return {"message": "Server started"}
+    else:
+        return {"error": "Failed to start server"}, 500
+
+@app.post("/api/server/stop")
+async def stop_server():
+    global server_status
+    server_manager.stop()
+    server_status = "offline"
+    return {"message": "Server stopped"}
 
 @app.get("/settings")
 async def get_settings():
@@ -136,18 +308,48 @@ async def send_command(command: Command, background_tasks: BackgroundTasks):
         "LAUNCH_RACE": "racing"
     }
     
-    # If it's a web client, just update the status directly so it picks it up in polling
+    # If it's a web client, just update the status directly
     if rig.get("ip") == "web-kiosk":
         rig["status"] = action_map.get(command.action, "idle")
         if command.action == "KILL_RACE":
              rig["selected_car"] = None
         return {"status": "success", "message": f"Web Kiosk {command.rig_id} updated to {rig['status']}"}
 
-    # For physical Sleds, send the packet over the wire
+    # For physical Sleds
     ip = rig["ip"]
     port = CONFIG["command_port"]
     background_tasks.add_task(dispatch_command, ip, port, command.model_dump())
     return {"status": "success", "message": f"Command dispatched to Sled {command.rig_id}"}
+
+@app.post("/command/global")
+async def send_global_command(command: Command, background_tasks: BackgroundTasks):
+    """Sends a command to all registered and active sleds."""
+    responses = []
+    
+    # If starting a race in multiplayer mode, start the server first
+    if command.action == "LAUNCH_RACE" and command.use_server:
+         await start_server()
+         # Give it a second to bind ports
+         time.sleep(1)
+
+    for rig_id, rig_data in rigs.items():
+        if rig_data.get("ip") == "web-kiosk":
+            rig_data["status"] = "racing" if command.action == "LAUNCH_RACE" else "idle"
+            continue
+            
+        ip = rig_data["ip"]
+        port = CONFIG["command_port"]
+        
+        # Merge individual rig choice with global command
+        rig_command = command.model_copy()
+        rig_command.rig_id = rig_id
+        if not rig_command.car:
+            rig_command.car = rig_data.get("selected_car")
+            
+        background_tasks.add_task(dispatch_command, ip, port, rig_command.model_dump())
+        responses.append(rig_id)
+        
+    return {"status": "success", "rigs_notified": responses}
 
 def dispatch_command(ip: str, port: int, payload: dict):
     try:

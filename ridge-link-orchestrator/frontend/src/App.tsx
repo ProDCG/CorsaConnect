@@ -9,6 +9,14 @@ interface Rig {
     cpu_temp: number
     mod_version: string
     last_seen: number
+    telemetry?: {
+        velocity: [number, number, number]
+        gforce: [number, number, number]
+        normalized_pos: number
+        completed_laps: number
+        gas: number
+        brake: number
+    }
 }
 
 interface Branding {
@@ -25,7 +33,7 @@ function App() {
         return <Kiosk />
     }
 
-    const [activeTab, setActiveTab] = useState<'sims' | 'media' | 'cars' | 'race'>('sims')
+    const [activeTab, setActiveTab] = useState<'sims' | 'media' | 'cars' | 'race' | 'monitor' | 'leaderboard'>('sims')
     const [rigs, setRigs] = useState<Rig[]>([])
 
     // Global Session & Race Settings
@@ -36,14 +44,17 @@ function App() {
         race_time: 0,
         allow_drs: true,
         selected_track: 'monza',
-        selected_weather: '3_clear'
+        selected_weather: '3_clear',
+        useMultiplayer: false
     })
+    const [serverStatus, setServerStatus] = useState<'online' | 'offline'>('offline')
     const [selectedCar, setSelectedCar] = useState('ks_ferrari_488_gt3')
     const [activeCarPool, setActiveCarPool] = useState<string[]>([])
     const [brandingFields, setBrandingFields] = useState<Branding>({
         logo_url: '/assets/ridge_logo.png',
         video_url: '/assets/idle_race.mp4'
     })
+    const [leaderboard, setLeaderboard] = useState<any[]>([])
 
     const ALL_CARS = [
         { id: 'ks_ferrari_488_gt3', name: 'Ferrari 488 GT3' },
@@ -68,6 +79,10 @@ function App() {
                 if (Array.isArray(data)) {
                     setRigs(data)
                 }
+
+                const sRes = await fetch('/api/server/status')
+                const sData = await sRes.json()
+                setServerStatus(sData.status)
             } catch (err) {
                 console.error("Failed to fetch rigs:", err)
             }
@@ -161,9 +176,32 @@ function App() {
         }
     }
 
-    const sendGlobalCommand = (action: string) => {
-        rigs.forEach(rig => sendCommand(rig.rig_id, action, rig.selected_car))
+    const sendGlobalCommand = async (action: string) => {
+        try {
+            await fetch('/api/command/global', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    rig_id: 'ALL',
+                    action,
+                    track: raceSettings.selected_track,
+                    weather: raceSettings.selected_weather,
+                    practice_time: raceSettings.practice_time,
+                    qualy_time: raceSettings.qualy_time,
+                    race_laps: raceSettings.race_laps,
+                    race_time: raceSettings.race_time,
+                    allow_drs: raceSettings.allow_drs,
+                    use_server: raceSettings.useMultiplayer
+                })
+            })
+            if (action === "LAUNCH_RACE" && raceSettings.useMultiplayer) {
+                setServerStatus('online')
+            }
+        } catch (err) {
+            console.error("Global command failed:", err)
+        }
     }
+
 
     const SidebarItem = ({ id, icon: Icon, label }: { id: typeof activeTab, icon: any, label: string }) => (
         <button
@@ -187,8 +225,10 @@ function App() {
 
                 <div className="flex-1 w-full space-y-4">
                     <SidebarItem id="sims" icon={LayoutGrid} label="Sims" />
-                    <SidebarItem id="race" icon={Flag} label="Race" />
+                    <SidebarItem id="monitor" icon={Activity} label="Live Monitor" />
+                    <SidebarItem id="leaderboard" icon={Flag} label="Standings" />
                     <SidebarItem id="cars" icon={Car} label="Cars" />
+                    <SidebarItem id="race" icon={Settings2} label="Race Control" />
                     <SidebarItem id="media" icon={Image} label="Media" />
                 </div>
 
@@ -205,7 +245,14 @@ function App() {
                     <div>
                         <h1 className="text-3xl font-black italic tracking-tighter uppercase flex items-center gap-2">
                             <span className="text-ridge-brand">Ridge</span>
-                            <span>{activeTab === 'sims' ? 'Sim Manager' : activeTab === 'media' ? 'Media Center' : activeTab === 'cars' ? 'Car Pool' : 'Race Control'}</span>
+                            <span>{
+                                activeTab === 'sims' ? 'Sim Manager' :
+                                    activeTab === 'media' ? 'Media Center' :
+                                        activeTab === 'cars' ? 'Car Pool' :
+                                            activeTab === 'monitor' ? 'Telemetry Feed' :
+                                                activeTab === 'leaderboard' ? 'Facility Standings' :
+                                                    'Race Control'
+                            }</span>
                         </h1>
                         <p className="text-white/30 font-mono text-[10px] uppercase tracking-widest leading-none mt-1">
                             {rigs.length} Units Online // {raceSettings.selected_track.toUpperCase()} // ENV {raceSettings.selected_weather.split('_').slice(1).join(' ')}
@@ -287,6 +334,52 @@ function App() {
                     {/* RACE MANAGER VIEW */}
                     {activeTab === 'race' && (
                         <div className="max-w-4xl space-y-8">
+                            <div className="bg-white/5 border border-white/10 rounded-3xl p-8 mb-8">
+                                <div className="flex items-center justify-between mb-8">
+                                    <div>
+                                        <h2 className="text-2xl font-black italic uppercase tracking-tighter">Event Orchestration</h2>
+                                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Master Control</p>
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <button
+                                            onClick={() => setRaceSettings({ ...raceSettings, useMultiplayer: !raceSettings.useMultiplayer })}
+                                            className={`px-6 py-2 rounded-full border-2 text-[10px] font-black uppercase tracking-widest transition-all ${raceSettings.useMultiplayer
+                                                ? 'bg-ridge-brand/20 border-ridge-brand text-ridge-brand'
+                                                : 'bg-white/5 border-white/10 text-white/30'
+                                                }`}
+                                        >
+                                            {raceSettings.useMultiplayer ? 'MULTIPLAYER ON' : 'LOCAL RACES ONLY'}
+                                        </button>
+                                        <button
+                                            onClick={() => sendGlobalCommand('LAUNCH_RACE')}
+                                            className="bg-ridge-brand hover:bg-orange-600 px-8 py-3 rounded-full flex items-center gap-3 transition-all group scale-110 shadow-2xl shadow-ridge-brand/20"
+                                        >
+                                            <Play className="w-5 h-5 fill-white group-hover:scale-110 transition-transform" />
+                                            <span className="font-black italic uppercase tracking-tighter text-sm">Deploy Session</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-4 gap-4">
+                                    <div className={`p-4 rounded-2xl border transition-all ${serverStatus === 'online' ? 'bg-green-500/10 border-green-500/50' : 'bg-white/5 border-white/5'}`}>
+                                        <p className="text-[8px] font-black uppercase opacity-40 mb-1">Server Status</p>
+                                        <p className={`font-black uppercase tracking-widest ${serverStatus === 'online' ? 'text-green-500' : 'text-zinc-600'}`}>{serverStatus}</p>
+                                    </div>
+                                    <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                                        <p className="text-[8px] font-black uppercase opacity-40 mb-1">Circuit</p>
+                                        <p className="font-black uppercase tracking-widest text-ridge-brand">{raceSettings.selected_track}</p>
+                                    </div>
+                                    <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                                        <p className="text-[8px] font-black uppercase opacity-40 mb-1">DRS System</p>
+                                        <p className={`font-black uppercase tracking-widest ${raceSettings.allow_drs ? 'text-green-500' : 'text-red-500'}`}>{raceSettings.allow_drs ? 'ACTIVE' : 'RESTR'}</p>
+                                    </div>
+                                    <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                                        <p className="text-[8px] font-black uppercase opacity-40 mb-1">Cars Prepared</p>
+                                        <p className="font-black uppercase tracking-widest">{rigs.filter(r => r.status === 'ready').length} / {rigs.length}</p>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div className="glass rounded-3xl p-8 border border-white/10">
                                     <h2 className="text-xl font-black italic uppercase mb-6 flex items-center gap-2"><Flag className="text-ridge-brand" size={20} /> Circuit & Atmosphere</h2>
@@ -412,6 +505,114 @@ function App() {
                                         {activeCarPool.includes(car.id) && <div className="absolute -right-2 -bottom-2 w-12 h-12 bg-ridge-brand/20 blur-xl rounded-full" />}
                                     </button>
                                 ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* LIVE MONITOR VIEW */}
+                    {activeTab === 'monitor' && (
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                                {rigs.map(rig => (
+                                    <div key={rig.rig_id} className="bg-white/5 border border-white/10 rounded-3xl p-6 relative overflow-hidden group">
+                                        <div className="flex justify-between items-start mb-6">
+                                            <div>
+                                                <h3 className="text-xl font-black italic uppercase italic tracking-tighter">{rig.rig_id}</h3>
+                                                <p className="text-[8px] font-black uppercase text-white/30 tracking-widest leading-none mt-1">Status // {rig.status}</p>
+                                            </div>
+                                            <div className={`px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest ${rig.status === 'racing' ? 'bg-green-500 text-white' : 'bg-white/10 text-white/40'}`}>
+                                                {rig.status === 'racing' ? 'Live Telemetry' : 'Standby'}
+                                            </div>
+                                        </div>
+
+                                        {rig.telemetry ? (
+                                            <div className="space-y-6">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
+                                                        <p className="text-[8px] font-black uppercase opacity-40 mb-1">Velocity</p>
+                                                        <div className="flex items-baseline gap-2">
+                                                            <span className="text-2xl font-black italic tabular-nums">{rig.telemetry.velocity[0]}</span>
+                                                            <span className="text-[10px] font-bold text-ridge-brand">KM/H</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
+                                                        <p className="text-[8px] font-black uppercase opacity-40 mb-1">Force (G-Lat)</p>
+                                                        <div className="flex items-baseline gap-2">
+                                                            <span className="text-2xl font-black italic tabular-nums">{rig.telemetry.gforce[0]}</span>
+                                                            <span className="text-[10px] font-bold text-blue-400">G</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <div className="flex justify-between text-[8px] font-black uppercase tracking-widest mb-1">
+                                                        <span>Circuit Progress</span>
+                                                        <span>{Math.round(rig.telemetry.normalized_pos * 100)}%</span>
+                                                    </div>
+                                                    <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-ridge-brand transition-all duration-300"
+                                                            style={{ width: `${rig.telemetry.normalized_pos * 100}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div className="flex justify-between items-center p-2 rounded-lg bg-white/5">
+                                                        <span className="text-[8px] font-black uppercase opacity-30">Laps</span>
+                                                        <span className="font-bold text-sm">{rig.telemetry.completed_laps}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center p-2 rounded-lg bg-white/5">
+                                                        <span className="text-[8px] font-black uppercase opacity-30">Throttle</span>
+                                                        <span className="font-bold text-sm text-green-500">{Math.round(rig.telemetry.gas * 100)}%</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="py-12 text-center opacity-20">
+                                                <Activity size={32} className="mx-auto mb-2" />
+                                                <p className="text-[10px] uppercase font-black tracking-widest">Waiting for Engine Signal</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* LEADERBOARD VIEW */}
+                    {activeTab === 'leaderboard' && (
+                        <div className="glass rounded-[3rem] p-12 lg:p-16 border border-white/10 relative overflow-hidden max-w-5xl">
+                            <div className="flex justify-between items-start mb-12">
+                                <div>
+                                    <h2 className="text-4xl font-black italic uppercase tracking-tighter mb-2">Hall of Fame</h2>
+                                    <p className="text-sm text-white/40 uppercase tracking-[0.4em] font-bold">Fastest Laps // All Time</p>
+                                </div>
+                                <div className="p-4 bg-ridge-brand rounded-2xl rotate-3 shadow-2xl shadow-ridge-brand/40">
+                                    <Flag size={32} />
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                {leaderboard.length > 0 ? (
+                                    leaderboard.sort((a, b) => b.lap - a.lap).slice(0, 10).map((entry, idx) => (
+                                        <div key={idx} className="bg-white/5 hover:bg-white/10 p-6 rounded-2xl flex items-center gap-8 transition-all border border-white/5 group">
+                                            <div className="text-3xl font-black italic opacity-20 group-hover:opacity-100 group-hover:text-ridge-brand transition-all">#{idx + 1}</div>
+                                            <div className="flex-1">
+                                                <p className="text-2xl font-black italic uppercase tracking-tighter">{entry.rig_id}</p>
+                                                <p className="text-[10px] font-bold uppercase text-white/30 tracking-widest">{entry.car?.split('_').slice(1).join(' ').toUpperCase()}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-[10px] font-black uppercase text-ridge-brand mb-1">Lap Completion</p>
+                                                <p className="text-3xl font-black italic tabular-nums italic">LAP {entry.lap}</p>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="py-32 text-center">
+                                        <p className="text-xl font-black italic uppercase opacity-20 tracking-tighter">No Race Results Recorded Yet</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
