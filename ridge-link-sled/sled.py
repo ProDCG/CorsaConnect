@@ -138,7 +138,7 @@ class RigSled:
             orchestrator_ip = CONFIG.get("orchestrator_ip", "127.0.0.1")
             orchestrator_url = f"http://{orchestrator_ip}:5173"
             import requests
-
+            count = 0
             while True:
                 try:
                     # Sync car pool
@@ -146,15 +146,20 @@ class RigSled:
                     if res.status_code == 200:
                         self.car_pool = res.json()
                     
-                    # Sync this rig's specific state (e.g., car selection from Kiosk)
+                    # Diagnostic Sync
                     res_rigs = requests.get(f"{orchestrator_url}/api/rigs", timeout=2)
                     if res_rigs.status_code == 200:
                         rigs_data = res_rigs.json()
                         my_rig = next((r for r in rigs_data if r["rig_id"] == CONFIG["rig_id"]), None)
-                        if my_rig and my_rig.get("selected_car"):
-                             self.selected_car = my_rig["selected_car"]
-                             if my_rig.get("status"):
-                                 self.status = my_rig["status"]
+                        if my_rig:
+                            if my_rig.get("selected_car"):
+                                self.selected_car = my_rig["selected_car"]
+                            
+                            # ONLY overwrite status if we aren't currently in a transition state (setup/ready)
+                            # to prevent stale data from the server overwriting our fresh command local state.
+                            if self.status not in ["setup", "ready"]:
+                                if my_rig.get("status"):
+                                    self.status = my_rig["status"]
 
                     # Sync branding
                     res_brand = requests.get(f"{orchestrator_url}/api/branding", timeout=2)
@@ -196,18 +201,24 @@ class RigSled:
                         "telemetry": self.telemetry_data,
                         "ip": current_ip
                     }
-                    requests.post(f"{orchestrator_url}/api/rigs/{CONFIG['rig_id']}/status", 
+                    res = requests.post(f"{orchestrator_url}/api/rigs/{CONFIG['rig_id']}/status", 
                                   json=payload, timeout=2)
+                    if res.status_code != 200:
+                        print(f"Heartbeat Warning: Server returned {res.status_code}")
                 except Exception as e:
                     print(f"Heartbeat failed: {e}")
+                
+                if count % 5 == 0:
+                    print(f"Status Diagnostic: LocalStatus={self.status} // IP={current_ip}")
+                count += 1
                 
                 time.sleep(1)
         
         threading.Thread(target=run, daemon=True).start()
 
     def handle_command(self, payload):
+        print(f"DEBUG: Command Payload Received: {json.dumps(payload)}")
         action = payload.get("action")
-        print(f"Received command: {action}")
         
         if action == "LAUNCH_RACE":
             self.stop_kiosk()
