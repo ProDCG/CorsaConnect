@@ -14,13 +14,15 @@ from telemetry import ACTelemetry
 def get_local_ip():
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(2)
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
         s.close()
         return ip
     except:
         try:
-            return socket.gethostbyname(socket.gethostname())
+            # Fallback for offline/local-only networks
+            return socket.gethostbyname_ex(socket.gethostname())[2][0]
         except:
             return "127.0.0.1"
 
@@ -103,20 +105,20 @@ class RigSled:
                 webbrowser.open(url)
 
     def stop_kiosk(self):
+        """Specifically kills only the browser process launched by this sled."""
         if self.kiosk_process:
-            self.kiosk_process.terminate()
-            self.kiosk_process = None
-        
-        # Windows: Clean up any browser ghosts that might prevent a fresh kiosk launch
-        if IS_WINDOWS:
-            for proc in psutil.process_iter(['name']):
+            print(f"Stopping kiosk process (PID: {self.kiosk_process.pid})")
+            try:
+                self.kiosk_process.terminate()
+                self.kiosk_process.wait(timeout=3)
+            except:
                 try:
-                    if proc.info['name'] in ['msedge.exe', 'chrome.exe']:
-                        proc.kill()
+                    self.kiosk_process.kill()
                 except:
                     pass
-        else:
-            os.system("pkill chrome || true")
+            self.kiosk_process = None
+        
+        # NEVER use pkill chrome/msedge here, as it kills the Admin's browser too!
 
     def sync_mods(self):
         """Uses Robocopy to sync specific content from Admin PC"""

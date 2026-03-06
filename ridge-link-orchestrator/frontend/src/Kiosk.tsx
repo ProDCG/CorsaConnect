@@ -42,7 +42,8 @@ export default function Kiosk() {
         { id: 'ks_lotus_exos_125', name: 'Exos 125', brand: 'Lotus', class: 'F1' }
     ]
 
-    const brands = Array.from(new Set(ALL_CARS.filter(c => carPool.includes(c.id)).map(c => c.brand)))
+    const activeCars = (ALL_CARS || []).filter(c => (carPool || []).includes(c.id))
+    const brands = Array.from(new Set(activeCars.map(c => c.brand)))
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
@@ -69,9 +70,9 @@ export default function Kiosk() {
                 const rigRes = await fetch('/api/rigs')
                 const rigs = await rigRes.json()
                 if (Array.isArray(rigs)) {
-                    const myRig = rigs.find((r: Rig) => r.rig_id === id)
+                    const myRig = rigs.find((r: Rig) => r && r.rig_id === id)
                     if (myRig) {
-                        setStatus(myRig.status)
+                        setStatus(myRig.status || 'idle')
                         if (myRig.status === 'idle') {
                             setReady(false)
                         }
@@ -227,7 +228,7 @@ export default function Kiosk() {
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-2 gap-4">
-                                        {ALL_CARS.filter(c => carPool.includes(c.id) && c.brand === selectedBrand).map(car => (
+                                        {activeCars.filter(c => c.brand === selectedBrand).map(car => (
                                             <button
                                                 key={car.id}
                                                 onClick={() => handleCarSelect(car.id)}

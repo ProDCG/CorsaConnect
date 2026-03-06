@@ -203,10 +203,17 @@ async def get_rigs():
 @app.post("/rigs/{rig_id}/status")
 async def update_rig_status(rig_id: str, update: RigStatusUpdate, request: Request):
     """Allows Kiosks and Sleds to register or update their status/selection."""
-    # Prioritize reported IP over proxy-masked client host
-    client_ip = request.client.host
-    if update.ip and update.ip != "127.0.0.1":
+    # Robust IP Discovery:
+    # 1. Check X-Forwarded-For (set by Vite proxy)
+    # 2. Check update.ip (explicitly reported by Sled)
+    # 3. Fallback to request.client.host
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+    elif update.ip and update.ip != "127.0.0.1":
         client_ip = update.ip
+    else:
+        client_ip = request.client.host
 
     if rig_id not in rigs:
         rigs[rig_id] = {
