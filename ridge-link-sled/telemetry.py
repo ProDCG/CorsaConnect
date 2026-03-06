@@ -74,12 +74,15 @@ class ACTelemetry:
                 "DataCorePlugin.GameData.Status"
             ]
             url = f"http://127.0.0.1:8888/api/getproperties?properties={','.join(props)}"
-            r = requests.get(url, timeout=0.05)
+            r = requests.get(url, timeout=0.2) # Increased to 200ms
             if r.status_code == 200:
                 d = r.json()
-                self.simhub_connected = True
+                if not self.simhub_connected:
+                    print("SIMHUB: Connected successfully via Web API")
+                    self.simhub_connected = True
+                
                 return {
-                    "packet_id": 0, # SimHub doesn't expose raw packet ID easily
+                    "packet_id": 0,
                     "gas": round(d.get("DataCorePlugin.GameData.Gas", 0) / 100.0, 2),
                     "brake": round(d.get("DataCorePlugin.GameData.Brake", 0) / 100.0, 2),
                     "gear": d.get("DataCorePlugin.GameData.Gear", "N"),
@@ -95,8 +98,10 @@ class ACTelemetry:
                     "position": d.get("DataCorePlugin.GameData.Position", 0),
                     "normalized_pos": round(d.get("DataCorePlugin.GameData.TrackPositionPercent", 0) / 100.0, 4)
                 }
-        except:
-            self.simhub_connected = False
+        except Exception as e:
+            if self.simhub_connected:
+                print(f"SIMHUB: Connection lost: {e}")
+                self.simhub_connected = False
         return None
 
     def get_data(self):

@@ -56,10 +56,12 @@ class RigSled:
         self.kiosk_process = None
         self.car_pool = []
         self.file_lock = threading.Lock() # Fix permission issues
+        self.selected_car = CONFIG.get("default_car", "ks_ferrari_488_gt3")
         self.ac_telemetry = ACTelemetry()
         self.telemetry_data = {}
         self.telemetry_thread = threading.Thread(target=self.telemetry_loop, daemon=True)
         self.telemetry_thread.start()
+        print(f"SLED: Rig Agent '{CONFIG['rig_id']}' started. Waiting for telemetry...")
         self.start_kiosk()
 
     def telemetry_loop(self):
