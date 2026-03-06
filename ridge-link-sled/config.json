@@ -3,5 +3,6 @@
     "rig_id": "RIG-06",
     "admin_shared_folder": "\\\\ADMIN-PC\\RidgeContent",
     "local_ac_folder": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\assettocorsa",
-    "cm_path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\assettocorsa\\Content Manager.exe"
+    "cm_path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\assettocorsa\\Content Manager.exe",
+    "ac_path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\assettocorsa\\acs.exe"
 }

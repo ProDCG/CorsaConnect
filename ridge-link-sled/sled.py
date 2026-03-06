@@ -21,7 +21,8 @@ CONFIG = {
     "mod_version": "1.0.0",
     "admin_shared_folder": r"\\ADMIN-PC\RidgeContent",
     "local_ac_folder": r"C:\AssettoCorsa",
-    "cm_path": r"C:\RidgeLink\Content Manager.exe"
+    "cm_path": r"C:\RidgeLink\Content Manager.exe",
+    "ac_path": r"C:\AssettoCorsa\acs.exe"
 }
 
 # Load local config if exists
@@ -169,25 +170,80 @@ class RigSled:
             with open("selected_car.json", "w") as f:
                 json.dump({"selected_car": self.selected_car, "ready": False}, f)
 
+    def generate_race_ini(self, car, track):
+        """Generates a standard race.ini file for direct acs.exe launch"""
+        try:
+            # On Windows, this is usually Documents\Assetto Corsa\cfg\race.ini
+            documents = os.path.join(os.environ['USERPROFILE'], 'Documents') if IS_WINDOWS else os.path.expanduser('~/Documents')
+            cfg_path = os.path.join(documents, 'Assetto Corsa', 'cfg', 'race.ini')
+            os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
+            
+            content = f"""
+[RACE]
+MODEL={car}
+TRACK={track}
+CONFIG_TRACK=
+CONF_MODE=
+FIXED_SETUP=0
+PENALTIES=1
+JUMP_START_PENALTY=1
+
+[GHOST_CAR]
+RECORDING=0
+PLAYING=0
+SECONDS_BEFORE_GHOST=0
+
+[REPLAY]
+FILENAME=
+ACTIVE=0
+
+[LIGHTING]
+SPECULAR_MULT=1.0
+CLOUD_SPEED=0.2
+"""
+            with open(cfg_path, "w") as f:
+                f.write(content.strip())
+            print(f"Generated race.ini at: {cfg_path}")
+            return cfg_path
+        except Exception as e:
+            print(f"Failed to generate race.ini: {e}")
+            return None
+
     def launch_race(self, car, track):
         """Final stage: Triggered after user clicks 'Ready' and Admin clicks 'Start'"""
         self.kill_race()
         self.status = "racing"
         
-        print(f"Launching race: {car} at {track}")
+        print(f"--- ATTEMPTING GAME LAUNCH: {car} @ {track} ---")
         
+        # Method 1: Content Manager CLI (Guerilla Mode)
         cm_path = CONFIG.get("cm_path")
         if cm_path and os.path.exists(cm_path):
-            print(f"Executing Content Manager: {cm_path}")
-            # CM arguments: -go (start immediately), -car, -track
-            cmd = [cm_path, "-go", f"-car:{car}", f"-track:{track}"]
+            print(f"[Method 1] Launching via Content Manager: {cm_path}")
+            # Dynamic arguments using double-dashes (most reliable for recent CM versions)
+            cmd = [cm_path, "--go", f"--car:{car}", f"--track:{track}"]
             try:
+                # We don't wait for CM to finish, we just fire and forget the launcher
                 self.current_process = subprocess.Popen(cmd)
                 return
             except Exception as e:
-                print(f"Failed to launch CM: {e}")
-        
-        print("WARNING: Content Manager path not found. Running dummy race process.")
+                print(f"CM Launch failed: {e}")
+
+        # Method 2: Direct Engine Launch (Industry Standard Fallback)
+        ac_path = CONFIG.get("ac_path")
+        if ac_path and os.path.exists(ac_path):
+            print(f"[Method 2] Falling back to Direct Engine Launch: {ac_path}")
+            ini_path = self.generate_race_ini(car, track)
+            if ini_path:
+                try:
+                    # acs.exe reads race.ini from the Documents folder by default
+                    self.current_process = subprocess.Popen([ac_path])
+                    return
+                except Exception as e:
+                    print(f"Direct Launch failed: {e}")
+
+        print("CRITICAL: No valid launch method worked. Verify 'cm_path' or 'ac_path' in config.json.")
+        # Dummy process to maintain system state
         self.current_process = subprocess.Popen(["sleep", "600"] if os.name != 'nt' else ["timeout", "/t", "600"])
 
     def kill_race(self):
