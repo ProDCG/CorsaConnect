@@ -12,11 +12,11 @@ from telemetry import ACTelemetry
 
 # Configuration
 RIG_ID = socket.gethostname()
-ORCHESTRATOR_IP = "192.168.9.35:5173"  # Broadcast
+ORCHESTRATOR_IP = "192.168.9.35"  # Broadcast
 # Default Configuration
 CONFIG = {
     "rig_id": socket.gethostname(),
-    "orchestrator_ip": "192.168.9.35:5173",
+    "orchestrator_ip": "192.168.9.35",
     "heartbeat_port": 5001,
     "command_port": 5000,
     "mod_version": "1.0.0",
@@ -134,7 +134,7 @@ class RigSled:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             
             orchestrator_ip = CONFIG.get("orchestrator_ip", "127.0.0.1")
-            orchestrator_url = f"http://{orchestrator_ip}:8000"
+            orchestrator_url = f"http://{orchestrator_ip}:5173"
             import requests
 
             while True:
