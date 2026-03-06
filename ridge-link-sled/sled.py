@@ -7,6 +7,8 @@ import subprocess
 import psutil
 import sys
 
+IS_WINDOWS = os.name == 'nt'
+
 # Configuration
 RIG_ID = socket.gethostname()
 ORCHESTRATOR_IP = "255.255.255.255"  # Broadcast
