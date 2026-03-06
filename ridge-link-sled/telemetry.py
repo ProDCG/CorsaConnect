@@ -10,8 +10,12 @@ class ACTelemetry:
         self.graphics_mmap = None
         self.static_mmap = None
         
+        # SimHub Configuration
+        self.simhub_url = "http://127.0.0.1:8888/api/getallproperties"
+        self.simhub_connected = False
+        
         # UDP Bridge Listener (Port 9996)
-        # This replaces Shared Memory if the AC Plugin is active
+        # Fallback if SimHub is not used
         try:
             self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.udp_sock.bind(("127.0.0.1", 9996))
@@ -51,8 +55,56 @@ class ACTelemetry:
         except:
             return False
 
+    def get_simhub_data(self):
+        """Pulls telemetry from SimHub's Web API."""
+        try:
+            import requests
+            # We only pull the specific properties we need to keep it light
+            props = [
+                "DataCorePlugin.GameData.Gas",
+                "DataCorePlugin.GameData.Brake",
+                "DataCorePlugin.GameData.Gear",
+                "DataCorePlugin.GameData.Rpms",
+                "DataCorePlugin.GameData.SpeedKmh",
+                "DataCorePlugin.GameData.AccelerationLateral",
+                "DataCorePlugin.GameData.AccelerationLongitudinal",
+                "DataCorePlugin.GameData.CompletedLaps",
+                "DataCorePlugin.GameData.Position",
+                "DataCorePlugin.GameData.TrackPositionPercent",
+                "DataCorePlugin.GameData.Status"
+            ]
+            url = f"http://127.0.0.1:8888/api/getproperties?properties={','.join(props)}"
+            r = requests.get(url, timeout=0.05)
+            if r.status_code == 200:
+                d = r.json()
+                self.simhub_connected = True
+                return {
+                    "packet_id": 0, # SimHub doesn't expose raw packet ID easily
+                    "gas": round(d.get("DataCorePlugin.GameData.Gas", 0) / 100.0, 2),
+                    "brake": round(d.get("DataCorePlugin.GameData.Brake", 0) / 100.0, 2),
+                    "gear": d.get("DataCorePlugin.GameData.Gear", "N"),
+                    "rpms": int(d.get("DataCorePlugin.GameData.Rpms", 0)),
+                    "velocity": [round(d.get("DataCorePlugin.GameData.SpeedKmh", 0), 1), 0, 0],
+                    "gforce": [
+                        round(d.get("DataCorePlugin.GameData.AccelerationLateral", 0), 2),
+                        round(d.get("DataCorePlugin.GameData.AccelerationLongitudinal", 0), 2),
+                        0
+                    ],
+                    "status": 2 if d.get("DataCorePlugin.GameData.Status") == "Running" else 0,
+                    "completed_laps": d.get("DataCorePlugin.GameData.CompletedLaps", 0),
+                    "position": d.get("DataCorePlugin.GameData.Position", 0),
+                    "normalized_pos": round(d.get("DataCorePlugin.GameData.TrackPositionPercent", 0) / 100.0, 4)
+                }
+        except:
+            self.simhub_connected = False
+        return None
+
     def get_data(self):
-        # 1. Try UDP Bridge First (Mod in Game)
+        # 1. Try SimHub First (Recommended)
+        sh_data = self.get_simhub_data()
+        if sh_data: return sh_data
+
+        # 2. Try UDP Bridge (Backwards compatibility)
         if self.udp_sock:
             try:
                 data, addr = self.udp_sock.recvfrom(2048)
