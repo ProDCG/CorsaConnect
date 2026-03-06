@@ -15,13 +15,24 @@ class ACTelemetry:
         # Offset 68: float gforce[3]
         self.physics_struct = "i 40x 3f 4x 3f" # total 44 + 12 + 4 + 12 = 72 bytes
         
+    def is_game_running(self):
+        try:
+            import psutil
+            for proc in psutil.process_iter(['name']):
+                if proc.info['name'] and proc.info['name'].lower() in ['acs.exe', 'acss.exe', 'assettocorsa.exe']:
+                    return True
+        except:
+            pass
+        return False
+
     def open(self):
-        # Try both standard and prefixed names
-        # Content Manager / CSP sometimes requires 'Local\' prefix depending on session settings
+        if not self.is_game_running():
+            return False
+            
         prefixes = ["", "Local\\", "Global\\"]
         names = ["physics", "graphics", "static"]
         
-        self.close() # Ensure clean slate
+        self.close()
         
         try:
             for pref in prefixes:
@@ -30,7 +41,8 @@ class ACTelemetry:
                 for name in names:
                     tag = f"{pref}acqs_{name}"
                     try:
-                        # On Windows, tagname is the 3rd arg
+                        # If the block doesn't exist, this might create it. 
+                        # That's why we check is_game_running first.
                         m = mmap.mmap(-1, 1024, tag, access=mmap.ACCESS_READ)
                         temp_maps[name] = m
                     except:
@@ -41,45 +53,49 @@ class ACTelemetry:
                     self.physics_mmap = temp_maps["physics"]
                     self.graphics_mmap = temp_maps["graphics"]
                     self.static_mmap = temp_maps["static"]
-                    print(f"TELEMETRY: Connected using prefix '{pref}'")
+                    print(f"TELEMETRY: Linked to Game Memory ('{pref}')")
                     return True
-            
             return False
-        except Exception as e:
-            print(f"TELEMETRY OPEN CRITICAL ERROR: {e}")
+        except:
             return False
 
     def get_data(self):
         try:
             if not self.physics_mmap:
-                if not self.open():
-                    return {} # Return empty dict if not connected
+                if self.is_game_running():
+                    if not self.open(): return {}
+                else:
+                    return {}
             
             self.physics_mmap.seek(0)
             data = self.physics_mmap.read(80) 
-            
-            if len(data) < 80:
-                return {}
+            if len(data) < 80: return {}
 
             packet_id = struct.unpack("i", data[0:4])[0]
-            
-            # Watchdog: If packet_id is 0 or frozen for too long, re-sync
             now = time.time()
-            if not hasattr(self, '_last_packet_id'): 
-                self._last_packet_id = -1
-                self._last_change_time = now
             
-            if packet_id != self._last_packet_id:
-                self._last_packet_id = packet_id
-                self._last_change_time = now
-            elif now - self._last_change_time > 5 and packet_id == 0:
-                # Pipe is open but dead. Re-sync.
-                if not hasattr(self, '_last_resync'): self._last_resync = 0
-                if now - self._last_resync > 5:
-                    print("TELEMETRY: Pipe is empty (0), attempting re-sync...")
-                    self.open()
-                    self._last_resync = now
-                return {}
+            # Initialization
+            if not hasattr(self, '_last_pid'): self._last_pid = -1
+            if not hasattr(self, '_last_pid_time'): self._last_pid_time = now
+            if not hasattr(self, '_id_frozen_count'): self._id_frozen_count = 0
+
+            # Connection Watchdog
+            if packet_id != self._last_pid:
+                self._last_pid = packet_id
+                self._last_pid_time = now
+                self._id_frozen_count = 0
+            else:
+                self._id_frozen_count += 1
+                # If packet hasn't changed in 5 seconds while game is "running"
+                if now - self._last_pid_time > 5:
+                    if packet_id == 0:
+                        # Just in menu likely, no noise
+                        return {}
+                    else:
+                        # Stuck on a dead pipe
+                        print("TELEMETRY: Connection frozen, resetting...")
+                        self.close()
+                        return {}
 
             gas = struct.unpack("f", data[4:8])[0]
             brake = struct.unpack("f", data[8:12])[0]
