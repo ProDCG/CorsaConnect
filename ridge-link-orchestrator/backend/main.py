@@ -228,7 +228,9 @@ async def update_rig_status(rig_id: str, update: RigStatusUpdate, request: Reque
         # Update IP if it changed (e.g. DHCP or transition from kiosk to sled)
         rigs[rig_id]["ip"] = client_ip
     
-    if update.status: rigs[rig_id]["status"] = update.status
+    if update.status: 
+        print(f"ORCHESTRATOR: Rig {rig_id} status updated to {update.status}")
+        rigs[rig_id]["status"] = update.status
     if update.selected_car: rigs[rig_id]["selected_car"] = update.selected_car
     if update.cpu_temp: rigs[rig_id]["cpu_temp"] = update.cpu_temp
     if update.telemetry: 

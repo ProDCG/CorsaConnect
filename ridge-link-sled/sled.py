@@ -91,10 +91,22 @@ class RigSled:
         orchestrator_ip = CONFIG.get("orchestrator_ip", "127.0.0.1")
         url = f"http://{orchestrator_ip}:5173/kiosk?rig_id={rig_id}"
         
-        print(f"Opening Kiosk in browser: {url}")
-        import webbrowser
-        # Using webbrowser.open is much more stable and prevents the constant "killing/restarting" behavior
-        webbrowser.open(url)
+        print(f"Launching Kiosk in Fullscreen: {url}")
+        
+        if IS_WINDOWS:
+            # Fullscreen Kiosk Mode for Edge
+            cmd = ["msedge.exe", "--kiosk", url, "--edge-kiosk-type=fullscreen", "--no-first-run", "--no-default-browser-check"]
+            try:
+                self.kiosk_process = subprocess.Popen(cmd)
+            except:
+                import webbrowser
+                webbrowser.open(url)
+        else:
+            try:
+                self.kiosk_process = subprocess.Popen(["google-chrome", "--kiosk", "--app=" + url])
+            except:
+                import webbrowser
+                webbrowser.open(url)
 
     def stop_kiosk(self):
         # We'll leave this empty for now or just do nothing to prevent dashboard closing
@@ -160,6 +172,18 @@ class RigSled:
                             if self.status not in ["setup", "ready"]:
                                 if my_rig.get("status"):
                                     self.status = my_rig["status"]
+                            
+                            # Write to local JSON for verification as requested
+                            try:
+                                with self.file_lock:
+                                    with open("selected_car.json", "w") as f:
+                                        json.dump({
+                                            "selected_car": self.selected_car,
+                                            "status": self.status,
+                                            "ready": self.status == "ready"
+                                        }, f)
+                            except:
+                                pass
 
                     # Sync branding
                     res_brand = requests.get(f"{orchestrator_url}/api/branding", timeout=2)

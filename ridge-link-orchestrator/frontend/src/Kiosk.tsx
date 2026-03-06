@@ -42,12 +42,26 @@ export default function Kiosk() {
         { id: 'ks_lotus_exos_125', name: 'Exos 125', brand: 'Lotus', class: 'F1' }
     ]
 
+    const BRAND_LOGOS: Record<string, string> = {
+        'Ferrari': 'https://upload.wikimedia.org/wikipedia/en/thumb/d/d1/Ferrari-Logo.svg/800px-Ferrari-Logo.svg.png',
+        'Lamborghini': 'https://upload.wikimedia.org/wikipedia/en/thumb/d/df/Lamborghini_Logo.svg/800px-Lamborghini_Logo.svg.png',
+        'Porsche': 'https://upload.wikimedia.org/wikipedia/en/thumb/d/df/Porsche_logo.svg/800px-Porsche_logo.svg.png',
+        'McLaren': 'https://upload.wikimedia.org/wikipedia/en/thumb/6/66/McLaren_Logo.svg/1200px-McLaren_Logo.svg.png',
+        'Audi': 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Audi-Logo_2016.svg/1024px-Audi-Logo_2016.svg.png',
+        'Mercedes': 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Mercedes-Benz_logo%2C_2011.svg/1024px-Mercedes-Benz_logo%2C_2011.svg.png',
+        'BMW': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/BMW.svg/1024px-BMW.svg.png',
+        'Nissan': 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Nissan_logo.svg/1024px-Nissan_logo.svg.png',
+        'Chevrolet': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/Chevrolet-logo.svg/1024px-Chevrolet-logo.svg.png',
+        'Tatuus': 'https://www.tatuus.it/img/logo-tatuus.png',
+        'Lotus': 'https://upload.wikimedia.org/wikipedia/en/thumb/6/67/Lotus_Cars_logo.svg/800px-Lotus_Cars_logo.svg.png'
+    }
+
     const activeCars = (ALL_CARS || []).filter(c => (carPool || []).includes(c.id))
     const brands = Array.from(new Set(activeCars.map(c => c.brand)))
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
-        const id = params.get('rig_id') || 'UNKNOWN'
+        const id = params.get('rig_id') || 'SLED-UNKNOWN'
         setRigId(id)
 
         const registerKiosk = async () => {
@@ -56,7 +70,7 @@ export default function Kiosk() {
                 await fetch(`/api/rigs/${id}/status`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
+                    body: JSON.stringify({ ip: 'web-kiosk' })
                 })
             } catch (err) { console.error("Initial registration failed", err) }
         }
@@ -101,7 +115,8 @@ export default function Kiosk() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     status: newStatus,
-                    selected_car: newCar || selectedCar
+                    selected_car: newCar || selectedCar,
+                    ip: 'web-kiosk'
                 })
             })
         } catch (err) {
@@ -175,7 +190,7 @@ export default function Kiosk() {
                 muted
                 playsInline
                 key={branding.video_url}
-                className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ${status === 'setup' || status === 'ready' ? 'blur-3xl scale-110 opacity-30 px-20' : 'opacity-80'}`}
+                className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ${(status?.toLowerCase() === 'setup' || status?.toLowerCase() === 'ready') ? 'blur-xl scale-110 opacity-40 px-20' : 'opacity-80'}`}
             >
                 <source src={finalVideoSrc} type="video/mp4" />
             </video>
@@ -225,10 +240,14 @@ export default function Kiosk() {
                                             <button
                                                 key={brand}
                                                 onClick={() => setSelectedBrand(brand)}
-                                                className="aspect-[4/3] rounded-3xl bg-white/5 border border-white/5 hover:border-ridge-brand/50 hover:bg-ridge-brand/5 transition-all flex flex-col items-center justify-center group"
+                                                className="aspect-square rounded-3xl bg-white/5 border border-white/5 hover:border-ridge-brand/50 hover:bg-ridge-brand/5 transition-all flex flex-col items-center justify-center group p-6"
                                             >
-                                                <Shield className="w-12 h-12 text-white/10 group-hover:text-ridge-brand transition-all duration-500 mb-4" />
-                                                <span className="font-black italic uppercase tracking-tighter text-xl">{brand}</span>
+                                                {BRAND_LOGOS[brand] ? (
+                                                    <img src={BRAND_LOGOS[brand]} alt={brand} className="w-20 h-20 object-contain mb-4 filter grayscale group-hover:grayscale-0 transition-all duration-500" />
+                                                ) : (
+                                                    <Shield className="w-12 h-12 text-white/10 group-hover:text-ridge-brand transition-all duration-500 mb-4" />
+                                                )}
+                                                <span className="font-black italic uppercase tracking-tighter text-lg">{brand}</span>
                                             </button>
                                         ))}
                                     </div>
@@ -277,8 +296,10 @@ export default function Kiosk() {
                         </div>
 
                         <div className="mt-8 flex items-center gap-4 animate-pulse">
-                            <div className="w-2 h-2 rounded-full bg-ridge-brand" />
-                            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/40 italic">Link active: {rigId}</span>
+                            <div className={`w-2 h-2 rounded-full ${rigId.includes('UNKNOWN') ? 'bg-red-500' : 'bg-ridge-brand'}`} />
+                            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/40 italic">
+                                {rigId.includes('UNKNOWN') ? 'NETWORK LINK INACTIVE' : `LINK ACTIVE: ${rigId}`}
+                            </span>
                         </div>
                     </div>
                 </div>
