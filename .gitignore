@@ -1,0 +1,28 @@
+# Node
+node_modules/
+dist/
+dist-ssr
+*.local
+.eslintcache
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env/
+.venv/
+
+# Local Configs
+config.json
+kiosk_data.json
+selected_car.json
+
+# Assets/Logs
+*.log
+.DS_Store
+public/assets/idle_race.mp4
+public/assets/ridge_logo.png
+public/assets/idle_race_temp.jpg

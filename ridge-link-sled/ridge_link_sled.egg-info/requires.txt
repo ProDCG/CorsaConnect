@@ -1,0 +1,5 @@
+requests
+psutil
+opencv-python
+pillow
+tkinter

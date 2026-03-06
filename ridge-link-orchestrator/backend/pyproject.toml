@@ -1,0 +1,16 @@
+[project]
+name = "ridge-link-orchestrator"
+version = "1.0.0"
+description = "Centralized orchestration hub for racing simulators"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "psutil",
+    "sqlalchemy",
+    "python-multipart",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
