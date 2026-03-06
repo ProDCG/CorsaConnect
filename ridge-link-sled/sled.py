@@ -71,6 +71,8 @@ class RigSled:
                 data = self.ac_telemetry.get_data()
                 if data:
                     self.telemetry_data = data
+                    # Console Verification at 10Hz
+                    print(f"RAW_TELEMETRY: {json.dumps(data)}")
                 time.sleep(0.1) # 10Hz reading
             except Exception as e:
                 print(f"Telemetry error: {e}")
@@ -84,6 +86,11 @@ class RigSled:
             return 0.0
 
     def start_kiosk(self):
+        # SIMPLIFICATION: Only launch if not already running
+        if self.kiosk_process and self.kiosk_process.poll() is None:
+            print("Kiosk is already running. Skipping launch.")
+            return
+
         self.stop_kiosk()
         rig_id = CONFIG.get("rig_id", "UNKNOWN")
         orchestrator_ip = CONFIG.get("orchestrator_ip", "127.0.0.1")
