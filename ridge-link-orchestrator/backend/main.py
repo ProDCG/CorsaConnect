@@ -3,6 +3,7 @@ import threading
 import json
 import time
 import os
+import asyncio
 from fastapi import FastAPI, BackgroundTasks, Request
 from pydantic import BaseModel
 from typing import Dict, Optional, List
@@ -231,6 +232,9 @@ async def update_rig_status(rig_id: str, update: RigStatusUpdate, request: Reque
     
     # Status Precedence Logic
     if update.status:
+        current_status = rigs[rig_id].get("status", "idle")
+        new_status = update.status
+
         # Precedence: RACING > READY > SETUP > IDLE
         status_rank = { "idle": 0, "setup": 1, "ready": 2, "racing": 3 }
         current_rank = status_rank.get(current_status, 0)
@@ -363,7 +367,13 @@ async def send_command(command: Command, background_tasks: BackgroundTasks):
     # For physical Sleds
     ip = rig["ip"]
     port = CONFIG["command_port"]
-    background_tasks.add_task(dispatch_command, ip, port, command.model_dump())
+    
+    # Inject current selection if not specified in manual command
+    payload = command.model_dump()
+    if not payload.get("car") and rig.get("selected_car"):
+        payload["car"] = rig["selected_car"]
+        
+    background_tasks.add_task(dispatch_command, ip, port, payload)
     return {"status": "success", "message": f"Command dispatched to Sled {command.rig_id}"}
 
 @app.post("/command/global")
@@ -374,7 +384,7 @@ async def send_global_command(command: Command, background_tasks: BackgroundTask
     # If starting a race in multiplayer mode, start the server first
     if command.action == "LAUNCH_RACE" and command.use_server:
          await start_server()
-         time.sleep(1)
+         await asyncio.sleep(1)
     
     action_map = {
         "SETUP_MODE": "setup",
