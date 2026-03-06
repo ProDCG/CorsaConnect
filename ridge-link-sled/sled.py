@@ -20,9 +20,9 @@ CONFIG = {
     "command_port": 5000,
     "mod_version": "1.0.0",
     "admin_shared_folder": r"\\ADMIN-PC\RidgeContent",
-    "local_ac_folder": r"C:\AssettoCorsa",
-    "cm_path": r"C:\RidgeLink\Content Manager.exe",
-    "ac_path": r"C:\AssettoCorsa\acs.exe"
+    "local_ac_folder": r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa",
+    "cm_path": r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\Content Manager.exe",
+    "ac_path": r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\acs.exe"
 }
 
 # Load local config if exists
@@ -286,8 +286,8 @@ ACTIVE=0
             if ini_path:
                 try:
                     ac_dir = os.path.dirname(ac_path)
-                    # Use double quotes for the ini path to handle spaces
-                    cmd = [ac_path, f'-ini={ini_path}']
+                    # Use -race flag which is specifically for starting a session from an INI
+                    cmd = [ac_path, f'-race={ini_path}']
                     print(f"Executing: {' '.join(cmd)}")
                     self.current_process = subprocess.Popen(cmd, cwd=ac_dir)
                     return
