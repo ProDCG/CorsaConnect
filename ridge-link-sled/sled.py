@@ -12,11 +12,11 @@ from telemetry import ACTelemetry
 
 # Configuration
 RIG_ID = socket.gethostname()
-ORCHESTRATOR_IP = "255.255.255.255"  # Broadcast
+ORCHESTRATOR_IP = "192.168.9.35:5173"  # Broadcast
 # Default Configuration
 CONFIG = {
     "rig_id": socket.gethostname(),
-    "orchestrator_ip": "255.255.255.255",
+    "orchestrator_ip": "192.168.9.35:5173",
     "heartbeat_port": 5001,
     "command_port": 5000,
     "mod_version": "1.0.0",
