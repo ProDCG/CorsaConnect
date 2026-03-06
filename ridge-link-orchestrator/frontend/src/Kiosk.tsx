@@ -25,21 +25,24 @@ export default function Kiosk() {
         logo_url: '/assets/ridge_logo.png',
         video_url: '/assets/idle_race.mp4'
     })
+    const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
 
     const ALL_CARS = [
-        { id: 'ks_ferrari_488_gt3', name: 'Ferrari 488 GT3', class: 'GT3' },
-        { id: 'ks_lamborghini_huracan_gt3', name: 'Lamborghini Huracan GT3', class: 'GT3' },
-        { id: 'ks_porsche_911_gt3_r', name: 'Porsche 911 GT3 R', class: 'GT3' },
-        { id: 'ks_mclaren_650s_gt3', name: 'McLaren 650S GT3', class: 'GT3' },
-        { id: 'ks_audi_r8_lms', name: 'Audi R8 LMS', class: 'GT3' },
-        { id: 'ks_mercedes_amg_gt3', name: 'Mercedes AMG GT3', class: 'GT3' },
-        { id: 'ks_bmw_m6_gt3', name: 'BMW M6 GT3', class: 'GT3' },
-        { id: 'ks_nissan_gt_r_gt3', name: 'Nissan GT-R GT3', class: 'GT3' },
-        { id: 'ks_corvette_c7_r', name: 'Corvette C7.R', class: 'GTE' },
-        { id: 'ks_ferrari_488_gte', name: 'Ferrari 488 GTE', class: 'GTE' },
-        { id: 'tatuusfa1', name: 'Tatuus FA.01', class: 'OPEN' },
-        { id: 'ks_lotus_exos_125', name: 'Lotus Exos 125', class: 'F1' }
+        { id: 'ks_ferrari_488_gt3', name: '488 GT3', brand: 'Ferrari', class: 'GT3' },
+        { id: 'ks_lamborghini_huracan_gt3', name: 'Huracan GT3', brand: 'Lamborghini', class: 'GT3' },
+        { id: 'ks_porsche_911_gt3_r', name: '911 GT3 R', brand: 'Porsche', class: 'GT3' },
+        { id: 'ks_mclaren_650s_gt3', name: '650S GT3', brand: 'McLaren', class: 'GT3' },
+        { id: 'ks_audi_r8_lms', name: 'R8 LMS', brand: 'Audi', class: 'GT3' },
+        { id: 'ks_mercedes_amg_gt3', name: 'AMG GT3', brand: 'Mercedes', class: 'GT3' },
+        { id: 'ks_bmw_m6_gt3', name: 'M6 GT3', brand: 'BMW', class: 'GT3' },
+        { id: 'ks_nissan_gt_r_gt3', name: 'GT-R GT3', brand: 'Nissan', class: 'GT3' },
+        { id: 'ks_corvette_c7_r', name: 'C7.R GTE', brand: 'Chevrolet', class: 'GTE' },
+        { id: 'ks_ferrari_488_gte', name: '488 GTE', brand: 'Ferrari', class: 'GTE' },
+        { id: 'tatuusfa1', name: 'FA.01', brand: 'Tatuus', class: 'FORMULA' },
+        { id: 'ks_lotus_exos_125', name: 'Exos 125', brand: 'Lotus', class: 'F1' }
     ]
+
+    const brands = Array.from(new Set(ALL_CARS.filter(c => carPool.includes(c.id)).map(c => c.brand)))
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
@@ -140,18 +143,25 @@ export default function Kiosk() {
             <style>
                 {`
                 .custom-scrollbar::-webkit-scrollbar {
-                    width: 6px;
+                    width: 4px;
                 }
                 .custom-scrollbar::-webkit-scrollbar-track {
-                    background: rgba(255, 255, 255, 0.05);
-                    border-radius: 10px;
+                    background: rgba(255, 255, 255, 0.02);
                 }
                 .custom-scrollbar::-webkit-scrollbar-thumb {
-                    background: rgba(255, 81, 0, 0.3);
+                    background: rgba(255, 81, 0, 0.2);
                     border-radius: 10px;
                 }
-                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                    background: rgba(255, 81, 0, 0.6);
+                .locked-pane {
+                    height: 500px;
+                    width: 900px;
+                    background: rgba(0, 0, 0, 0.6);
+                    backdrop-blur: 40px;
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 40px;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
                 }
                 `}
             </style>
@@ -163,73 +173,104 @@ export default function Kiosk() {
                 muted
                 playsInline
                 key={branding.video_url}
-                poster="/assets/idle_race_temp.jpg"
-                className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ${status === 'setup' || status === 'ready' ? 'blur-2xl scale-110 opacity-50' : 'opacity-80'}`}
+                className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ${status === 'setup' || status === 'ready' ? 'blur-3xl scale-110 opacity-30 px-20' : 'opacity-80'}`}
             >
                 <source src={finalVideoSrc} type="video/mp4" />
             </video>
 
             {/* Logo Overlay */}
-            <div className="absolute bottom-12 right-12 z-50 pointer-events-none">
-                <div className="flex items-center gap-4 glass p-6 rounded-3xl border border-white/10 shadow-2xl transition-all duration-1000">
-                    <img
-                        src={branding.logo_url || "/assets/ridge_logo.png"}
-                        alt="Facility Logo"
-                        className="h-24 w-auto object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]"
-                        onError={(e) => {
-                            (e.target as HTMLImageElement).src = "/assets/ridge_logo.png";
-                        }}
-                    />
-                </div>
+            <div className="absolute top-12 left-12 z-50 pointer-events-none">
+                <img
+                    src={branding.logo_url || "/assets/ridge_logo.png"}
+                    alt="Facility Logo"
+                    className="h-16 w-auto object-contain"
+                />
             </div>
 
             {/* Setup Overlay */}
             {(status === 'setup' || status === 'ready') && (
-                <div className="absolute inset-0 flex items-center justify-center z-40 bg-black/40 backdrop-blur-sm animate-in fade-in zoom-in duration-500">
-                    <div className="max-w-4xl w-full mx-8">
-                        <div className="text-center mb-12">
-                            <h1 className="text-6xl font-black uppercase tracking-tighter italic mb-2">Prepare for Mission</h1>
-                            <p className="text-ridge-brand font-bold tracking-[0.3em] uppercase text-sm">Select Your Vehicle</p>
+                <div className="absolute inset-0 flex items-center justify-center z-40 bg-black/20 animate-in fade-in duration-700">
+                    <div className="flex flex-col items-center">
+                        <div className="text-center mb-10">
+                            <h1 className="text-5xl font-black uppercase tracking-tighter italic leading-none">
+                                {selectedBrand ? selectedBrand.toUpperCase() : 'MISSION PREP'}
+                            </h1>
+                            <p className="text-ridge-brand font-black tracking-[0.4em] uppercase text-[10px] mt-2">
+                                {selectedBrand ? 'Select Your Model' : 'CHOOSE MANUFACTURER'}
+                            </p>
                         </div>
 
-                        <div className="max-h-[50vh] overflow-y-auto overflow-x-hidden p-2 mb-12 custom-scrollbar">
-                            <div className="grid grid-cols-3 gap-6">
-                                {carPool.map(carId => {
-                                    const carInfo = ALL_CARS.find(c => c.id === carId) || { id: carId, name: carId.split('_').slice(1).join(' ').toUpperCase() || carId, class: 'CAR' };
-                                    return (
-                                        <button
-                                            key={carId}
-                                            onClick={() => handleCarSelect(carId)}
-                                            className={`p-6 rounded-3xl border-2 transition-all duration-500 text-left relative overflow-hidden group ${selectedCar === carId
-                                                ? 'bg-ridge-brand border-ridge-brand shadow-[0_0_30px_rgba(255,81,0,0.4)]'
-                                                : 'bg-white/5 border-white/5 hover:border-white/20'
-                                                }`}
-                                        >
-                                            <div className="relative z-10">
-                                                <p className="text-[10px] font-bold opacity-50 uppercase mb-1">{carInfo.class}</p>
-                                                <h3 className="text-xl font-bold uppercase italic leading-tight">{carInfo.name}</h3>
-                                            </div>
-                                            <Shield className={`absolute -right-4 -bottom-4 w-24 h-24 transition-all duration-700 ${selectedCar === carId ? 'text-white/20 scale-110 rotate-12' : 'text-white/5 rotate-45'}`} />
-                                        </button>
-                                    );
-                                })}
+                        <div className="locked-pane relative">
+                            {selectedBrand && (
+                                <button
+                                    onClick={() => setSelectedBrand(null)}
+                                    className="absolute top-6 left-8 z-50 text-[10px] font-black uppercase tracking-widest text-white/40 hover:text-ridge-brand transition-colors flex items-center gap-2"
+                                >
+                                    ← BACK TO BRANDS
+                                </button>
+                            )}
+
+                            <div className="flex-1 overflow-y-auto custom-scrollbar p-12 pt-16">
+                                {!selectedBrand ? (
+                                    <div className="grid grid-cols-3 gap-6">
+                                        {brands.map(brand => (
+                                            <button
+                                                key={brand}
+                                                onClick={() => setSelectedBrand(brand)}
+                                                className="aspect-[4/3] rounded-3xl bg-white/5 border border-white/5 hover:border-ridge-brand/50 hover:bg-ridge-brand/5 transition-all flex flex-col items-center justify-center group"
+                                            >
+                                                <Shield className="w-12 h-12 text-white/10 group-hover:text-ridge-brand transition-all duration-500 mb-4" />
+                                                <span className="font-black italic uppercase tracking-tighter text-xl">{brand}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {ALL_CARS.filter(c => carPool.includes(c.id) && c.brand === selectedBrand).map(car => (
+                                            <button
+                                                key={car.id}
+                                                onClick={() => handleCarSelect(car.id)}
+                                                className={`p-6 rounded-3xl border-2 text-left relative transition-all duration-500 overflow-hidden ${selectedCar === car.id
+                                                    ? 'bg-ridge-brand/20 border-ridge-brand shadow-[0_0_40px_rgba(255,81,0,0.2)]'
+                                                    : 'bg-white/5 border-white/5 hover:border-white/10'
+                                                    }`}
+                                            >
+                                                <div className="relative z-10">
+                                                    <p className="text-[10px] font-black opacity-30 uppercase mb-1">{car.class}</p>
+                                                    <h3 className="text-2xl font-black tracking-tighter italic uppercase underline-offset-4 decoration-ridge-brand">{car.name}</h3>
+                                                </div>
+                                                {selectedCar === car.id && (
+                                                    <div className="absolute top-4 right-4 text-ridge-brand">
+                                                        <Check size={20} />
+                                                    </div>
+                                                )}
+                                                <Shield className={`absolute -right-6 -bottom-6 w-32 h-32 transition-all duration-700 ${selectedCar === car.id ? 'text-ridge-brand/10 scale-125' : 'text-white/5 opacity-0'}`} />
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-8 bg-black/20 border-t border-white/5 flex justify-center">
+                                <button
+                                    onClick={toggleReady}
+                                    disabled={!selectedCar}
+                                    className={`group px-20 py-4 rounded-full font-black uppercase tracking-[0.2em] text-sm transition-all duration-500 ${ready
+                                        ? 'bg-green-500 shadow-[0_0_50px_rgba(34,197,94,0.4)]'
+                                        : !selectedCar ? 'bg-zinc-800 text-white/20 cursor-not-allowed' : 'bg-white text-black hover:scale-105 active:scale-95 shadow-xl shadow-white/5'
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-3">
+                                        {ready ? <Check className="w-5 h-5" /> : <Zap className="w-5 h-5 shadow-inner shadow-black" />}
+                                        {ready ? 'SYSTEM READY' : 'CONFIRM SELECTION'}
+                                    </span>
+                                </button>
                             </div>
                         </div>
 
-                        <div className="flex justify-center">
-                            <button
-                                onClick={toggleReady}
-                                className={`group relative px-16 py-6 rounded-full font-black uppercase tracking-[0.2em] transition-all duration-500 overflow-hidden ${ready
-                                    ? 'bg-green-500 shadow-[0_0_50px_rgba(34,197,94,0.4)]'
-                                    : 'bg-white text-black hover:scale-105 active:scale-95'
-                                    }`}
-                            >
-                                <span className={`relative z-10 flex items-center gap-3 ${ready ? 'text-white' : ''}`}>
-                                    {ready ? <Check className="w-6 h-6" /> : <Zap className="w-6 h-6" />}
-                                    {ready ? 'Ready for Launch' : 'Confirm & Ready'}
-                                </span>
-                                {ready && <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-green-600 animate-pulse" />}
-                            </button>
+                        <div className="mt-8 flex items-center gap-4 animate-pulse">
+                            <div className="w-2 h-2 rounded-full bg-ridge-brand" />
+                            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/40 italic">Link active: {rigId}</span>
                         </div>
                     </div>
                 </div>

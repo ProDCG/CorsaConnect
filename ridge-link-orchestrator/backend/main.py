@@ -38,19 +38,35 @@ class Branding(BaseModel):
 class CarPoolUpdate(BaseModel):
     cars: list[str]
 
+class GlobalSettings(BaseModel):
+    practice_time: int = 0
+    qualy_time: int = 10
+    race_laps: int = 10
+    race_time: int = 0
+    allow_drs: bool = True
+    selected_track: str = "monza"
+    selected_weather: str = "3_clear"
+
 class Command(BaseModel):
     rig_id: str
     action: str  # SETUP_MODE, LAUNCH_RACE, KILL_RACE
     track: Optional[str] = None
     car: Optional[str] = None
     weather: Optional[str] = None
-    session_time: Optional[int] = None
+    # Session Details
+    practice_time: Optional[int] = 0
+    qualy_time: Optional[int] = 0
+    race_laps: Optional[int] = 10
+    race_time: Optional[int] = 0
+    allow_drs: Optional[bool] = True
+    session_time: Optional[int] = None # Legacy support
     server_ip: Optional[str] = None
 
 # --- In-Memory Store ---
 rigs: Dict[str, dict] = {}
 car_pool = ["ks_ferrari_488_gt3", "ks_lamborghini_huracan_gt3", "ks_porsche_911_gt3_r"]
 branding = Branding()
+global_settings = GlobalSettings()
 
 # --- API Endpoints ---
 
@@ -96,6 +112,16 @@ async def update_branding(update: Branding):
     global branding
     branding = update
     return {"status": "success", "branding": branding}
+
+@app.get("/settings")
+async def get_settings():
+    return global_settings
+
+@app.post("/settings")
+async def update_settings(update: GlobalSettings):
+    global global_settings
+    global_settings = update
+    return {"status": "success", "settings": global_settings}
 
 @app.post("/command")
 async def send_command(command: Command, background_tasks: BackgroundTasks):

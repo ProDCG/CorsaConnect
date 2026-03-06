@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react'
-import { Activity, Cpu, Monitor, Zap, Power, RotateCcw, Play, Check } from 'lucide-react'
+import { Activity, Cpu, Monitor, Zap, Power, RotateCcw, Play, Check, Image, Car, Settings2, Flag, Clock, ShieldCheck, LayoutGrid } from 'lucide-react'
 import Kiosk from './Kiosk'
 
 interface Rig {
@@ -17,6 +16,8 @@ interface Branding {
     video_url: string
 }
 
+import { useState, useEffect } from 'react'
+
 function App() {
     const isKiosk = window.location.pathname === '/kiosk'
 
@@ -24,10 +25,20 @@ function App() {
         return <Kiosk />
     }
 
+    const [activeTab, setActiveTab] = useState<'sims' | 'media' | 'cars' | 'race'>('sims')
     const [rigs, setRigs] = useState<Rig[]>([])
-    const [selectedTrack, setSelectedTrack] = useState('monza')
+
+    // Global Session & Race Settings
+    const [raceSettings, setRaceSettings] = useState({
+        practice_time: 0,
+        qualy_time: 10,
+        race_laps: 10,
+        race_time: 0,
+        allow_drs: true,
+        selected_track: 'monza',
+        selected_weather: '3_clear'
+    })
     const [selectedCar, setSelectedCar] = useState('ks_ferrari_488_gt3')
-    const [selectedWeather, setSelectedWeather] = useState('3_clear')
     const [activeCarPool, setActiveCarPool] = useState<string[]>([])
     const [brandingFields, setBrandingFields] = useState<Branding>({
         logo_url: '/assets/ridge_logo.png',
@@ -134,10 +145,14 @@ function App() {
                 body: JSON.stringify({
                     rig_id: rigId,
                     action,
-                    track: selectedTrack,
+                    track: raceSettings.selected_track,
                     car: carToLaunch,
-                    weather: selectedWeather,
-                    session_time: 20,
+                    weather: raceSettings.selected_weather,
+                    practice_time: raceSettings.practice_time,
+                    qualy_time: raceSettings.qualy_time,
+                    race_laps: raceSettings.race_laps,
+                    race_time: raceSettings.race_time,
+                    allow_drs: raceSettings.allow_drs,
                     server_ip: "192.168.1.10"
                 })
             })
@@ -150,233 +165,314 @@ function App() {
         rigs.forEach(rig => sendCommand(rig.rig_id, action, rig.selected_car))
     }
 
+    const SidebarItem = ({ id, icon: Icon, label }: { id: typeof activeTab, icon: any, label: string }) => (
+        <button
+            onClick={() => setActiveTab(id)}
+            className={`w-full flex flex-col items-center gap-2 p-4 transition-all ${activeTab === id ? 'text-ridge-brand bg-white/5 border-r-2 border-ridge-brand' : 'text-white/40 hover:text-white/60 hover:bg-white/5 border-r-2 border-transparent'}`}
+        >
+            <Icon size={24} />
+            <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
+        </button>
+    )
+
     return (
-        <div className="min-h-screen p-8">
-            {/* Header */}
-            <header className="flex justify-between items-center mb-12">
-                <div>
-                    <h1 className="text-4xl font-black tracking-tighter uppercase italic flex items-center gap-2">
-                        <span className="text-ridge-brand">Ridge</span>
-                        <span>Link</span>
-                    </h1>
-                    <p className="text-white/40 font-mono text-sm">Facility Orchestration System v1.0</p>
+        <div className="flex min-h-screen bg-ridge-dark text-white overflow-hidden">
+            {/* Sidebar */}
+            <aside className="w-24 border-r border-white/10 flex flex-col items-center py-8 z-50 bg-[#0a0a0a]">
+                <div className="mb-12">
+                    <div className="w-12 h-12 bg-ridge-brand rounded-xl rotate-45 flex items-center justify-center shadow-lg shadow-ridge-brand/40">
+                        <Zap className="-rotate-45 text-white" size={24} />
+                    </div>
                 </div>
 
-                <div className="flex gap-4">
-                    <button
-                        onClick={() => sendGlobalCommand('KILL_RACE')}
-                        className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 px-6 py-2 rounded-full font-bold transition-all border border-white/10"
-                    >
-                        <RotateCcw size={18} /> Global Reset
-                    </button>
-                    <button
-                        onClick={() => sendGlobalCommand('SETUP_MODE')}
-                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-full font-bold transition-all shadow-lg shadow-blue-500/20"
-                    >
-                        <Monitor size={18} /> Prepare Rigs
-                    </button>
-                    <button
-                        onClick={() => sendGlobalCommand('LAUNCH_RACE')}
-                        className="flex items-center gap-2 bg-ridge-brand hover:bg-orange-600 px-6 py-2 rounded-full font-bold transition-all shadow-lg shadow-ridge-brand/20"
-                    >
-                        <Play size={18} /> Start All
+                <div className="flex-1 w-full space-y-4">
+                    <SidebarItem id="sims" icon={LayoutGrid} label="Sims" />
+                    <SidebarItem id="race" icon={Flag} label="Race" />
+                    <SidebarItem id="cars" icon={Car} label="Cars" />
+                    <SidebarItem id="media" icon={Image} label="Media" />
+                </div>
+
+                <div className="mt-auto">
+                    <button onClick={() => sendGlobalCommand('KILL_RACE')} className="p-4 text-red-500 hover:bg-red-500/10 rounded-full transition-all">
+                        <Power size={24} />
                     </button>
                 </div>
-            </header>
+            </aside>
 
-            <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
-                {/* Main Grid */}
-                <div className="xl:col-span-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {rigs.map((rig) => (
-                        <div key={rig.rig_id} className={`glass rounded-2xl p-6 transition-all duration-500 overflow-hidden relative ${rig.status === 'racing' ? 'status-glow-racing border-ridge-brand/50' :
-                            rig.status === 'ready' ? 'status-glow-online border-green-500/50' :
-                                rig.status === 'setup' ? 'status-glow-online border-blue-500/50' :
-                                    'status-glow-online border-green-500/30'
-                            }`}>
-                            <div className="flex justify-between items-start mb-6">
-                                <div>
-                                    <h3 className="text-2xl font-black italic">{rig.rig_id}</h3>
-                                    <code className="text-xs text-white/30">{rig.ip}</code>
-                                </div>
-                                <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest ${rig.status === 'racing' ? 'bg-ridge-brand text-white' :
-                                    rig.status === 'ready' ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' :
-                                        rig.status === 'setup' ? 'bg-blue-500 text-white' :
-                                            'bg-zinc-800 text-white'
+            {/* Main Content Area */}
+            <main className="flex-1 overflow-y-auto relative">
+                <header className="sticky top-0 z-40 bg-ridge-dark/80 backdrop-blur-xl p-8 flex justify-between items-center border-b border-white/5">
+                    <div>
+                        <h1 className="text-3xl font-black italic tracking-tighter uppercase flex items-center gap-2">
+                            <span className="text-ridge-brand">Ridge</span>
+                            <span>{activeTab === 'sims' ? 'Sim Manager' : activeTab === 'media' ? 'Media Center' : activeTab === 'cars' ? 'Car Pool' : 'Race Control'}</span>
+                        </h1>
+                        <p className="text-white/30 font-mono text-[10px] uppercase tracking-widest leading-none mt-1">
+                            {rigs.length} Units Online // {raceSettings.selected_track.toUpperCase()} // ENV {raceSettings.selected_weather.split('_').slice(1).join(' ')}
+                        </p>
+                    </div>
+
+                    <div className="flex gap-4">
+                        <button onClick={() => sendGlobalCommand('SETUP_MODE')} className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-full font-black italic uppercase text-xs flex items-center gap-2 transition-all shadow-lg shadow-blue-500/20">
+                            <Monitor size={16} /> Prepare Grid
+                        </button>
+                        <button onClick={() => sendGlobalCommand('LAUNCH_RACE')} className="bg-ridge-brand hover:bg-orange-600 px-8 py-2 rounded-full font-black italic uppercase text-xs flex items-center gap-2 transition-all shadow-lg shadow-ridge-brand/40">
+                            <Play size={16} /> Start Session
+                        </button>
+                    </div>
+                </header>
+
+                <div className="p-8 pb-32">
+                    {/* SIM MANAGEMENT VIEW */}
+                    {activeTab === 'sims' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                            {rigs.map((rig) => (
+                                <div key={rig.rig_id} className={`glass rounded-2xl p-6 transition-all duration-500 overflow-hidden relative border ${rig.status === 'racing' ? 'status-glow-racing border-ridge-brand/50 bg-ridge-brand/5' :
+                                    rig.status === 'ready' ? 'status-glow-online border-green-500/50 bg-green-500/5' :
+                                        rig.status === 'setup' ? 'status-glow-online border-blue-500/50 bg-blue-500/5' :
+                                            'border-white/10'
                                     }`}>
-                                    {rig.status}
-                                </div>
-                            </div>
-
-                            <div className="space-y-4 mb-8">
-                                <div className="flex items-center justify-between text-sm">
-                                    <div className="flex items-center gap-2 text-white/60">
-                                        <Cpu size={16} /> CPU Temp
-                                    </div>
-                                    <div className="font-mono font-bold">{rig.cpu_temp}°C</div>
-                                </div>
-                                <div className="flex items-center justify-between text-sm">
-                                    <div className="flex items-center gap-2 text-white/60">
-                                        <Activity size={16} /> Mod Version
-                                    </div>
-                                    <div className="font-mono">{rig.mod_version}</div>
-                                </div>
-                                {rig.selected_car && (
-                                    <div className={`flex items-center justify-between text-sm p-2 rounded-lg border ${rig.selected_car !== selectedCar ? 'bg-ridge-brand/10 border-ridge-brand/20' : 'bg-white/5 border-white/10'}`}>
-                                        <div className={`flex items-center gap-2 font-bold uppercase text-[10px] ${rig.selected_car !== selectedCar ? 'text-ridge-brand' : 'text-white/60'}`}>
-                                            <Zap size={14} /> Selected Car
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div>
+                                            <h3 className="text-2xl font-black italic tracking-tighter line-height-none">{rig.rig_id}</h3>
+                                            <code className="text-[10px] text-white/30 font-mono">{rig.ip}</code>
                                         </div>
-                                        <div className="font-bold text-white truncate max-w-[120px]">{rig.selected_car.split('_').slice(1).join(' ').toUpperCase()}</div>
+                                        <div className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest ${rig.status === 'racing' ? 'bg-ridge-brand text-white' :
+                                            rig.status === 'ready' ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' :
+                                                rig.status === 'setup' ? 'bg-blue-500 text-white' :
+                                                    'bg-zinc-800 text-white'
+                                            }`}>
+                                            {rig.status}
+                                        </div>
                                     </div>
-                                )}
-                            </div>
 
-                            <div className="grid grid-cols-2 gap-2 mt-auto">
-                                <button
-                                    onClick={() => sendCommand(rig.rig_id, 'LAUNCH_RACE', rig.selected_car)}
-                                    className="bg-white/5 hover:bg-white/10 p-3 rounded-xl flex items-center justify-center transition-colors group"
-                                >
-                                    <Zap className="group-hover:text-ridge-brand transition-colors" size={20} />
-                                </button>
-                                <button
-                                    onClick={() => sendCommand(rig.rig_id, 'KILL_RACE')}
-                                    className="bg-white/5 hover:bg-white/10 p-3 rounded-xl flex items-center justify-center transition-colors group"
-                                >
-                                    <Power className="group-hover:text-ridge-brand transition-colors" size={20} />
-                                </button>
+                                    <div className="space-y-4 mb-8">
+                                        <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-widest">
+                                            <div className="flex items-center gap-2 text-white/40">
+                                                <Cpu size={14} /> Internal Temp
+                                            </div>
+                                            <div className={rig.cpu_temp > 80 ? 'text-red-500' : 'text-white'}>{rig.cpu_temp}°C</div>
+                                        </div>
+                                        {rig.selected_car && (
+                                            <div className={`p-3 rounded-xl border ${rig.selected_car !== selectedCar ? 'bg-ridge-brand/10 border-ridge-brand/30' : 'bg-white/5 border-white/10'}`}>
+                                                <div className="flex items-center gap-2 font-black uppercase text-[9px] text-white/40 mb-1">
+                                                    <Zap size={12} className={rig.selected_car !== selectedCar ? 'text-ridge-brand' : ''} /> Selection
+                                                </div>
+                                                <div className="font-black italic text-xs truncate overflow-hidden">
+                                                    {rig.selected_car.split('_').slice(1).join(' ').toUpperCase()}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button onClick={() => sendCommand(rig.rig_id, 'LAUNCH_RACE', rig.selected_car)} className="bg-white/5 hover:bg-ridge-brand/20 hover:text-ridge-brand p-3 rounded-xl flex items-center justify-center transition-all border border-transparent hover:border-ridge-brand/30">
+                                            <Zap size={20} />
+                                        </button>
+                                        <button onClick={() => sendCommand(rig.rig_id, 'KILL_RACE')} className="bg-white/5 hover:bg-red-500/20 hover:text-red-500 p-3 rounded-xl flex items-center justify-center transition-all border border-transparent hover:border-red-500/30">
+                                            <Power size={20} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                            {rigs.length === 0 && (
+                                <div className="col-span-full py-24 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-3xl">
+                                    <Activity size={48} className="mb-4 text-white/10 animate-pulse" />
+                                    <p className="text-xl font-black italic tracking-tighter uppercase opacity-20 text-center">No Active Signals Detected<br /><span className="text-xs font-mono normal-case tracking-normal">Listening for UDP heartbeats on 5001...</span></p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* RACE MANAGER VIEW */}
+                    {activeTab === 'race' && (
+                        <div className="max-w-4xl space-y-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="glass rounded-3xl p-8 border border-white/10">
+                                    <h2 className="text-xl font-black italic uppercase mb-6 flex items-center gap-2"><Flag className="text-ridge-brand" size={20} /> Circuit & Atmosphere</h2>
+                                    <div className="space-y-6">
+                                        <div>
+                                            <label className="block text-[10px] uppercase font-black text-white/40 mb-2">Target Circuit</label>
+                                            <select
+                                                value={raceSettings.selected_track}
+                                                onChange={(e) => setRaceSettings({ ...raceSettings, selected_track: e.target.value })}
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-ridge-brand transition-all font-bold italic appearance-none"
+                                            >
+                                                <option value="monza">Monza - Grand Prix</option>
+                                                <option value="spa">Spa-Francorchamps</option>
+                                                <option value="nordschleife">Nürburgring Nordschleife</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] uppercase font-black text-white/40 mb-2">Environment / Weather</label>
+                                            <select
+                                                value={raceSettings.selected_weather}
+                                                onChange={(e) => setRaceSettings({ ...raceSettings, selected_weather: e.target.value })}
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-ridge-brand transition-all font-bold italic appearance-none"
+                                            >
+                                                <option value="0_sun">01 - Clear Sun</option>
+                                                <option value="1_nosun">02 - No Sun</option>
+                                                <option value="2_clouds">03 - Overcast</option>
+                                                <option value="3_clear">04 - Optimum (Clear)</option>
+                                                <option value="4_mid_clouds">05 - Mid Clouds</option>
+                                                <option value="5_light_clouds">06 - Light Clouds</option>
+                                                <option value="6_heavy_clouds">07 - Heavy Clouds</option>
+                                            </select>
+                                        </div>
+                                        <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/10">
+                                            <div>
+                                                <p className="font-black italic uppercase text-sm">DRS System Availability</p>
+                                                <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Global Regulation Flag</p>
+                                            </div>
+                                            <button
+                                                onClick={() => setRaceSettings({ ...raceSettings, allow_drs: !raceSettings.allow_drs })}
+                                                className={`w-14 h-8 rounded-full relative transition-all ${raceSettings.allow_drs ? 'bg-ridge-brand' : 'bg-zinc-800'}`}
+                                            >
+                                                <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${raceSettings.allow_drs ? 'left-7' : 'left-1'}`} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="glass rounded-3xl p-8 border border-white/10">
+                                    <h2 className="text-xl font-black italic uppercase mb-6 flex items-center gap-2"><Clock className="text-ridge-brand" size={20} /> Session Timing</h2>
+                                    <div className="space-y-6">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-[10px] uppercase font-black text-white/40 mb-2">Practice (Min)</label>
+                                                <input
+                                                    type="number"
+                                                    value={raceSettings.practice_time}
+                                                    onChange={(e) => setRaceSettings({ ...raceSettings, practice_time: parseInt(e.target.value) })}
+                                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 outline-none focus:border-ridge-brand transition-all font-bold font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] uppercase font-black text-white/40 mb-2">Qualifying (Min)</label>
+                                                <input
+                                                    type="number"
+                                                    value={raceSettings.qualy_time}
+                                                    onChange={(e) => setRaceSettings({ ...raceSettings, qualy_time: parseInt(e.target.value) })}
+                                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 outline-none focus:border-ridge-brand transition-all font-bold font-mono"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] uppercase font-black text-white/40 mb-2">Race Length (Laps)</label>
+                                            <input
+                                                type="number"
+                                                value={raceSettings.race_laps}
+                                                onChange={(e) => setRaceSettings({ ...raceSettings, race_laps: parseInt(e.target.value) })}
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-ridge-brand transition-all font-bold font-mono text-xl"
+                                            />
+                                        </div>
+                                        <div className="bg-ridge-brand/10 border border-ridge-brand/30 p-4 rounded-2xl flex items-start gap-4">
+                                            <div className="p-2 bg-ridge-brand rounded-lg"><Flag size={16} /></div>
+                                            <div>
+                                                <p className="text-[10px] font-black uppercase tracking-widest text-ridge-brand mb-1">Session Summary</p>
+                                                <p className="text-xs text-white/70 leading-relaxed font-medium capitalize">
+                                                    Race will run {raceSettings.practice_time > 0 ? `${raceSettings.practice_time}m Practice, ` : ''}{raceSettings.qualy_time > 0 ? `${raceSettings.qualy_time}m Qualy, ` : ''}followed by a {raceSettings.race_laps} Lap Grand Prix.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    ))}
+                    )}
 
-                    {/* Placeholder for no rigs */}
-                    {rigs.length === 0 && (
-                        <div className="col-span-full py-24 flex flex-col items-center justify-center glass rounded-3xl opacity-50">
-                            <Monitor size={64} className="mb-4 text-white/20 animate-pulse" />
-                            <p className="text-xl font-bold italic tracking-tighter uppercase">Waiting for heartbeats...</p>
-                            <p className="text-sm text-white/30 font-mono">Ensure Rig Sleds are broadcasting on UDP :5001</p>
+                    {/* CAR POOL VIEW */}
+                    {activeTab === 'cars' && (
+                        <div className="max-w-5xl">
+                            <div className="flex items-center justify-between mb-8">
+                                <div>
+                                    <h2 className="text-xl font-black italic uppercase">Fleet Authorization</h2>
+                                    <p className="text-xs text-white/40 uppercase tracking-widest font-bold">Manage available vehicle classes for customer selection</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs font-black uppercase text-white/40">Authorized</p>
+                                    <p className="text-2xl font-black italic text-ridge-brand">{activeCarPool.length} / {ALL_CARS.length}</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                {ALL_CARS.map(car => (
+                                    <button
+                                        key={car.id}
+                                        onClick={() => toggleCarInPool(car.id)}
+                                        className={`group text-left p-4 rounded-2xl border transition-all relative overflow-hidden flex flex-col justify-between h-32 ${activeCarPool.includes(car.id)
+                                            ? 'bg-ridge-brand/10 border-ridge-brand/50 text-white'
+                                            : 'bg-white/5 border-white/5 text-white/20'
+                                            }`}
+                                    >
+                                        <div className="flex justify-between items-start">
+                                            <Car size={32} className={`transition-all ${activeCarPool.includes(car.id) ? 'text-ridge-brand' : 'opacity-20'}`} />
+                                            {activeCarPool.includes(car.id) ? <Check className="text-ridge-brand" size={16} /> : <Zap size={16} className="opacity-10" />}
+                                        </div>
+                                        <span className={`font-black italic uppercase text-xs tracking-tighter ${activeCarPool.includes(car.id) ? 'text-white' : 'group-hover:text-white/40 transition-colors'}`}>{car.name}</span>
+                                        {activeCarPool.includes(car.id) && <div className="absolute -right-2 -bottom-2 w-12 h-12 bg-ridge-brand/20 blur-xl rounded-full" />}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MEDIA VIEW */}
+                    {activeTab === 'media' && (
+                        <div className="max-w-2xl space-y-6">
+                            <div className="glass rounded-3xl p-8 border border-white/10">
+                                <h2 className="text-xl font-black italic uppercase mb-6 flex items-center gap-2"><Image className="text-ridge-brand" size={24} /> Brand Identity</h2>
+                                <div className="space-y-6">
+                                    <div>
+                                        <label className="block text-[10px] uppercase font-black text-white/40 mb-2">Corporate Logo URL (PNG/SVG)</label>
+                                        <input
+                                            type="text"
+                                            value={brandingFields.logo_url}
+                                            onChange={(e) => setBrandingFields({ ...brandingFields, logo_url: e.target.value })}
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 font-mono text-xs focus:ring-1 focus:ring-ridge-brand outline-none transition-all"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] uppercase font-black text-white/40 mb-1">Cinematic Loop (MP4)</label>
+                                        <p className="text-[9px] text-white/20 uppercase font-black mb-2 tracking-widest italic">Displayed during rig idle state</p>
+                                        <input
+                                            type="text"
+                                            value={brandingFields.video_url}
+                                            onChange={(e) => setBrandingFields({ ...brandingFields, video_url: e.target.value })}
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 font-mono text-xs focus:ring-1 focus:ring-ridge-brand outline-none transition-all"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={handleBrandingPush}
+                                        className="w-full bg-ridge-brand hover:bg-orange-600 py-4 rounded-xl font-black tracking-tighter italic uppercase text-sm transition-all shadow-lg shadow-ridge-brand/20"
+                                    >
+                                        Deploy Branding to Network
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="p-6 border border-zinc-800 rounded-3xl opacity-50">
+                                <p className="text-[10px] font-black uppercase text-white/30 mb-2">Preview</p>
+                                <div className="aspect-video bg-zinc-900 rounded-2xl flex items-center justify-center border border-white/5">
+                                    <Monitor size={32} className="text-white/5" />
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
-                <aside className="space-y-8">
-                    {/* Facility Branding Manager */}
-                    <div className="glass rounded-2xl p-6 border border-white/10">
-                        <div className="flex items-center gap-2 mb-6">
-                            <Monitor className="text-ridge-brand" size={24} />
-                            <h2 className="text-xl font-bold uppercase italic">Facility Branding</h2>
+
+                {/* Sub-Footer Contextual Label */}
+                <div className="fixed bottom-8 right-8 z-50 pointer-events-none">
+                    <div className="glass px-6 py-2 rounded-full border border-white/10 shadow-2xl flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                            <span className="text-[9px] font-black uppercase tracking-widest">Orchestrator Stable</span>
                         </div>
-                        <div className="space-y-4 text-sm">
-                            <div>
-                                <label className="block text-white/40 mb-1 uppercase font-bold text-[10px]">Logo URL</label>
-                                <input
-                                    type="text"
-                                    value={brandingFields.logo_url}
-                                    onChange={(e) => setBrandingFields({ ...brandingFields, logo_url: e.target.value })}
-                                    className="w-full bg-zinc-900 border border-white/10 rounded px-3 py-2 font-mono text-xs focus:ring-1 focus:ring-ridge-brand outline-none"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-white/40 mb-1 uppercase font-bold text-[10px]">Idle Video (MP4)</label>
-                                <input
-                                    type="text"
-                                    value={brandingFields.video_url}
-                                    onChange={(e) => setBrandingFields({ ...brandingFields, video_url: e.target.value })}
-                                    className="w-full bg-zinc-900 border border-white/10 rounded px-3 py-2 font-mono text-xs focus:ring-1 focus:ring-ridge-brand outline-none"
-                                />
-                            </div>
-                            <button
-                                onClick={handleBrandingPush}
-                                className="w-full bg-zinc-800 hover:bg-zinc-700 py-2 rounded font-bold transition-all text-xs uppercase tracking-widest"
-                            >
-                                Push Global Branding
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Car Pool Manager */}
-                    <div className="glass rounded-2xl p-6 border border-white/10">
-                        <h2 className="text-xl font-black uppercase italic mb-6 flex items-center gap-2">
-                            <Monitor className="text-ridge-brand" size={20} />
-                            Car Pool Manager
-                        </h2>
-                        <div className="space-y-3">
-                            {ALL_CARS.map(car => (
-                                <button
-                                    key={car.id}
-                                    onClick={() => toggleCarInPool(car.id)}
-                                    className={`w-full text-left p-4 rounded-xl border transition-all flex justify-between items-center ${activeCarPool.includes(car.id)
-                                        ? 'bg-ridge-brand/10 border-ridge-brand/50 text-white'
-                                        : 'bg-white/5 border-white/10 text-white/40 grayscale shadow-inner'
-                                        }`}
-                                >
-                                    <span className="font-bold italic uppercase text-xs">{car.name}</span>
-                                    {activeCarPool.includes(car.id) && <Zap size={14} className="text-ridge-brand" />}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="mt-8 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
-                            <p className="text-[10px] text-blue-400 font-bold uppercase mb-2">Facility Info</p>
-                            <p className="text-xs text-blue-200/60 leading-relaxed">
-                                Selected cars here will be mirrored in the **User Side Kiosk** for selection.
-                            </p>
-                        </div>
-                    </div>
-                </aside>
-            </div>
-
-            {/* Mission Packet Setup */}
-            <footer className="fixed bottom-0 left-0 right-0 p-8 pt-24 bg-gradient-to-t from-ridge-dark to-transparent pointer-events-none z-50">
-                <div className="max-w-6xl mx-auto glass p-6 rounded-3xl border-white/5 pointer-events-auto flex items-center gap-8 shadow-2xl transition-all hover:border-white/10">
-                    <div className="flex-1">
-                        <label className="block text-[10px] uppercase tracking-widest font-black text-white/40 mb-2">Target Circuit</label>
-                        <select
-                            value={selectedTrack}
-                            onChange={(e) => setSelectedTrack(e.target.value)}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 outline-none focus:border-ridge-brand transition-colors appearance-none font-bold italic text-sm"
-                        >
-                            <option value="monza">Monza - Grand Prix</option>
-                            <option value="spa">Spa-Francorchamps</option>
-                            <option value="nordschleife">Nürburgring Nordschleife</option>
-                        </select>
-                    </div>
-
-                    <div className="flex-1">
-                        <label className="block text-[10px] uppercase tracking-widest font-black text-white/40 mb-2">Default Class</label>
-                        <select
-                            value={selectedCar}
-                            onChange={(e) => setSelectedCar(e.target.value)}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 outline-none focus:border-ridge-brand transition-colors appearance-none font-bold italic text-sm"
-                        >
-                            {ALL_CARS.filter(c => activeCarPool.includes(c.id)).map(car => (
-                                <option key={car.id} value={car.id}>{car.name}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="flex-1">
-                        <label className="block text-[10px] uppercase tracking-widest font-black text-white/40 mb-2">Environment</label>
-                        <select
-                            value={selectedWeather}
-                            onChange={(e) => setSelectedWeather(e.target.value)}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 outline-none focus:border-ridge-brand transition-colors appearance-none font-bold italic text-sm"
-                        >
-                            <option value="0_sun">01 - Clear Sun</option>
-                            <option value="1_nosun">02 - No Sun</option>
-                            <option value="2_clouds">03 - Overcast</option>
-                            <option value="3_clear">04 - Optimum</option>
-                            <option value="4_mid_clouds">05 - Mid Clouds</option>
-                            <option value="5_light_clouds">06 - Light Clouds</option>
-                            <option value="6_heavy_clouds">07 - Heavy Clouds</option>
-                        </select>
-                    </div>
-
-                    <div className="w-px h-12 bg-white/10" />
-
-                    <div className="flex flex-col items-end min-w-[100px]">
-                        <p className="text-[10px] uppercase tracking-widest font-black text-white/40">Active Rigs</p>
-                        <p className="text-3xl font-black italic text-ridge-brand">{rigs.length}</p>
+                        <div className="w-px h-4 bg-white/10" />
+                        <span className="text-[9px] font-black font-mono text-ridge-brand uppercase italic tracking-widest">Target: {raceSettings.selected_track.toUpperCase()}</span>
                     </div>
                 </div>
-            </footer>
-        </div >
+            </main>
+        </div>
     )
 }
 

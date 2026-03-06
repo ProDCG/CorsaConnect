@@ -180,11 +180,18 @@ class RigSled:
         
         if action == "LAUNCH_RACE":
             self.stop_kiosk()
-            car = payload.get("car") or self.selected_car
-            car = payload.get("car") or self.selected_car
-            track = payload.get("track", "monza")
-            weather = payload.get("weather", "3_clear")
-            self.launch_race(car, track, weather)
+            # Extract all session parameters
+            params = {
+                "car": payload.get("car") or self.selected_car,
+                "track": payload.get("track", "monza"),
+                "weather": payload.get("weather", "3_clear"),
+                "practice_time": payload.get("practice_time", 0),
+                "qualy_time": payload.get("qualy_time", 10),
+                "race_laps": payload.get("race_laps", 10),
+                "race_time": payload.get("race_time", 0),
+                "allow_drs": payload.get("allow_drs", True)
+            }
+            self.launch_race(params)
         elif action == "KILL_RACE":
             self.kill_race()
             self.start_kiosk()
@@ -199,9 +206,13 @@ class RigSled:
                 except Exception as e:
                     print(f"Warning: Could not reset selected_car.json: {e}")
 
-    def generate_race_ini(self, car, track, weather="3_clear"):
-        """Generates a standard race.ini file for direct acs.exe launch"""
+    def generate_race_ini(self, params):
+        """Generates a multi-session race.ini file for direct acs.exe launch"""
         try:
+            car = params["car"]
+            track = params["track"]
+            weather = params["weather"]
+            
             user_profile = os.environ.get('USERPROFILE') or os.path.expanduser('~')
             documents = os.path.join(user_profile, 'Documents')
             
@@ -212,7 +223,42 @@ class RigSled:
             cfg_path = os.path.join(documents, 'Assetto Corsa', 'cfg', 'race.ini')
             os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
             
-            # Use absolute path for track/car if possible, but default to relative
+            sessions = []
+            session_id = 0
+            
+            # Practice Session
+            if params.get("practice_time", 0) > 0:
+                sessions.append(f"""
+[SESSION_{session_id}]
+NAME=Practice
+TYPE=0
+DURATION_MINUTES={params["practice_time"]}
+WAIT_TIME=0
+""")
+                session_id += 1
+                
+            # Qualifying Session
+            if params.get("qualy_time", 0) > 0:
+                sessions.append(f"""
+[SESSION_{session_id}]
+NAME=Qualifying
+TYPE=1
+DURATION_MINUTES={params["qualy_time"]}
+WAIT_TIME=0
+""")
+                session_id += 1
+                
+            # Race Session (Defaulting to Laps if laps > 0, else Time)
+            race_type = 3 if params.get("race_laps", 0) > 0 else 2
+            sessions.append(f"""
+[SESSION_{session_id}]
+NAME=Grand Prix
+TYPE={race_type}
+LAPS={params.get("race_laps", 10)}
+DURATION_MINUTES={params.get("race_time", 0)}
+WAIT_TIME=0
+""")
+
             content = f"""[RACE]
 VERSION=1.1
 MODEL={car}
@@ -238,31 +284,11 @@ GUID=
 BALLAST=0
 RESTRICTOR=0
 SPECTATOR_MODE=0
-
-[SESSION_0]
-NAME=Quick Race
-TYPE=3
-LAPS=10
-DURATION_MINUTES=20
-WAIT_TIME=0
-
+{"".join(sessions)}
 [REMOTE]
 ACTIVE=0
 SERVER_IP=
 SERVER_PORT=
-NAME=
-TEAM=
-GUID=
-PASS=
-
-[GHOST_CAR]
-RECORDING=0
-PLAYING=0
-SECONDS_BEFORE_GHOST=0
-
-[REPLAY]
-FILENAME=
-ACTIVE=0
 
 [LIGHTING]
 SPECULAR_MULT=1.0
@@ -277,20 +303,21 @@ ACTIVE=0
             with open(cfg_path, "w") as f:
                 f.write(content.strip())
             
-            print(f"DEBUG: Successfully wrote race.ini to {cfg_path}")
-            print(f"--- PARAMS: CAR={car}, TRACK={track} ---")
+            print(f"DEBUG: Successfully wrote multi-session race.ini to {cfg_path}")
+            print(f"--- PARAMS: CAR={car}, TRACK={track}, WEATHER={weather}, DRS={params.get('allow_drs')} ---")
             
             return cfg_path
         except Exception as e:
             print(f"Failed to generate race.ini: {e}")
             return None
 
-    def launch_race(self, car, track, weather="3_clear"):
+    def launch_race(self, params):
         """Final stage: Triggered after user clicks 'Ready' and Admin clicks 'Start'"""
         self.kill_race()
         
-        # Optional: Run sync here if needed, but user said skip at this step
-        # self.sync_mods()
+        car = params["car"]
+        track = params["track"]
+        weather = params["weather"]
         
         self.status = "racing"
         print(f"--- LAUNCHING ENGINE: {car} @ {track} (Weather: {weather}) ---")
@@ -301,7 +328,7 @@ ACTIVE=0
             ac_path = probable_path if os.path.exists(probable_path) else ac_path
 
         if ac_path and os.path.exists(ac_path):
-            ini_path = self.generate_race_ini(car, track, weather)
+            ini_path = self.generate_race_ini(params)
             if ini_path:
                 try:
                     ac_dir = os.path.dirname(ac_path)
