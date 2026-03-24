@@ -1,6 +1,0 @@
-pyproject.toml
-ridge_link_sled.egg-info/PKG-INFO
-ridge_link_sled.egg-info/SOURCES.txt
-ridge_link_sled.egg-info/dependency_links.txt
-ridge_link_sled.egg-info/requires.txt
-ridge_link_sled.egg-info/top_level.txt

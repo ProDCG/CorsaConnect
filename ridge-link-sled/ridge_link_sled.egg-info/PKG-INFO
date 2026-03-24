@@ -1,9 +1,0 @@
-Metadata-Version: 2.4
-Name: ridge-link-sled
-Version: 1.0.0
-Summary: Lightweight agent for racing simulators
-Requires-Dist: requests
-Requires-Dist: psutil
-Requires-Dist: opencv-python
-Requires-Dist: pillow
-Requires-Dist: tkinter
