@@ -1,92 +1,80 @@
-# Ridge-Link: Facility Orchestration System (Windows Deployment Guide)
+# Ridge-Link: Facility Orchestration System v2.0
 
-Ridge-Link is a high-performance, distributed management system built to control 10+ Assetto Corsa racing rigs from a single Admin console. This system is designed specifically for **Windows-powered racing facilities**.
+Ridge-Link is a distributed management system for controlling 10+ Assetto Corsa racing rigs from a single admin console.
 
-## 1. Prerequisites (All Machines)
+## Architecture
 
--   **Python 3.11+**: [Download from python.org](https://www.python.org/downloads/windows/). Ensure "Add Python to PATH" is checked during installation.
--   **Assetto Corsa**: Installed at `C:\AssettoCorsa` (default local path defined in `sled.py`).
--   **Local Area Network**: All machines must be on the same subnet (e.g., 192.168.1.x).
+```
+/corsa (monorepo root)
+├── /apps
+│   ├── /orchestrator     ← FastAPI backend + React dashboard
+│   │   ├── main.py       ← Entry point
+│   │   ├── state.py      ← Thread-safe state manager
+│   │   ├── /routers      ← API endpoints (rigs, commands, groups, settings, server, leaderboard)
+│   │   ├── /services     ← Heartbeat listener, command dispatcher
+│   │   └── /frontend     ← React/Tailwind dashboard (Vite)
+│   └── /sled             ← Rig agent
+│       ├── main.py       ← Entry point
+│       ├── agent.py      ← Core rig lifecycle manager
+│       ├── heartbeat.py  ← HTTP heartbeat with standalone fallback
+│       ├── command_handler.py ← TCP command listener
+│       ├── launcher.py   ← Race INI generation + AC process launcher
+│       └── telemetry.py  ← SimHub/UDP/SharedMemory telemetry
+├── /shared               ← Shared Pydantic models & constants
+├── /deploy               ← PyInstaller & packaging (future)
+├── bootstrap.py          ← One-click setup (firewall + venv + deps)
+├── Makefile              ← lint / typecheck / test commands
+└── pyproject.toml        ← ruff + mypy + pytest config
+```
 
----
+## Quick Start
 
-## 2. Admin PC Setup (The Hub)
+### Admin PC (The Hub)
+```powershell
+python bootstrap.py          # Select 'admin'
+python apps/orchestrator/main.py
+cd apps/orchestrator/frontend && npm install && npm run dev
+```
 
-The Admin PC acts as the "Master" and hosts all game content.
+### Racing Rig (The Sled)
+```powershell
+python bootstrap.py          # Select 'rig'
+python apps/sled/main.py
+```
 
-1.  **Run Bootstrap**:
-    Open a terminal as **Administrator** and run:
-    ```powershell
-    python bootstrap.py
-    ```
-    Select `admin`. This will create `C:\RidgeContent` and open the firewall.
+## Key URLs
+| URL | Description |
+|-----|-------------|
+| `http://<admin-ip>:5173` | Admin Dashboard |
+| `http://<admin-ip>:5173/kiosk?rig_id=RIG-01` | Rig Kiosk Screen |
+| `http://<admin-ip>:5173/lobby` | TV Leaderboard Display |
+| `http://<admin-ip>:8000/docs` | API Documentation |
 
-2.  **Share Content Folder (SMB)**:
-    -   Right-click `C:\RidgeContent` -> Properties -> Sharing -> Advanced Sharing.
-    -   Check "Share this folder".
-    -   Click "Permissions" and ensure "Everyone" has **Read** access.
-    -   **Important**: The network path must be reachable as `\\ADMIN-PC\RidgeContent`. If your Admin PC has a different name, update `ADMIN_SHARED_FOLDER` in `sled.py`.
+## Rig Grouping
 
-3.  **Start the Controller**:
-    ```powershell
-    cd ridge-link-orchestrator/backend
-    pip install .
-    python main.py
-    ```
+Create groups from the **Groups** tab in the dashboard to pair rigs together:
+- **Multiplayer groups**: All rigs in the group connect to the same AC server
+- **Solo groups**: Each rig runs independently with the same settings
+- Commands can be sent per-group (Start Race, Kill Race, Setup)
 
----
+## Development
 
-## 3. Racing Rig Setup (The Sleds)
+### Code Quality (Syntax & Type Checking)
+```bash
+make check        # Run all checks (lint + typecheck + test)
+make lint         # ruff check (auto-fix)
+make typecheck    # mypy strict mode
+make test         # pytest
+make frontend-lint # TypeScript type-check
+```
 
-Repeat these steps for every simulator rig.
+### Prerequisites
+- **Python 3.11+** with `ruff` and `mypy` installed (`pip install ruff mypy`)
+- **Node.js 18+** for the frontend
+- **Assetto Corsa** installed at the configured path
+- All machines on the same LAN subnet
 
-1.  **Run Bootstrap**:
-    Open a terminal as **Administrator**:
-    ```powershell
-    python bootstrap.py
-    ```
-    Select `rig`.
-
-2.  **Start the Agent**:
-    ```powershell
-    cd ridge-link-sled
-    pip install .
-    python sled.py
-    ```
-    The Rig will instantly appear on the Admin Dashboard.
-
----
-
-## 4. Testing on Actual Hardware
-
-Once the software is running, follow this validation flow:
-
-1.  **Discovery Check**: Open the Admin Dashboard. You should see a card for every rig that has `sled.py` running.
-2.  **Branding Check**: Verify that the rig is showing the "Ridge Racing" splash screen (Kiosk Mode).
-3.  **Sync Test**: Put a small text file in `C:\RidgeContent` on the Admin PC. Click "Start All" on the dashboard. Verify the file appears in `C:\AssettoCorsa` on the rig via Robocopy.
-4.  **Process Test**: Verify that the Kiosk screen disappears and a dummy process (or AC) launches. Verify "Global Reset" kills the process and restores the Kiosk screen.
-
----
-
-## 5. Compiling to Executables (Optional)
-
-To avoid showing a console window to staff/customers, compile the scripts:
-
-1.  **Install PyInstaller**: `pip install pyinstaller`
-2.  **Compile Sled**:
-    ```powershell
-    cd ridge-link-sled
-    pyinstaller --noconsole --onefile --add-data "assets;assets" sled.py
-    ```
-3.  **Compile Orchestrator**:
-    ```powershell
-    cd ridge-link-orchestrator/backend
-    pyinstaller --noconsole --onefile main.py
-    ```
-    *Note: The frontend dashboard should be hosted via a web server or kept as a Vite dev process for speed tonight.*
-
----
-
-## 6. Troubleshooting
--   **Rigs not appearing?** Check if the Admin PC can ping the Rig and vice versa. Ensure UDP port 5001 is not blocked by a third-party antivirus.
--   **Robocopy failing?** Try accessing `\\ADMIN-PC\RidgeContent` manually via Windows Explorer on the Rig. If it asks for a password, you may need to disable "Password protected sharing" in Windows Network and Sharing Center.
+## Troubleshooting
+- **Rigs not appearing?** Check firewall — UDP 5001 must be open. Verify IPs can ping.
+- **Robocopy failing?** Access `\\ADMIN-PC\RidgeContent` manually in Explorer first.
+- **Standalone mode?** If the admin PC is down, sleds auto-enter local standalone mode.

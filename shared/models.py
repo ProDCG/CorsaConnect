@@ -1,0 +1,170 @@
+"""Shared Pydantic models for Ridge-Link orchestrator and sled communication."""
+
+from __future__ import annotations
+
+import time
+import uuid
+
+from pydantic import BaseModel, Field
+
+# --- Rig Models ---
+
+
+class RigStatusUpdate(BaseModel):
+    """Payload sent by sleds/kiosks to update their status."""
+
+    status: str | None = None
+    selected_car: str | None = None
+    cpu_temp: float | None = None
+    telemetry: dict[str, object] | None = None
+    ip: str | None = None
+
+
+class Rig(BaseModel):
+    """Represents a single racing rig in the system."""
+
+    rig_id: str
+    ip: str
+    status: str = "idle"  # idle, setup, ready, racing, error
+    selected_car: str | None = None
+    cpu_temp: float = 0.0
+    mod_version: str = "unknown"
+    last_seen: float = Field(default_factory=time.time)
+    telemetry: dict[str, object] | None = None
+    last_lap_count: int = 0
+    group_id: str | None = None
+
+
+# --- Rig Group Models ---
+
+
+class RigGroup(BaseModel):
+    """A named group of rigs that can receive commands together."""
+
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
+    name: str
+    mode: str = "multiplayer"  # multiplayer | solo
+    rig_ids: list[str] = Field(default_factory=list)
+
+
+class RigGroupCreate(BaseModel):
+    """Payload for creating a new rig group."""
+
+    name: str
+    mode: str = "multiplayer"
+
+
+class RigGroupUpdate(BaseModel):
+    """Payload for updating an existing rig group."""
+
+    name: str | None = None
+    mode: str | None = None
+
+
+class RigGroupAddRig(BaseModel):
+    """Payload for adding a rig to a group."""
+
+    rig_id: str
+
+
+# --- Command Models ---
+
+
+class Command(BaseModel):
+    """Command to send to one or more rigs."""
+
+    rig_id: str
+    action: str  # SETUP_MODE, LAUNCH_RACE, KILL_RACE
+    track: str | None = None
+    car: str | None = None
+    weather: str | None = None
+    practice_time: int = 0
+    qualy_time: int = 0
+    race_laps: int = 10
+    race_time: int = 0
+    allow_drs: bool = True
+    use_server: bool = False
+    session_time: int | None = None  # Legacy support
+    server_ip: str | None = None
+
+
+# --- Settings Models ---
+
+
+class GlobalSettings(BaseModel):
+    """Global race/session configuration."""
+
+    practice_time: int = 0
+    qualy_time: int = 10
+    race_laps: int = 10
+    race_time: int = 0
+    allow_drs: bool = True
+    selected_track: str = "monza"
+    selected_weather: str = "3_clear"
+
+
+class Branding(BaseModel):
+    """Facility branding assets."""
+
+    logo_url: str = "/assets/ridge_logo.png"
+    video_url: str = "/assets/idle_race.mp4"
+
+
+class CarPoolUpdate(BaseModel):
+    """Payload to update the available car pool."""
+
+    cars: list[str]
+
+
+class TelemetryConfig(BaseModel):
+    """Configuration for which telemetry fields are active."""
+
+    active_fields: list[str] = Field(
+        default_factory=lambda: ["velocity", "gforce", "normalized_pos", "gear", "completed_laps", "gas"]
+    )
+
+
+# --- Preset Models ---
+
+
+class Preset(BaseModel):
+    """A saved configuration preset."""
+
+    id: str
+    name: str
+    track: str
+    weather: str
+    practice_time: int
+    qualy_time: int
+    race_laps: int
+    race_time: int
+    allow_drs: bool
+    selected_car: str | None = None
+    car_pool: list[str] = Field(default_factory=list)
+
+
+# --- Leaderboard Models ---
+
+
+class LeaderboardEntry(BaseModel):
+    """A single lap record on the leaderboard."""
+
+    rig_id: str
+    car: str | None = None
+    timestamp: float = Field(default_factory=time.time)
+    lap: int = 0
+
+
+# --- Heartbeat Models ---
+
+
+class HeartbeatPayload(BaseModel):
+    """UDP heartbeat broadcast from a sled."""
+
+    rig_id: str
+    status: str = "idle"
+    cpu_temp: float = 0.0
+    mod_version: str = "unknown"
+    selected_car: str | None = None
+    telemetry: dict[str, object] | None = None
+    ip: str | None = None

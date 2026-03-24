@@ -13,7 +13,13 @@ venv/
 .venv/
 env/
 .env/
-.venv/
+*.egg-info/
+build/
+
+# Type checking / linting caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
 
 # Local Configs
 # config.json
@@ -26,3 +32,6 @@ env/
 public/assets/idle_race.mp4
 public/assets/ridge_logo.png
 public/assets/idle_race_temp.jpg
+
+# Server generated configs
+server_config/

@@ -1,0 +1,61 @@
+"""Settings, car pool, branding, presets, and telemetry config endpoints."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter
+
+from apps.orchestrator.state import AppState
+from shared.models import Branding, CarPoolUpdate, GlobalSettings, Preset, TelemetryConfig
+
+router = APIRouter(tags=["settings"])
+
+
+def create_router(state: AppState) -> APIRouter:
+    """Create the settings router bound to the given application state."""
+
+    @router.get("/settings")
+    async def get_settings() -> GlobalSettings:
+        return state.settings
+
+    @router.post("/settings")
+    async def update_settings(update: GlobalSettings) -> dict[str, object]:
+        state.settings = update
+        return {"status": "success", "settings": update.model_dump()}
+
+    @router.get("/carpool")
+    async def get_carpool() -> list[str]:
+        return state.car_pool
+
+    @router.post("/carpool")
+    async def update_carpool(update: CarPoolUpdate) -> dict[str, object]:
+        state.car_pool = update.cars
+        return {"status": "success", "car_pool": update.cars}
+
+    @router.get("/branding")
+    async def get_branding() -> Branding:
+        return state.branding
+
+    @router.post("/branding")
+    async def update_branding(update: Branding) -> dict[str, object]:
+        state.branding = update
+        return {"status": "success", "branding": update.model_dump()}
+
+    @router.get("/presets")
+    async def get_presets() -> list[Preset]:
+        return state.presets
+
+    @router.post("/presets")
+    async def save_presets(presets: list[Preset]) -> dict[str, str]:
+        state.presets = presets
+        return {"status": "success"}
+
+    @router.get("/telem_config")
+    async def get_telem_config() -> TelemetryConfig:
+        return state.telem_config
+
+    @router.post("/telem_config")
+    async def save_telem_config(config: TelemetryConfig) -> dict[str, str]:
+        state.telem_config = config
+        return {"status": "success"}
+
+    return router
