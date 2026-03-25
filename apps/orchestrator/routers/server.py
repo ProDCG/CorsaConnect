@@ -1,183 +1,107 @@
-"""Assetto Corsa dedicated server management endpoints."""
+"""Assetto Corsa dedicated server management endpoints.
+
+Supports per-group servers: each group can have its own AC server instance
+with unique ports, track, car list, and entry list.
+"""
 
 from __future__ import annotations
 
 import logging
-import os
-import shutil
-import subprocess
 
 from fastapi import APIRouter
+from pydantic import BaseModel, Field
 
+from apps.orchestrator.services.acserver import ACServerManager
 from apps.orchestrator.state import AppState
-from shared.constants import (
-    AC_ADMIN_PASSWORD,
-    AC_HTTP_PORT,
-    AC_SERVER_NAME,
-    AC_SERVER_PASSWORD,
-    AC_TCP_PORT,
-    AC_UDP_PORT,
-    DEFAULT_AC_PATH,
-)
-from shared.models import GlobalSettings
 
 logger = logging.getLogger("ridge.server")
 
 router = APIRouter(prefix="/server", tags=["server"])
 
 
-class ServerManager:
-    """Manages the Assetto Corsa dedicated server process."""
+class StartServerRequest(BaseModel):
+    """Request body for starting a server for a group."""
 
-    def __init__(self) -> None:
-        self.process: subprocess.Popen[bytes] | None = None
-        self.config_dir = os.path.join(os.getcwd(), "server_config")
-        os.makedirs(self.config_dir, exist_ok=True)
-
-    def generate_configs(self, rigs_list: list[dict[str, object]], settings: GlobalSettings) -> None:
-        """Generate server_cfg.ini and entry_list.ini from current rig/settings state."""
-        cars_set = {str(r.get("selected_car", "ks_ferrari_488_gt3")) for r in rigs_list if r.get("selected_car")}
-
-        server_cfg = f"""
-[SERVER]
-NAME={AC_SERVER_NAME}
-CARS={",".join(cars_set)}
-TRACK={settings.selected_track}
-CONFIG_TRACK=
-SUN_ANGLE=0
-MAX_CLIENTS=16
-RACE_OVER_TIME=60
-UDP_PORT={AC_UDP_PORT}
-TCP_PORT={AC_TCP_PORT}
-HTTP_PORT={AC_HTTP_PORT}
-PASSWORD={AC_SERVER_PASSWORD}
-ADMIN_PASSWORD={AC_ADMIN_PASSWORD}
-PICKUP_MODE_ENABLED=1
-SLEEP_TIME=1
-CLIENT_SEND_INTERVAL_HZ=30
-SEND_BUFFER_SIZE=0
-RECV_BUFFER_SIZE=0
-
-[PRACTICE]
-NAME=Practice
-TIME={settings.practice_time}
-WAIT_TIME=0
-
-[QUALIFY]
-NAME=Qualifying
-TIME={settings.qualy_time}
-WAIT_TIME=0
-
-[RACE]
-NAME=Grand Prix
-LAPS={settings.race_laps}
-WAIT_TIME=0
-
-[DYNAMIC_TRACK]
-SESSION_START=100
-SESSION_TRANSFER=100
-RANDOMNESS=0
-LAP_GAIN=0
-"""
-        entry_list = ""
-        for i, rig in enumerate(rigs_list):
-            if rig.get("selected_car"):
-                entry_list += f"""
-[CAR_{i}]
-MODEL={rig['selected_car']}
-SKIN=0_official
-SPECTATOR_MODE=0
-DRIVER_NAME={rig['rig_id']}
-TEAM=
-GUID=
-BALLAST=0
-RESTRICTOR=0
-"""
-
-        with open(os.path.join(self.config_dir, "server_cfg.ini"), "w") as f:
-            f.write(server_cfg.strip())
-        with open(os.path.join(self.config_dir, "entry_list.ini"), "w") as f:
-            f.write(entry_list.strip())
-
-    def start(self, ac_path: str) -> bool:
-        """Start the AC dedicated server."""
-        self.stop()
-        ac_dir = os.path.dirname(ac_path)
-        server_dir = os.path.join(ac_dir, "server")
-        server_exe = os.path.join(server_dir, "acServer.exe")
-
-        if not os.path.exists(server_exe):
-            if os.path.exists("acServer.exe"):
-                server_exe = os.path.abspath("acServer.exe")
-                server_dir = os.getcwd()
-            else:
-                logger.error("Server EXE not found at %s", server_exe)
-                return False
-
-        # Copy generated configs to server/cfg
-        dest_cfg = os.path.join(server_dir, "cfg")
-        os.makedirs(dest_cfg, exist_ok=True)
-        try:
-            shutil.copy(os.path.join(self.config_dir, "server_cfg.ini"), os.path.join(dest_cfg, "server_cfg.ini"))
-            shutil.copy(os.path.join(self.config_dir, "entry_list.ini"), os.path.join(dest_cfg, "entry_list.ini"))
-        except Exception as e:
-            logger.error("Failed to copy server configs: %s", e)
-
-        logger.info("Starting AC Server: %s", server_exe)
-        try:
-            self.process = subprocess.Popen([server_exe], cwd=server_dir)
-            return True
-        except Exception as e:
-            logger.error("Failed to start server: %s", e)
-            return False
-
-    def stop(self) -> None:
-        """Stop the AC dedicated server."""
-        if self.process:
-            self.process.terminate()
-            self.process = None
-
-        try:
-            import psutil
-
-            for proc in psutil.process_iter(["name"]):
-                try:
-                    if proc.info["name"] == "acServer.exe":
-                        proc.kill()
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
-        except ImportError:
-            pass
-
-    @property
-    def is_running(self) -> bool:
-        return self.process is not None and self.process.poll() is None
+    group_id: str
+    track: str = "monza"
+    cars: list[str] = Field(default_factory=lambda: ["ks_ferrari_488_gt3"])
+    race_laps: int = 10
+    practice_time: int = 0
+    qualy_time: int = 10
+    max_clients: int = 10
+    weather: str = "3_clear"
 
 
-_server_manager = ServerManager()
+# Singleton server manager — created when router is bound to state
+_manager: ACServerManager | None = None
 
 
 def create_router(state: AppState) -> APIRouter:
     """Create the server router bound to the given application state."""
+    global _manager
+    _manager = ACServerManager(state)
 
     @router.get("/status")
-    async def get_server_status() -> dict[str, str]:
-        status = "online" if _server_manager.is_running else "offline"
-        state.server_status = status
-        return {"status": status}
+    async def get_server_status() -> dict[str, object]:
+        """Get status of all running AC servers."""
+        assert _manager is not None
+        servers = _manager.get_servers()
+        any_running = any(s["status"] == "running" for s in servers)
+        state.server_status = "online" if any_running else "offline"
+        return {
+            "status": state.server_status,
+            "servers": servers,
+            "total": len(servers),
+        }
+
+    @router.get("/list")
+    async def list_servers() -> list[dict[str, object]]:
+        """List all server instances."""
+        assert _manager is not None
+        return _manager.get_servers()
 
     @router.post("/start")
-    async def start_server() -> dict[str, str]:
-        _server_manager.generate_configs(state.get_rigs(), state.settings)
-        if _server_manager.start(DEFAULT_AC_PATH):
-            state.server_status = "online"
-            return {"message": "Server started"}
-        return {"error": "Failed to start server"}
+    async def start_server(req: StartServerRequest) -> dict[str, object]:
+        """Start an AC server for a specific group."""
+        assert _manager is not None
+        group = state.get_group(req.group_id)
+        if not group:
+            return {"status": "error", "message": f"Group '{req.group_id}' not found"}
 
-    @router.post("/stop")
-    async def stop_server() -> dict[str, str]:
-        _server_manager.stop()
+        result = _manager.start_server(
+            group_id=req.group_id,
+            group_name=group.name,
+            track=req.track,
+            cars=req.cars,
+            race_laps=req.race_laps,
+            practice_time=req.practice_time,
+            qualy_time=req.qualy_time,
+            max_clients=req.max_clients,
+            weather=req.weather,
+        )
+
+        if result.get("status") == "success":
+            state.server_status = "online"
+
+        return result
+
+    @router.post("/stop/{group_id}")
+    async def stop_server(group_id: str) -> dict[str, str]:
+        """Stop the AC server for a specific group."""
+        assert _manager is not None
+        result = _manager.stop_server(group_id)
+        # Update global status
+        servers = _manager.get_servers()
+        any_running = any(s["status"] == "running" for s in servers)
+        state.server_status = "online" if any_running else "offline"
+        return result
+
+    @router.post("/stop-all")
+    async def stop_all_servers() -> dict[str, str]:
+        """Stop all running AC servers."""
+        assert _manager is not None
+        _manager.stop_all()
         state.server_status = "offline"
-        return {"message": "Server stopped"}
+        return {"status": "success", "message": "All servers stopped"}
 
     return router

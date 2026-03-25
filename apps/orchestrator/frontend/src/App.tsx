@@ -1,4 +1,4 @@
-import { Activity, Cpu, Monitor, Zap, Power, RotateCcw, Play, Check, Image, Car, Settings2, Flag, Clock, ShieldCheck, LayoutGrid, Users } from 'lucide-react'
+import { Activity, Cpu, Monitor, Zap, Power, RotateCcw, Play, Check, Image, Car, Settings2, Flag, Clock, ShieldCheck, LayoutGrid, Users, Lock, Unlock } from 'lucide-react'
 import Kiosk from './Kiosk'
 import Lobby from './Lobby'
 import GroupManager from './components/GroupManager'
@@ -7,6 +7,7 @@ interface Rig {
     rig_id: string
     ip: string
     status: 'idle' | 'racing' | 'offline' | 'setup' | 'ready'
+    mode?: 'lockout' | 'freeuse'
     selected_car?: string | null
     cpu_temp: number
     mod_version: string
@@ -447,12 +448,30 @@ function App() {
                                         )}
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button onClick={() => sendCommand(rig.rig_id, 'LAUNCH_RACE', rig.selected_car)} className="bg-white/5 hover:bg-ridge-brand/20 hover:text-ridge-brand p-3 rounded-xl flex items-center justify-center transition-all border border-transparent hover:border-ridge-brand/30">
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <button onClick={() => sendCommand(rig.rig_id, 'LAUNCH_RACE', rig.selected_car)} className="bg-white/5 hover:bg-ridge-brand/20 hover:text-ridge-brand p-3 rounded-xl flex items-center justify-center transition-all border border-transparent hover:border-ridge-brand/30" title="Launch Race">
                                             <Zap size={20} />
                                         </button>
-                                        <button onClick={() => sendCommand(rig.rig_id, 'KILL_RACE')} className="bg-white/5 hover:bg-red-500/20 hover:text-red-500 p-3 rounded-xl flex items-center justify-center transition-all border border-transparent hover:border-red-500/30">
+                                        <button onClick={() => sendCommand(rig.rig_id, 'KILL_RACE')} className="bg-white/5 hover:bg-red-500/20 hover:text-red-500 p-3 rounded-xl flex items-center justify-center transition-all border border-transparent hover:border-red-500/30" title="Kill Race">
                                             <Power size={20} />
+                                        </button>
+                                        <button
+                                            onClick={async () => {
+                                                const newMode = (rig.mode || 'lockout') === 'lockout' ? 'freeuse' : 'lockout'
+                                                await fetch(`/api/rigs/${rig.rig_id}/mode`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ mode: newMode })
+                                                })
+                                            }}
+                                            className={`p-3 rounded-xl flex items-center justify-center transition-all border border-transparent ${
+                                                (rig.mode || 'lockout') === 'lockout'
+                                                    ? 'bg-white/5 hover:bg-amber-500/20 hover:text-amber-500 hover:border-amber-500/30'
+                                                    : 'bg-green-500/10 text-green-400 hover:bg-red-500/20 hover:text-red-400 border-green-500/20 hover:border-red-500/30'
+                                            }`}
+                                            title={(rig.mode || 'lockout') === 'lockout' ? 'Unlock (Freeuse)' : 'Lock (Lockout)'}
+                                        >
+                                            {(rig.mode || 'lockout') === 'lockout' ? <Lock size={20} /> : <Unlock size={20} />}
                                         </button>
                                     </div>
                                 </div>
@@ -464,6 +483,11 @@ function App() {
                                 </div>
                             )}
                         </div>
+                    )}
+
+                    {/* GROUPS MANAGER VIEW */}
+                    {activeTab === 'groups' && (
+                        <GroupManager rigs={rigs} raceSettings={raceSettings} allCars={ALL_CARS} />
                     )}
 
                     {/* RACE MANAGER VIEW */}

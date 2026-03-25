@@ -2,7 +2,13 @@
 
 This IS the kiosk — no browser needed. Covers the entire Windows desktop,
 shows Ridge branding + rig status, and boots the sled agent in the background.
-When a race launches, AC opens on top. When AC closes, this is still here.
+
+Modes (controlled by admin dashboard):
+  - LOCKOUT (default): Fullscreen overlay blocks desktop. Customer sees branding.
+  - FREEUSE: Overlay hides, customer can use the PC freely.
+
+When status is "setup", the overlay shows a car selection grid.
+When a race launches, AC opens on top. When AC closes, overlay returns.
 
 Uses only Tkinter (ships with Python, zero extra dependencies).
 """
@@ -18,6 +24,8 @@ import threading
 import time
 import tkinter as tk
 from pathlib import Path
+from urllib import request as urlrequest
+from urllib.error import URLError
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,6 +33,10 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("ridge.splash")
+
+BRAND_COLOR = "#FF6B00"
+BG_COLOR = "#050505"
+POLL_INTERVAL_MS = 3000  # Poll orchestrator every 3 seconds
 
 
 def _load_rig_config() -> dict[str, object]:
@@ -45,71 +57,89 @@ class DesktopBlocker:
     def __init__(self, rig_id: str = "RIG", orchestrator_ip: str = "---") -> None:
         self.rig_id = rig_id
         self.orchestrator_ip = orchestrator_ip
+        self._current_mode = "lockout"
+        self._current_status = "idle"
+        self._car_pool: list[str] = []
+        self._showing_cars = False
+        self._car_widgets: list[int] = []
+
         self.root = tk.Tk()
         self.root.title("Ridge-Link")
 
         # Fullscreen, always on top, no decorations
         self.root.attributes("-fullscreen", True)
         self.root.attributes("-topmost", True)
-        self.root.configure(bg="#050505", cursor="none")
+        self.root.configure(bg=BG_COLOR, cursor="none")
         self.root.overrideredirect(True)
 
-        # Block Alt-F4 and other close attempts
+        # Block Alt-F4 (but NOT everything else)
         self.root.protocol("WM_DELETE_WINDOW", lambda: None)
 
-        # Dev mode toggle (Ctrl+Shift+D)
+        # Dev mode toggle (Ctrl+Shift+D) — unlock so you can click other windows
         self._dev_mode = False
         self.root.bind("<Control-Shift-D>", self._toggle_dev_mode)
         self.root.bind("<Control-Shift-d>", self._toggle_dev_mode)
 
-        # Exit shortcut (Ctrl+Shift+Q)
-        self.root.bind("<Control-Shift-Q>", lambda e: self.destroy())
-        self.root.bind("<Control-Shift-q>", lambda e: self.destroy())
+        # EXIT shortcuts — MULTIPLE ways to kill splash
+        self.root.bind("<Control-Shift-Q>", lambda e: self._emergency_exit())
+        self.root.bind("<Control-Shift-q>", lambda e: self._emergency_exit())
+        self.root.bind("<Control-Alt-x>", lambda e: self._emergency_exit())
+        self.root.bind("<Control-Alt-X>", lambda e: self._emergency_exit())
 
-        # Block Windows key
-        if os.name == "nt":
-            try:
-                import ctypes
-                ctypes.windll.user32.SystemParametersInfoW(97, 1, None, 0)  # type: ignore[attr-defined]
-            except Exception:
-                pass
+        # Escape key: 5 rapid taps to exit (prevents accidental close)
+        self._esc_count = 0
+        self._esc_timer: str | None = None
+        self.root.bind("<Escape>", self._handle_escape)
 
         # Get screen dimensions
-        sw = self.root.winfo_screenwidth()
-        sh = self.root.winfo_screenheight()
+        self.sw = self.root.winfo_screenwidth()
+        self.sh = self.root.winfo_screenheight()
 
         # Canvas
         self.canvas = tk.Canvas(
-            self.root, width=sw, height=sh,
-            bg="#050505", highlightthickness=0,
+            self.root, width=self.sw, height=self.sh,
+            bg=BG_COLOR, highlightthickness=0,
         )
         self.canvas.pack(fill="both", expand=True)
 
         # Draw branding
-        self._draw_splash(sw, sh)
+        self._draw_splash()
 
         # Rig ID label (large, bottom area)
         self.canvas.create_text(
-            sw // 2, sh - 140,
+            self.sw // 2, self.sh - 140,
             text=self.rig_id,
             font=("Arial", 28, "bold italic"),
-            fill="#FF6B00",
+            fill=BRAND_COLOR,
+            tags="branding",
         )
 
         # Status label
         self.status_text = self.canvas.create_text(
-            sw // 2, sh // 2 + 80,
+            self.sw // 2, self.sh // 2 + 80,
             text="INITIALIZING SYSTEMS...",
             font=("Arial", 12, "bold"),
             fill="#666666",
+            tags="branding",
+        )
+
+        # Mode indicator (top right)
+        self.mode_indicator = self.canvas.create_text(
+            self.sw - 20, 20,
+            text="LOCKOUT",
+            font=("Arial", 8, "bold"),
+            fill="#333333",
+            anchor="ne",
+            tags="branding",
         )
 
         # Connection info label
         self.canvas.create_text(
-            sw // 2, sh - 100,
+            self.sw // 2, self.sh - 100,
             text=f"ADMIN: {self.orchestrator_ip}",
             font=("Arial", 8, "bold"),
             fill="#333333",
+            tags="branding",
         )
 
         # Pulse animation
@@ -119,23 +149,29 @@ class DesktopBlocker:
         # Periodically re-assert topmost (every 5s)
         self._reassert_topmost()
 
-    def _draw_splash(self, sw: int, sh: int) -> None:
+        # Start polling orchestrator for mode/status
+        self.root.after(POLL_INTERVAL_MS, self._poll_orchestrator)
+
+    def _draw_splash(self) -> None:
         """Draw the branded splash screen."""
+        sw, sh = self.sw, self.sh
         # Top accent line
-        self.canvas.create_rectangle(0, 0, sw, 3, fill="#FF6B00", outline="")
+        self.canvas.create_rectangle(0, 0, sw, 3, fill=BRAND_COLOR, outline="", tags="branding")
 
         # Main title
         self.canvas.create_text(
             sw // 2, sh // 2 - 60,
             text="RIDGE",
             font=("Arial", 72, "bold italic"),
-            fill="#FF6B00",
+            fill=BRAND_COLOR,
+            tags="branding",
         )
         self.canvas.create_text(
             sw // 2, sh // 2 + 10,
             text="RACING",
             font=("Arial", 36, "bold italic"),
             fill="#FFFFFF",
+            tags="branding",
         )
 
         # Tagline
@@ -144,13 +180,227 @@ class DesktopBlocker:
             text="POWERED BY RIDGE-LINK v2.0",
             font=("Arial", 8, "bold"),
             fill="#333333",
+            tags="branding",
         )
 
         # Bottom accent line
         self.canvas.create_rectangle(
             sw // 4, sh - 60, sw * 3 // 4, sh - 58,
-            fill="#FF6B00", outline="",
+            fill=BRAND_COLOR, outline="",
+            tags="branding",
         )
+
+        # Exit hint (always visible — very dark so customers can't see it)
+        self.canvas.create_text(
+            sw // 2, sh - 30,
+            text="Ctrl+Shift+Q to exit  |  Ctrl+Shift+D for dev mode  |  Esc x5 to quit",
+            font=("Arial", 7),
+            fill="#1a1a1a",
+            tags="branding",
+        )
+
+    # ------------------------------------------------------------------
+    # Car Selection UI
+    # ------------------------------------------------------------------
+
+    def _show_car_selection(self, cars: list[str]) -> None:
+        """Display a clickable car grid on the splash screen."""
+        if self._showing_cars:
+            return  # Already showing
+        self._showing_cars = True
+        self._clear_car_widgets()
+
+        sw = self.sw
+
+        # Title
+        tid = self.canvas.create_text(
+            sw // 2, 60,
+            text="SELECT YOUR CAR",
+            font=("Arial", 32, "bold italic"),
+            fill=BRAND_COLOR,
+            tags="car_select",
+        )
+        self._car_widgets.append(tid)
+
+        tid2 = self.canvas.create_text(
+            sw // 2, 100,
+            text=f"TAP TO CHOOSE  //  {self.rig_id}",
+            font=("Arial", 10, "bold"),
+            fill="#555555",
+            tags="car_select",
+        )
+        self._car_widgets.append(tid2)
+
+        # Car grid layout
+        cols = min(4, len(cars))
+        if cols == 0:
+            return
+        card_w = 280
+        card_h = 80
+        gap = 20
+        total_w = cols * card_w + (cols - 1) * gap
+        start_x = (sw - total_w) // 2
+        start_y = 160
+
+        for i, car_id in enumerate(cars):
+            col = i % cols
+            row = i // cols
+            x = start_x + col * (card_w + gap)
+            y = start_y + row * (card_h + gap)
+
+            # Shortened display name
+            display = car_id.replace("ks_", "").replace("_", " ").title()
+
+            # Card background
+            rect_id = self.canvas.create_rectangle(
+                x, y, x + card_w, y + card_h,
+                fill="#1a1a1a", outline="#333333", width=2,
+                tags=("car_select", f"car_{i}"),
+            )
+            # Car name
+            text_id = self.canvas.create_text(
+                x + card_w // 2, y + card_h // 2,
+                text=display,
+                font=("Arial", 12, "bold"),
+                fill="#FFFFFF",
+                tags=("car_select", f"car_{i}"),
+            )
+
+            # Make clickable
+            self.canvas.tag_bind(f"car_{i}", "<Button-1>",
+                                 lambda e, cid=car_id: self._on_car_selected(cid))
+            # Hover effects
+            self.canvas.tag_bind(f"car_{i}", "<Enter>",
+                                 lambda e, rid=rect_id: self.canvas.itemconfig(rid, fill="#FF6B00", outline="#FF6B00"))
+            self.canvas.tag_bind(f"car_{i}", "<Leave>",
+                                 lambda e, rid=rect_id: self.canvas.itemconfig(rid, fill="#1a1a1a", outline="#333333"))
+
+            self._car_widgets.extend([rect_id, text_id])
+
+        # Show cursor for car selection
+        self.root.configure(cursor="hand2")
+
+    def _on_car_selected(self, car_id: str) -> None:
+        """Handle car selection — report back to orchestrator."""
+        logger.info("Car selected: %s", car_id)
+        self._clear_car_widgets()
+        self._showing_cars = False
+        self.root.configure(cursor="none")
+
+        display = car_id.replace("ks_", "").replace("_", " ").title()
+        self.update_status(f"SELECTED: {display.upper()}")
+
+        # Report to orchestrator in background
+        threading.Thread(target=self._report_car_selection, args=(car_id,), daemon=True).start()
+
+    def _report_car_selection(self, car_id: str) -> None:
+        """POST selected car to orchestrator."""
+        try:
+            url = f"http://{self.orchestrator_ip}:8000/rigs/{self.rig_id}/status"
+            data = json.dumps({"selected_car": car_id, "status": "ready"}).encode()
+            req = urlrequest.Request(url, data=data, headers={"Content-Type": "application/json"})
+            urlrequest.urlopen(req, timeout=3)
+            logger.info("Car selection reported: %s", car_id)
+        except Exception as e:
+            logger.error("Failed to report car selection: %s", e)
+
+    def _clear_car_widgets(self) -> None:
+        """Remove all car selection widgets from canvas."""
+        self.canvas.delete("car_select")
+        self._car_widgets.clear()
+
+    def _hide_car_selection(self) -> None:
+        """Hide car selection grid."""
+        if self._showing_cars:
+            self._clear_car_widgets()
+            self._showing_cars = False
+            self.root.configure(cursor="none")
+
+    # ------------------------------------------------------------------
+    # Orchestrator Polling (mode + status)
+    # ------------------------------------------------------------------
+
+    def _poll_orchestrator(self) -> None:
+        """Poll the orchestrator for this rig's mode and status."""
+        threading.Thread(target=self._do_poll, daemon=True).start()
+        self.root.after(POLL_INTERVAL_MS, self._poll_orchestrator)
+
+    def _do_poll(self) -> None:
+        """Fetch mode/status from orchestrator (runs in background thread)."""
+        try:
+            url = f"http://{self.orchestrator_ip}:8000/rigs/{self.rig_id}/mode"
+            req = urlrequest.Request(url)
+            with urlrequest.urlopen(req, timeout=3) as resp:
+                data = json.loads(resp.read())
+
+            new_mode = str(data.get("mode", "lockout"))
+            new_status = str(data.get("status", "idle"))
+            car_pool = data.get("car_pool", [])
+
+            # Mode change
+            if new_mode != self._current_mode:
+                logger.info("Mode changed: %s -> %s", self._current_mode, new_mode)
+                self._current_mode = new_mode
+                self.root.after(0, lambda: self._apply_mode(new_mode))
+
+            # Status change
+            if new_status != self._current_status:
+                logger.info("Status changed: %s -> %s", self._current_status, new_status)
+                self._current_status = new_status
+                self._car_pool = list(car_pool) if isinstance(car_pool, list) else []
+                self.root.after(0, lambda: self._apply_status(new_status))
+
+        except URLError:
+            pass  # Orchestrator offline — maintain current state
+        except Exception as e:
+            logger.debug("Poll error: %s", e)
+
+    def _apply_mode(self, mode: str) -> None:
+        """Apply lockout or freeuse mode."""
+        if mode == "freeuse":
+            # Hide splash — let customer use the PC
+            self.root.attributes("-topmost", False)
+            self.root.iconify()  # Minimize to taskbar
+            self.root.configure(cursor="arrow")
+            self.canvas.itemconfig(self.mode_indicator, text="FREEUSE", fill="#00CC66")
+            logger.info("FREEUSE mode — splash minimized")
+        else:
+            # LOCKOUT — restore fullscreen blocker
+            self.root.deiconify()  # Restore from minimized
+            self.root.attributes("-fullscreen", True)
+            self.root.attributes("-topmost", True)
+            self.root.configure(cursor="none")
+            self.root.lift()
+            self.root.focus_force()
+            self.canvas.itemconfig(self.mode_indicator, text="LOCKOUT", fill="#333333")
+            self._hide_car_selection()
+            logger.info("LOCKOUT mode — splash restored")
+
+    def _apply_status(self, status: str) -> None:
+        """React to status changes from orchestrator."""
+        if status == "setup" and self._current_mode == "lockout":
+            # Show car selection
+            self.update_status("CHOOSE YOUR CAR")
+            if self._car_pool:
+                self._show_car_selection(self._car_pool)
+            else:
+                self.update_status("WAITING FOR CAR POOL...")
+        elif status == "racing":
+            self._hide_car_selection()
+            self.update_status("RACE IN PROGRESS")
+        elif status == "ready":
+            self._hide_car_selection()
+            self.update_status("READY — WAITING FOR GREEN LIGHT")
+        elif status == "syncing":
+            self._hide_car_selection()
+            self.update_status("SYNCING MODS...")
+        else:
+            self._hide_car_selection()
+            self.update_status("SYSTEMS ONLINE — READY")
+
+    # ------------------------------------------------------------------
+    # Animation / Display
+    # ------------------------------------------------------------------
 
     def _animate_pulse(self) -> None:
         """Subtle pulsing dot animation."""
@@ -167,17 +417,19 @@ class DesktopBlocker:
         if self._dev_mode:
             self.root.attributes("-topmost", False)
             self.root.configure(cursor="arrow")
-            self.update_status("DEV MODE UNLOCKED — Ctrl+Shift+D to re-lock")
+            self.update_status("DEV MODE UNLOCKED")
+            self.canvas.itemconfig(self.mode_indicator, text="DEV", fill="#FFD700")
             logger.info("Dev mode ENABLED — splash unlocked")
         else:
             self.root.attributes("-topmost", True)
             self.root.configure(cursor="none")
             self.update_status("SYSTEMS ONLINE — READY")
+            self.canvas.itemconfig(self.mode_indicator, text="LOCKOUT", fill="#333333")
             logger.info("Dev mode DISABLED — splash locked")
 
     def _reassert_topmost(self) -> None:
         """Periodically re-assert topmost so splash survives other windows opening."""
-        if not self._dev_mode:
+        if not self._dev_mode and self._current_mode == "lockout":
             try:
                 self.root.attributes("-topmost", True)
             except Exception:
@@ -193,23 +445,47 @@ class DesktopBlocker:
     def reclaim_top(self) -> None:
         """Re-assert topmost after AC closes."""
         def _raise() -> None:
-            self.root.attributes("-topmost", True)
-            self.root.lift()
+            if self._current_mode == "lockout":
+                self.root.attributes("-topmost", True)
+                self.root.lift()
         self.root.after(0, _raise)
 
     def update_status(self, text: str) -> None:
         """Update the status message from another thread."""
         self.root.after(0, lambda: self.canvas.itemconfig(self.status_text, text=text))
 
+    # ------------------------------------------------------------------
+    # Exit / Close
+    # ------------------------------------------------------------------
+
+    def _handle_escape(self, event: object = None) -> None:
+        """5 rapid Escape taps to exit (prevents accidental close)."""
+        self._esc_count += 1
+        remaining = 5 - self._esc_count
+        if remaining > 0:
+            self.update_status(f"Press Escape {remaining} more time{'s' if remaining > 1 else ''} to exit")
+            if self._esc_timer:
+                self.root.after_cancel(self._esc_timer)
+            self._esc_timer = self.root.after(2000, self._reset_esc)
+        else:
+            self._emergency_exit()
+
+    def _reset_esc(self) -> None:
+        self._esc_count = 0
+        self.update_status("SYSTEMS ONLINE — READY")
+
+    def _emergency_exit(self) -> None:
+        """Kill splash + all child processes."""
+        logger.info("EMERGENCY EXIT triggered")
+        self.destroy()
+        sys.exit(0)
+
     def destroy(self) -> None:
-        """Close (only called on graceful shutdown)."""
-        if os.name == "nt":
-            try:
-                import ctypes
-                ctypes.windll.user32.SystemParametersInfoW(97, 0, None, 0)  # type: ignore[attr-defined]
-            except Exception:
-                pass
-        self.root.destroy()
+        """Close the splash window."""
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
 
     def mainloop(self) -> None:
         self.root.mainloop()
@@ -232,7 +508,7 @@ def _boot_sled(splash: DesktopBlocker) -> None:
         if not venv_python.exists():
             venv_python = Path(sys.executable)
 
-        # Start sled as a subprocess (no kiosk — splash IS the kiosk)
+        # Start sled as a subprocess (no kiosk -- splash IS the kiosk)
         env = os.environ.copy()
         env["RIDGE_NO_KIOSK"] = "1"  # Tell sled not to open a browser
 

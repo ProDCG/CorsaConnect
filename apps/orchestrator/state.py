@@ -108,6 +108,7 @@ class AppState:
                 self._rigs[rig_id] = {
                     "rig_id": rig_id,
                     "status": "idle",
+                    "mode": "lockout",
                     "cpu_temp": 0,
                     "mod_version": "unknown",
                     "last_seen": time.time(),

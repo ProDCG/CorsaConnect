@@ -6,6 +6,7 @@ import logging
 import time
 
 from fastapi import APIRouter, Request
+from pydantic import BaseModel
 
 from apps.orchestrator.state import AppState
 from shared.models import LeaderboardEntry, RigStatusUpdate
@@ -13,6 +14,12 @@ from shared.models import LeaderboardEntry, RigStatusUpdate
 logger = logging.getLogger("ridge.rigs")
 
 router = APIRouter(tags=["rigs"])
+
+
+class ModeUpdate(BaseModel):
+    """Payload for changing a rig's mode."""
+
+    mode: str  # "lockout" or "freeuse"
 
 
 def create_router(state: AppState) -> APIRouter:
@@ -76,4 +83,28 @@ def create_router(state: AppState) -> APIRouter:
 
         return {"status": "success"}
 
+    @router.get("/rigs/{rig_id}/mode")
+    async def get_rig_mode(rig_id: str) -> dict[str, object]:
+        """Get a rig's current mode (lockout/freeuse) and status."""
+        rig = state.get_rig(rig_id)
+        if not rig:
+            return {"mode": "lockout", "status": "unknown", "car_pool": []}
+        return {
+            "mode": rig.get("mode", "lockout"),
+            "status": rig.get("status", "idle"),
+            "selected_car": rig.get("selected_car"),
+            "car_pool": state.car_pool,
+        }
+
+    @router.post("/rigs/{rig_id}/mode")
+    async def set_rig_mode(rig_id: str, update: ModeUpdate) -> dict[str, str]:
+        """Toggle a rig between lockout and freeuse mode."""
+        rig = state.get_rig(rig_id)
+        if not rig:
+            return {"status": "error", "message": "Rig not found"}
+        state.update_rig_field(rig_id, "mode", update.mode)
+        logger.info("Rig %s mode -> %s", rig_id, update.mode)
+        return {"status": "success", "mode": update.mode}
+
     return router
+

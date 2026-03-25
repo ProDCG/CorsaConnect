@@ -137,15 +137,9 @@ def main() -> None:
         _print_step(3, total, "Writing rig config...")
         create_rig_config(admin_ip, rig_id)
 
-        _print_step(4, total, "Creating shortcuts...")
-        try:
-            subprocess.run(
-                [sys.executable, "create_shortcuts.py"],
-                check=False,
-                input=b"rig\ny\n",
-            )
-        except Exception:
-            print("  (Skipping shortcut creation)")
+        _print_step(4, total, "Setup complete!")
+        # Don't auto-create startup shortcuts - let users do it manually once stable
+        print("  To create a desktop shortcut: python create_shortcuts.py")
 
         print("\n  ═══════════════════════════════════════")
         print(f"  RIG '{rig_id}' SETUP COMPLETE!")
