@@ -45,6 +45,15 @@ class RigGroup(BaseModel):
     name: str
     mode: str = "multiplayer"  # multiplayer | solo
     rig_ids: list[str] = Field(default_factory=list)
+    # Per-group race settings
+    track: str = "monza"
+    weather: str = "3_clear"
+    car_pool: list[str] = Field(default_factory=lambda: ["ks_ferrari_488_gt3"])
+    ai_count: int = 0
+    ai_difficulty: int = 80  # 0-100 (AC's AI strength)
+    practice_time: int = 0
+    qualy_time: int = 10
+    race_laps: int = 10
 
 
 class RigGroupCreate(BaseModel):
@@ -59,6 +68,14 @@ class RigGroupUpdate(BaseModel):
 
     name: str | None = None
     mode: str | None = None
+    track: str | None = None
+    weather: str | None = None
+    car_pool: list[str] | None = None
+    ai_count: int | None = None
+    ai_difficulty: int | None = None
+    practice_time: int | None = None
+    qualy_time: int | None = None
+    race_laps: int | None = None
 
 
 class RigGroupAddRig(BaseModel):

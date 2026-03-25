@@ -78,4 +78,14 @@ def create_router(state: AppState) -> APIRouter:
                 responses.append(rig_id)
         return {"status": "success", "synced_rigs": responses, "content_folder": content_folder}
 
+    @router.get("/catalogs")
+    async def get_catalogs() -> dict[str, object]:
+        """Return all available tracks, cars, weather for UI dropdowns."""
+        from shared.constants import CAR_CATALOG, TRACK_CATALOG, WEATHER_OPTIONS
+        return {
+            "tracks": [{"id": t.id, "name": t.name} for t in TRACK_CATALOG],
+            "cars": [{"id": c.id, "name": c.name, "brand": c.brand, "car_class": c.car_class} for c in CAR_CATALOG],
+            "weather": [{"id": w.id, "name": w.name} for w in WEATHER_OPTIONS],
+        }
+
     return router

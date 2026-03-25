@@ -66,12 +66,13 @@ def setup_frontend() -> None:
     print("  Frontend ready.")
 
 
-def create_rig_config(admin_ip: str, rig_id: str) -> None:
+def create_rig_config(admin_ip: str, rig_id: str, rig_type: str = "gt") -> None:
     """Write apps/sled/config.json with the rig's identity."""
     config_path = os.path.join("apps", "sled", "config.json")
     config = {
         "orchestrator_ip": admin_ip,
         "rig_id": rig_id,
+        "rig_type": rig_type,
         "admin_shared_folder": f"\\\\{admin_ip}\\RidgeContent",
         "local_ac_folder": r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa",
         "ac_path": r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\acs.exe",
@@ -126,7 +127,14 @@ def main() -> None:
             print("  ERROR: Admin IP is required!")
             return
 
-        print(f"\n  Configuring as: RIG ({rig_id}) → Admin: {admin_ip}")
+        # Rig type selection
+        print("\n  Rig Type:")
+        print("    1) GT  — Gran Turismo / Sports Car setup")
+        print("    2) F1  — Formula 1 open-wheel setup")
+        rig_type_input = input("  Select rig type (1/2, default GT): ").strip()
+        rig_type = "f1" if rig_type_input == "2" else "gt"
+
+        print(f"\n  Configuring as: RIG ({rig_id}) [{rig_type.upper()}] -> Admin: {admin_ip}")
 
         _print_step(1, total, "Setting up firewall rules...")
         setup_firewall()
@@ -135,7 +143,7 @@ def main() -> None:
         setup_venv_and_install()
 
         _print_step(3, total, "Writing rig config...")
-        create_rig_config(admin_ip, rig_id)
+        create_rig_config(admin_ip, rig_id, rig_type)
 
         _print_step(4, total, "Setup complete!")
         # Don't auto-create startup shortcuts - let users do it manually once stable

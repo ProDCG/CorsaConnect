@@ -337,36 +337,43 @@ class DesktopBlocker:
             new_status = str(data.get("status", "idle"))
             car_pool = data.get("car_pool", [])
 
+            logger.debug("Poll result: mode=%s status=%s (current: mode=%s status=%s)",
+                         new_mode, new_status, self._current_mode, self._current_status)
+
             # Mode change
             if new_mode != self._current_mode:
-                logger.info("Mode changed: %s -> %s", self._current_mode, new_mode)
+                logger.info("MODE CHANGE: %s -> %s", self._current_mode, new_mode)
                 self._current_mode = new_mode
-                self.root.after(0, lambda: self._apply_mode(new_mode))
+                self.root.after(0, lambda m=new_mode: self._apply_mode(m))
 
             # Status change
             if new_status != self._current_status:
-                logger.info("Status changed: %s -> %s", self._current_status, new_status)
+                logger.info("STATUS CHANGE: %s -> %s", self._current_status, new_status)
                 self._current_status = new_status
                 self._car_pool = list(car_pool) if isinstance(car_pool, list) else []
-                self.root.after(0, lambda: self._apply_status(new_status))
+                self.root.after(0, lambda s=new_status: self._apply_status(s))
 
         except URLError:
-            pass  # Orchestrator offline — maintain current state
+            logger.debug("Orchestrator unreachable at %s", self.orchestrator_ip)
         except Exception as e:
             logger.debug("Poll error: %s", e)
 
     def _apply_mode(self, mode: str) -> None:
         """Apply lockout or freeuse mode."""
+        logger.info("Applying mode: %s", mode)
         if mode == "freeuse":
-            # Hide splash — let customer use the PC
+            # FREEUSE — completely hide the splash window
+            self._hide_car_selection()
             self.root.attributes("-topmost", False)
-            self.root.iconify()  # Minimize to taskbar
-            self.root.configure(cursor="arrow")
+            self.root.attributes("-fullscreen", False)
+            self.root.overrideredirect(False)
+            self.root.withdraw()  # Completely hide (iconify doesn't work with overrideredirect)
             self.canvas.itemconfig(self.mode_indicator, text="FREEUSE", fill="#00CC66")
-            logger.info("FREEUSE mode — splash minimized")
+            logger.info("FREEUSE mode — splash hidden, desktop accessible")
         else:
             # LOCKOUT — restore fullscreen blocker
-            self.root.deiconify()  # Restore from minimized
+            self.root.deiconify()  # Show the window again
+            self.root.overrideredirect(True)
             self.root.attributes("-fullscreen", True)
             self.root.attributes("-topmost", True)
             self.root.configure(cursor="none")

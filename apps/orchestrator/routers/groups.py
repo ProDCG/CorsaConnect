@@ -34,8 +34,9 @@ def create_router(state: AppState) -> APIRouter:
 
     @router.put("/{group_id}")
     async def update_group(group_id: str, body: RigGroupUpdate) -> dict[str, object]:
-        """Update a group's name or mode."""
-        group = state.update_group(group_id, name=body.name, mode=body.mode)
+        """Update a group's settings."""
+        update_data = body.model_dump(exclude_none=True)
+        group = state.update_group(group_id, **update_data)
         if not group:
             return {"error": "Group not found"}
         return {"status": "success", "group": group.model_dump()}

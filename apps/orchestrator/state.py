@@ -164,15 +164,17 @@ class AppState:
             self._save_groups()
         return group
 
-    def update_group(self, group_id: str, name: str | None = None, mode: str | None = None) -> RigGroup | None:
+    def update_group(self, group_id: str, **kwargs: object) -> RigGroup | None:
         with self._lock:
             group = self._groups.get(group_id)
             if not group:
                 return None
-            if name is not None:
-                group.name = name
-            if mode is not None:
-                group.mode = mode
+            for field in ("name", "mode", "track", "weather", "car_pool",
+                          "ai_count", "ai_difficulty", "practice_time",
+                          "qualy_time", "race_laps"):
+                value = kwargs.get(field)
+                if value is not None:
+                    setattr(group, field, value)
             self._save_groups()
             return group
 

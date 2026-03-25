@@ -487,7 +487,7 @@ function App() {
 
                     {/* GROUPS MANAGER VIEW */}
                     {activeTab === 'groups' && (
-                        <GroupManager rigs={rigs} raceSettings={raceSettings} allCars={ALL_CARS} />
+                        <GroupManager rigs={rigs} />
                     )}
 
                     {/* RACE MANAGER VIEW */}
