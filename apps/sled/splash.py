@@ -87,7 +87,7 @@ class DesktopBlocker:
         for i in range(3):
             self.canvas.create_rectangle(
                 0, i * 2, sw, (i + 1) * 2,
-                fill=f"#{hex(5 + i * 3)[2:]}0505",
+                fill=f"#{5 + i * 3:02x}0505",
                 outline="",
             )
 
