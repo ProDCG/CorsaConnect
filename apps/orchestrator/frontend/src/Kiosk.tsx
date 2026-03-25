@@ -30,7 +30,7 @@ export default function Kiosk() {
     const ALL_CARS = [
         { id: 'ks_ferrari_488_gt3', name: '488 GT3', brand: 'Ferrari', class: 'GT3' },
         { id: 'ks_lamborghini_huracan_gt3', name: 'Huracan GT3', brand: 'Lamborghini', class: 'GT3' },
-        { id: 'ks_porsche_911_gt3_r', name: '911 GT3 R', brand: 'Porsche', class: 'GT3' },
+        { id: 'ks_porsche_911_gt3_rs', name: '911 GT3 RS', brand: 'Porsche', class: 'GT3' },
         { id: 'ks_mclaren_650s_gt3', name: '650S GT3', brand: 'McLaren', class: 'GT3' },
         { id: 'ks_audi_r8_lms', name: 'R8 LMS', brand: 'Audi', class: 'GT3' },
         { id: 'ks_mercedes_amg_gt3', name: 'AMG GT3', brand: 'Mercedes', class: 'GT3' },

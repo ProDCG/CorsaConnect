@@ -82,7 +82,7 @@ function App() {
     const ALL_CARS = [
         { id: 'ks_ferrari_488_gt3', name: 'Ferrari 488 GT3' },
         { id: 'ks_lamborghini_huracan_gt3', name: 'Lambo Huracán GT3' },
-        { id: 'ks_porsche_911_gt3_r', name: 'Porsche 911 GT3 R' },
+        { id: 'ks_porsche_911_gt3_rs', name: 'Porsche 911 GT3 RS' },
         { id: 'ks_mclaren_650s_gt3', name: 'McLaren 650S GT3' },
         { id: 'ks_audi_r8_lms', name: 'Audi R8 LMS' },
         { id: 'ks_mercedes_amg_gt3', name: 'Mercedes AMG GT3' },
