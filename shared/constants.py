@@ -50,7 +50,7 @@ class CarDef:
 CAR_CATALOG: list[CarDef] = [
     CarDef("ks_ferrari_488_gt3", "Ferrari 488 GT3", "Ferrari", "GT3"),
     CarDef("ks_lamborghini_huracan_gt3", "Lambo Huracán GT3", "Lamborghini", "GT3"),
-    CarDef("ks_porsche_911_gt3_r", "Porsche 911 GT3 R", "Porsche", "GT3"),
+    CarDef("ks_porsche_911_gt3_rs", "Porsche 911 GT3 RS", "Porsche", "GT3"),
     CarDef("ks_mclaren_650s_gt3", "McLaren 650S GT3", "McLaren", "GT3"),
     CarDef("ks_audi_r8_lms", "Audi R8 LMS", "Audi", "GT3"),
     CarDef("ks_mercedes_amg_gt3", "Mercedes AMG GT3", "Mercedes", "GT3"),
@@ -65,7 +65,7 @@ CAR_CATALOG: list[CarDef] = [
 DEFAULT_CAR_POOL: list[str] = [
     "ks_ferrari_488_gt3",
     "ks_lamborghini_huracan_gt3",
-    "ks_porsche_911_gt3_r",
+    "ks_porsche_911_gt3_rs",
 ]
 
 
