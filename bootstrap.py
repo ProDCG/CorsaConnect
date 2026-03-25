@@ -113,7 +113,7 @@ def main() -> None:
             print("  (Skipping — not Windows)")
 
         # Write role marker so START_ADMIN.bat knows bootstrap has run
-        with open(".ridge_role", "w") as f:
+        with open("ridge_role", "w") as f:
             f.write("admin")
 
         print("\n  =======================================")
@@ -154,7 +154,7 @@ def main() -> None:
         print("  To create a desktop shortcut: python create_shortcuts.py")
 
         # Write role marker so START_RIG.bat knows bootstrap has run
-        with open(".ridge_role", "w") as f:
+        with open("ridge_role", "w") as f:
             f.write("rig")
 
         print("\n  =======================================")

@@ -7,7 +7,7 @@ REM ═════════════════════════�
 cd /d "%~dp0"
 
 REM --- Guard: Check bootstrap has been run ---
-if not exist ".ridge_role" (
+if not exist "ridge_role" (
     echo.
     echo  ERROR: Bootstrap has not been run yet!
     echo  Run "python bootstrap.py" first and select "admin".
@@ -17,7 +17,7 @@ if not exist ".ridge_role" (
 )
 
 REM --- Guard: Check role is "admin" ---
-set /p ROLE=<.ridge_role
+for /f %%i in (ridge_role) do set ROLE=%%i
 if not "%ROLE%"=="admin" (
     echo.
     echo  ERROR: This machine is configured as "%ROLE%", not "admin".
@@ -56,19 +56,15 @@ echo    Starting orchestrator + dashboard...
 echo  ========================================
 echo.
 
-REM Step 1: Start the backend API
 echo  [1/3] Backend starting...
 start "Ridge-Link Backend" /MIN "venv\Scripts\python.exe" apps\orchestrator\main.py
 
-REM Step 2: Wait for backend to be ready
 timeout /t 3 /nobreak >nul
 
-REM Step 3: Start the frontend dev server
 echo  [2/3] Starting dashboard...
 cd apps\orchestrator\frontend
 start "Ridge-Link Dashboard" /MIN cmd /c "npm run dev"
 
-REM Step 4: Wait and open browser
 cd /d "%~dp0"
 timeout /t 5 /nobreak >nul
 

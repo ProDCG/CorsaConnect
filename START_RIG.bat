@@ -7,7 +7,7 @@ REM ═════════════════════════�
 cd /d "%~dp0"
 
 REM --- Guard: Check bootstrap has been run ---
-if not exist ".ridge_role" (
+if not exist "ridge_role" (
     echo.
     echo  ERROR: Bootstrap has not been run yet!
     echo  Run "python bootstrap.py" first and select "rig".
@@ -17,7 +17,7 @@ if not exist ".ridge_role" (
 )
 
 REM --- Guard: Check role is "rig" ---
-set /p ROLE=<.ridge_role
+for /f %%i in (ridge_role) do set ROLE=%%i
 if not "%ROLE%"=="rig" (
     echo.
     echo  ERROR: This machine is configured as "%ROLE%", not "rig".
@@ -41,7 +41,7 @@ if not exist "venv\Scripts\python.exe" (
 REM --- Guard: Check rig config exists ---
 if not exist "apps\sled\config.json" (
     echo.
-    echo  ERROR: Rig config not found (apps\sled\config.json).
+    echo  ERROR: Rig config not found.
     echo  Run "python bootstrap.py" and select "rig" to generate it.
     echo.
     pause
@@ -49,7 +49,6 @@ if not exist "apps\sled\config.json" (
 )
 
 REM --- Launch ---
-REM Try pythonw first (no console window), fall back to python
 if exist "venv\Scripts\pythonw.exe" (
     start "" /B "venv\Scripts\pythonw.exe" -m apps.sled.splash
 ) else (
