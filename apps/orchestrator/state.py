@@ -74,7 +74,16 @@ class AppState:
             try:
                 with open(self._groups_file) as f:
                     raw = json.load(f)
+                # Migrate old car IDs
+                for g in raw:
+                    if "car_pool" in g:
+                        g["car_pool"] = [
+                            c.replace("ks_porsche_911_gt3_r", "ks_porsche_911_gt3_rs")
+                            if c == "ks_porsche_911_gt3_r" else c
+                            for c in g["car_pool"]
+                        ]
                 self._groups = {g["id"]: RigGroup(**g) for g in raw}
+                self._save_groups()  # persist the migration
             except Exception:
                 logger.warning("Could not load groups file, starting fresh")
 
