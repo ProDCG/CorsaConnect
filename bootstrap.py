@@ -1,7 +1,8 @@
-"""Ridge-Link Bootstrap — sets up firewall rules, directories, and dependencies."""
+"""Ridge-Link Bootstrap — one-time setup for Admin or Rig PCs."""
 
 from __future__ import annotations
 
+import json
 import os
 import socket
 import subprocess
@@ -18,13 +19,15 @@ FIREWALL_RULES: list[dict[str, str]] = [
 ]
 
 
+def _print_step(step: int, total: int, msg: str) -> None:
+    print(f"\n  [{step}/{total}] {msg}")
+
+
 def setup_firewall() -> None:
     """Add Windows Firewall rules for Ridge-Link ports."""
-    print("Setting up firewall rules...")
     if os.name != "nt":
-        print("Non-Windows detected. Please ensure ports 5000, 5001, 8000, 8081, 9600 are open.")
+        print("  (Skipping firewall — not Windows)")
         return
-
     for rule in FIREWALL_RULES:
         subprocess.run(
             [
@@ -33,71 +36,125 @@ def setup_firewall() -> None:
                 f'protocol={rule["protocol"]}', f'localport={rule["port"]}',
             ],
             check=False,
+            capture_output=True,
         )
+    print("  Firewall rules added.")
 
 
-def setup_venv() -> None:
-    """Create a virtual environment and install packages in dev mode."""
+def setup_venv_and_install() -> None:
+    """Create venv and pip install the monorepo."""
     venv_dir = os.path.join(os.getcwd(), "venv")
     if not os.path.exists(venv_dir):
-        print("Creating virtual environment...")
+        print("  Creating virtual environment...")
         subprocess.run([sys.executable, "-m", "venv", venv_dir], check=True)
 
-    # Use the venv python
-    if os.name == "nt":
-        pip = os.path.join(venv_dir, "Scripts", "pip.exe")
-    else:
-        pip = os.path.join(venv_dir, "bin", "pip")
+    pip = os.path.join(venv_dir, "Scripts", "pip.exe") if os.name == "nt" else os.path.join(venv_dir, "bin", "pip")
+    print("  Installing Python packages...")
+    subprocess.run([pip, "install", "-e", "."], check=True, capture_output=True)
+    print("  Python packages installed.")
 
-    print("Installing shared package...")
-    subprocess.run([pip, "install", "-e", "shared/"], check=True)
+
+def setup_frontend() -> None:
+    """Install and build the React frontend."""
+    frontend_dir = os.path.join("apps", "orchestrator", "frontend")
+    if not os.path.exists(frontend_dir):
+        print("  WARNING: Frontend directory not found!")
+        return
+    print("  Installing frontend dependencies (npm install)...")
+    subprocess.run(["npm", "install"], cwd=frontend_dir, check=True, capture_output=True)
+    print("  Frontend ready.")
+
+
+def create_rig_config(admin_ip: str, rig_id: str) -> None:
+    """Write apps/sled/config.json with the rig's identity."""
+    config_path = os.path.join("apps", "sled", "config.json")
+    config = {
+        "orchestrator_ip": admin_ip,
+        "rig_id": rig_id,
+        "admin_shared_folder": f"\\\\{admin_ip}\\RidgeContent",
+        "local_ac_folder": r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa",
+        "ac_path": r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\acs.exe",
+    }
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=4)
+    print(f"  Config written to {config_path}")
 
 
 def main() -> None:
-    print("=== Ridge-Link Bootstrap v2.0 ===")
-    role = input("Is this the Admin PC or a Racing Rig? (admin/rig): ").strip().lower()
+    print()
+    print("  ╔═══════════════════════════════════════════╗")
+    print("  ║     RIDGE-LINK BOOTSTRAP v2.0             ║")
+    print("  ╚═══════════════════════════════════════════╝")
+    print()
+    role = input("  Is this the ADMIN PC or a RIG? (admin/rig): ").strip().lower()
 
     if role == "admin":
-        print("\nConfiguring Admin PC...")
-        master_folder = r"C:\RidgeContent"
-        if os.name == "nt" and not os.path.exists(master_folder):
-            os.makedirs(master_folder)
-            print(f"Created Master Content Folder at {master_folder}")
+        total = 4
+        print("\n  Configuring as: ADMIN PC")
 
+        _print_step(1, total, "Setting up firewall rules...")
         setup_firewall()
-        setup_venv()
 
-        # Install orchestrator
+        _print_step(2, total, "Creating Python environment...")
+        setup_venv_and_install()
+
+        _print_step(3, total, "Setting up frontend...")
+        setup_frontend()
+
+        _print_step(4, total, "Creating content directory...")
         if os.name == "nt":
-            pip = os.path.join("venv", "Scripts", "pip.exe")
+            master = r"C:\RidgeContent"
+            os.makedirs(master, exist_ok=True)
+            print(f"  Created {master}")
+            print("  IMPORTANT: Share this folder on the network as 'RidgeContent'")
         else:
-            pip = os.path.join("venv", "bin", "pip")
-        subprocess.run([pip, "install", "-e", "apps/orchestrator/"], check=False)
+            print("  (Skipping — not Windows)")
 
-        print("\nSetup Complete.")
-        print("Share 'C:\\RidgeContent' on the network as 'RidgeContent'.")
-        print("Run: python apps/orchestrator/main.py")
+        print("\n  ═══════════════════════════════════════")
+        print("  ADMIN SETUP COMPLETE!")
+        print("  To start: double-click START_ADMIN.bat")
+        print("  ═══════════════════════════════════════\n")
 
     elif role == "rig":
-        rig_id = socket.gethostname().upper()
-        print(f"\nConfiguring Rig: {rig_id}")
+        total = 4
+        hostname = socket.gethostname().upper()
+        rig_id = input(f"  Rig ID (press Enter for '{hostname}'): ").strip() or hostname
+        admin_ip = input("  Admin PC IP address: ").strip()
 
+        if not admin_ip:
+            print("  ERROR: Admin IP is required!")
+            return
+
+        print(f"\n  Configuring as: RIG ({rig_id}) → Admin: {admin_ip}")
+
+        _print_step(1, total, "Setting up firewall rules...")
         setup_firewall()
-        setup_venv()
 
-        # Install sled
-        if os.name == "nt":
-            pip = os.path.join("venv", "Scripts", "pip.exe")
-        else:
-            pip = os.path.join("venv", "bin", "pip")
-        subprocess.run([pip, "install", "-e", "apps/sled/"], check=False)
+        _print_step(2, total, "Creating Python environment...")
+        setup_venv_and_install()
 
-        print("\nSetup Complete.")
-        print("Run: python apps/sled/main.py")
+        _print_step(3, total, "Writing rig config...")
+        create_rig_config(admin_ip, rig_id)
+
+        _print_step(4, total, "Creating shortcuts...")
+        try:
+            subprocess.run(
+                [sys.executable, "create_shortcuts.py"],
+                check=False,
+                input=b"rig\ny\n",
+            )
+        except Exception:
+            print("  (Skipping shortcut creation)")
+
+        print("\n  ═══════════════════════════════════════")
+        print(f"  RIG '{rig_id}' SETUP COMPLETE!")
+        print("  To start: double-click START_RIG.bat")
+        print("  ═══════════════════════════════════════\n")
 
     else:
-        print("Invalid role. Use 'admin' or 'rig'.")
+        print("  Invalid role. Use 'admin' or 'rig'.")
 
 
 if __name__ == "__main__":
     main()
+
