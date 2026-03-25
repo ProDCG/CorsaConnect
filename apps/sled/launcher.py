@@ -160,15 +160,16 @@ def launch_ac(config: SledConfig, params: dict[str, object]) -> subprocess.Popen
         return None
 
 
-def sync_mods(config: SledConfig) -> bool:
+def sync_mods(config: SledConfig, source_override: str | None = None) -> bool:
     """Use Robocopy to sync car/track content from the admin share."""
     if not IS_WINDOWS:
         logger.info("Skipping robocopy on non-Windows system")
         return True
 
-    car_source = os.path.join(config.admin_shared_folder, "cars")
+    source = source_override or config.admin_shared_folder
+    car_source = os.path.join(source, "cars")
     car_target = os.path.join(config.local_ac_folder, "content", "cars")
-    track_source = os.path.join(config.admin_shared_folder, "tracks")
+    track_source = os.path.join(source, "tracks")
     track_target = os.path.join(config.local_ac_folder, "content", "tracks")
 
     try:

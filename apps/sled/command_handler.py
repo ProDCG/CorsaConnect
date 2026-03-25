@@ -82,5 +82,18 @@ class CommandHandler:
                 except Exception:
                     pass
 
+        elif action == "SYNC_MODS":
+            logger.info("Syncing mods from admin share...")
+            self.agent.status = "syncing"
+            try:
+                from apps.sled.launcher import sync_mods
+                content_folder = str(payload.get("content_folder", self.config.admin_shared_folder))
+                sync_mods(self.config, source_override=content_folder)
+                self.agent.status = "idle"
+                logger.info("Mod sync complete")
+            except Exception as e:
+                logger.error("Sync failed: %s", e)
+                self.agent.status = "idle"
+
         else:
             logger.warning("Unknown command action: %s", action)

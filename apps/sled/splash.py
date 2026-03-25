@@ -57,6 +57,15 @@ class DesktopBlocker:
         # Block Alt-F4 and other close attempts
         self.root.protocol("WM_DELETE_WINDOW", lambda: None)
 
+        # Dev mode toggle (Ctrl+Shift+D)
+        self._dev_mode = False
+        self.root.bind("<Control-Shift-D>", self._toggle_dev_mode)
+        self.root.bind("<Control-Shift-d>", self._toggle_dev_mode)
+
+        # Exit shortcut (Ctrl+Shift+Q)
+        self.root.bind("<Control-Shift-Q>", lambda e: self.destroy())
+        self.root.bind("<Control-Shift-q>", lambda e: self.destroy())
+
         # Block Windows key
         if os.name == "nt":
             try:
@@ -152,12 +161,27 @@ class DesktopBlocker:
         self.canvas.itemconfig(self.status_text, text=f"{base_text}{dots}")
         self.root.after(500, self._animate_pulse)
 
+    def _toggle_dev_mode(self, event: object = None) -> None:
+        """Toggle dev mode — unlock splash so you can click other windows."""
+        self._dev_mode = not self._dev_mode
+        if self._dev_mode:
+            self.root.attributes("-topmost", False)
+            self.root.configure(cursor="arrow")
+            self.update_status("DEV MODE UNLOCKED — Ctrl+Shift+D to re-lock")
+            logger.info("Dev mode ENABLED — splash unlocked")
+        else:
+            self.root.attributes("-topmost", True)
+            self.root.configure(cursor="none")
+            self.update_status("SYSTEMS ONLINE — READY")
+            logger.info("Dev mode DISABLED — splash locked")
+
     def _reassert_topmost(self) -> None:
         """Periodically re-assert topmost so splash survives other windows opening."""
-        try:
-            self.root.attributes("-topmost", True)
-        except Exception:
-            pass
+        if not self._dev_mode:
+            try:
+                self.root.attributes("-topmost", True)
+            except Exception:
+                pass
         self.root.after(5000, self._reassert_topmost)
 
     def yield_to_ac(self) -> None:

@@ -101,6 +101,7 @@ class GlobalSettings(BaseModel):
     allow_drs: bool = True
     selected_track: str = "monza"
     selected_weather: str = "3_clear"
+    content_folder: str = r"C:\RidgeContent"
 
 
 class Branding(BaseModel):

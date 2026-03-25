@@ -52,7 +52,8 @@ function App() {
         allow_drs: true,
         selected_track: 'monza',
         selected_weather: '3_clear',
-        useMultiplayer: false
+        useMultiplayer: false,
+        content_folder: 'C:\\RidgeContent'
     })
     const [serverStatus, setServerStatus] = useState<'online' | 'offline'>('offline')
     const [selectedCar, setSelectedCar] = useState('ks_ferrari_488_gt3')
@@ -391,6 +392,9 @@ function App() {
                     </div>
 
                     <div className="flex gap-4">
+                        <button onClick={async () => { try { await fetch('/api/sync', { method: 'POST' }); alert('Sync command sent to all rigs!') } catch { alert('Sync failed') } }} className="bg-emerald-600 hover:bg-emerald-700 px-6 py-2 rounded-full font-black italic uppercase text-xs flex items-center gap-2 transition-all shadow-lg shadow-emerald-500/20">
+                            <RotateCcw size={16} /> Sync Rigs
+                        </button>
                         <button onClick={() => sendGlobalCommand('SETUP_MODE')} className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-full font-black italic uppercase text-xs flex items-center gap-2 transition-all shadow-lg shadow-blue-500/20">
                             <Monitor size={16} /> Prepare Grid
                         </button>
@@ -556,6 +560,16 @@ function App() {
                                             </button>
                                         </div>
                                     </div>
+                                        <div>
+                                            <label className="block text-[10px] uppercase font-black text-white/40 mb-2">Content Folder (Admin Share Path)</label>
+                                            <input
+                                                type="text"
+                                                value={raceSettings.content_folder}
+                                                onChange={(e) => setRaceSettings({ ...raceSettings, content_folder: e.target.value })}
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-ridge-brand transition-all font-bold font-mono text-xs"
+                                                placeholder="C:\RidgeContent or \\ADMIN-PC\RidgeContent"
+                                            />
+                                        </div>
                                 </div>
 
                                 <div className="glass rounded-3xl p-8 border border-white/10">

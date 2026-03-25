@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 
+from apps.orchestrator.services.dispatcher import dispatch_command
 from apps.orchestrator.state import AppState
+from shared.constants import COMMAND_PORT
 from shared.models import Branding, CarPoolUpdate, GlobalSettings, Preset, TelemetryConfig
 
 router = APIRouter(tags=["settings"])
@@ -57,5 +59,23 @@ def create_router(state: AppState) -> APIRouter:
     async def save_telem_config(config: TelemetryConfig) -> dict[str, str]:
         state.telem_config = config
         return {"status": "success"}
+
+    @router.post("/sync")
+    async def sync_all_rigs(background_tasks: BackgroundTasks) -> dict[str, object]:
+        """Trigger a SYNC_MODS command on every connected rig."""
+        responses: list[str] = []
+        content_folder = state.settings.content_folder
+        for rig in state.get_rigs():
+            rig_id = str(rig["rig_id"])
+            ip = str(rig.get("ip", ""))
+            if ip and ip != "web-kiosk":
+                payload = {
+                    "rig_id": rig_id,
+                    "action": "SYNC_MODS",
+                    "content_folder": content_folder,
+                }
+                background_tasks.add_task(dispatch_command, ip, COMMAND_PORT, payload)
+                responses.append(rig_id)
+        return {"status": "success", "synced_rigs": responses, "content_folder": content_folder}
 
     return router
