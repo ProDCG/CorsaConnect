@@ -112,10 +112,14 @@ def main() -> None:
         else:
             print("  (Skipping — not Windows)")
 
-        print("\n  ═══════════════════════════════════════")
+        # Write role marker so START_ADMIN.bat knows bootstrap has run
+        with open(".ridge_role", "w") as f:
+            f.write("admin")
+
+        print("\n  =======================================")
         print("  ADMIN SETUP COMPLETE!")
         print("  To start: double-click START_ADMIN.bat")
-        print("  ═══════════════════════════════════════\n")
+        print("  =======================================")
 
     elif role == "rig":
         total = 4
@@ -149,10 +153,14 @@ def main() -> None:
         # Don't auto-create startup shortcuts - let users do it manually once stable
         print("  To create a desktop shortcut: python create_shortcuts.py")
 
-        print("\n  ═══════════════════════════════════════")
+        # Write role marker so START_RIG.bat knows bootstrap has run
+        with open(".ridge_role", "w") as f:
+            f.write("rig")
+
+        print("\n  =======================================")
         print(f"  RIG '{rig_id}' SETUP COMPLETE!")
         print("  To start: double-click START_RIG.bat")
-        print("  ═══════════════════════════════════════\n")
+        print("  =======================================")
 
     else:
         print("  Invalid role. Use 'admin' or 'rig'.")
