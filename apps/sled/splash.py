@@ -287,7 +287,6 @@ class DesktopBlocker:
 
             # Resize to screen, darken slightly for text readability
             frame = cv2.resize(frame, (self.sw, self.sh))
-            frame = (frame * 0.35).astype(np.uint8)  # Dim to 35%
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(frame)
             photo = _pil_to_tk(img)
@@ -315,8 +314,6 @@ class DesktopBlocker:
         # Start video background (async, non-blocking)
         self.root.after(500, self._start_video_background)
 
-        # Top accent line
-        self.canvas.create_rectangle(0, 0, sw, 3, fill=BRAND_COLOR, outline="", tags="branding")
 
         # Main title removed — video background + logos only
 
