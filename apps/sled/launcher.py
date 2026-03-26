@@ -64,6 +64,22 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         if not car_pool:
             car_pool = [car]
 
+        # Validate car_pool: only keep cars that exist locally
+        ac_cars_dir = os.path.join(config.local_ac_folder, "content", "cars")
+        if os.path.isdir(ac_cars_dir):
+            valid_pool = [c for c in car_pool if os.path.isdir(os.path.join(ac_cars_dir, c))]
+            if not valid_pool:
+                valid_pool = [car]  # Fallback to player's car (known to exist)
+                logger.warning("No car_pool cars found locally — AI bots will use player car: %s", car)
+            elif len(valid_pool) < len(car_pool):
+                removed = set(car_pool) - set(valid_pool)
+                logger.warning("Filtered unavailable cars from AI pool: %s", removed)
+            car_pool = valid_pool
+        else:
+            # Can't verify — just ensure player car is in pool
+            if car not in car_pool:
+                car_pool.insert(0, car)
+
         # AC dedicated server doesn't support AI — force offline if bots requested
         use_server = bool(params.get("use_server", False))
         if ai_count > 0 and use_server:
