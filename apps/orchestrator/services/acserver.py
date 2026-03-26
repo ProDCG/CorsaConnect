@@ -136,6 +136,9 @@ class ACServerManager:
         ac_cfg_dir = os.path.join(ac_server_dir, "cfg")
         os.makedirs(ac_cfg_dir, exist_ok=True)
 
+        # Sync car/track content from main AC install to server content dir
+        self._sync_server_content(ac_server_dir, cars, track)
+
         try:
             shutil.copy2(
                 os.path.join(config_dir, "cfg", "server_cfg.ini"),
@@ -211,6 +214,61 @@ class ACServerManager:
         if server and server.process and server.process.poll() is None:
             return ("127.0.0.1", server.port)
         return None
+
+    # ------------------------------------------------------------------
+    # Content sync  — ensure server/content/ mirrors main AC content/
+    # ------------------------------------------------------------------
+
+    def _sync_server_content(
+        self, ac_server_dir: str, cars: list[str], track: str,
+    ) -> None:
+        """Copy car/track data from main AC install into the server's content dir.
+
+        acServer.exe looks for content in its own `content/` folder, which is
+        separate from the main game's `content/`. If a car or track is missing
+        there, clients get 'missing content' errors. This method syncs only
+        the minimal data/ subfolders the server needs (no textures/models).
+        """
+        # Main AC install is one level up from the server/ dir
+        ac_root = os.path.dirname(ac_server_dir)
+        main_content = os.path.join(ac_root, "content")
+        server_content = os.path.join(ac_server_dir, "content")
+
+        if not os.path.isdir(main_content):
+            logger.warning("Main AC content dir not found: %s", main_content)
+            return
+
+        # --- Sync cars ---
+        for car_id in cars:
+            src = os.path.join(main_content, "cars", car_id)
+            dst = os.path.join(server_content, "cars", car_id)
+            if not os.path.isdir(src):
+                logger.warning("Car '%s' not found in main AC content: %s", car_id, src)
+                continue
+            if os.path.isdir(dst):
+                continue  # Already synced
+            try:
+                # Copy the full car folder (server needs data/ at minimum)
+                shutil.copytree(src, dst, dirs_exist_ok=True)
+                logger.info("Synced car to server content: %s", car_id)
+            except Exception as e:
+                logger.warning("Failed to sync car '%s': %s", car_id, e)
+
+        # --- Sync track ---
+        # Track may have a config variant (e.g. "monza" or "ks_nordschleife/touristenfahrten")
+        track_parts = track.split("/", 1)
+        track_base = track_parts[0]
+        src = os.path.join(main_content, "tracks", track_base)
+        dst = os.path.join(server_content, "tracks", track_base)
+        if os.path.isdir(src):
+            if not os.path.isdir(dst):
+                try:
+                    shutil.copytree(src, dst, dirs_exist_ok=True)
+                    logger.info("Synced track to server content: %s", track_base)
+                except Exception as e:
+                    logger.warning("Failed to sync track '%s': %s", track_base, e)
+        else:
+            logger.warning("Track '%s' not found in main AC content: %s", track_base, src)
 
     # ------------------------------------------------------------------
     # Config generation
