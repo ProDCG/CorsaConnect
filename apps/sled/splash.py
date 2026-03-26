@@ -80,7 +80,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ridge.splash")
 
-BRAND_COLOR = "#FF6B00"
+BRAND_COLOR = "#0088FF"
 BG_COLOR = "#050505"
 POLL_INTERVAL_MS = 3000  # Poll orchestrator every 3 seconds
 
@@ -396,8 +396,8 @@ class DesktopBlocker:
 
         # Run in background thread to avoid blocking UI
         def _load():
-            talbot = self._load_logo("talbot_media_logo.jpg", max_height=40)
-            rsr = self._load_logo("rsr_logo.jpg", max_height=40)
+            talbot = self._load_logo("talbot_media_logo.jpg", max_height=120)
+            rsr = self._load_logo("rsr_logo.jpg", max_height=120)
             self.root.after_idle(lambda: self._place_logos(talbot, rsr))
 
         threading.Thread(target=_load, daemon=True).start()
