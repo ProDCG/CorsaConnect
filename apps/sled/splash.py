@@ -31,6 +31,13 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [SPLASH] %(levelname)s: %(message)s",
     datefmt="%H:%M:%S",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(
+            os.path.join(Path(__file__).resolve().parent.parent.parent, "ridge_rig.log"),
+            mode="a",
+        ),
+    ],
 )
 logger = logging.getLogger("ridge.splash")
 
@@ -177,7 +184,7 @@ class DesktopBlocker:
         # Collaboration line
         self.canvas.create_text(
             sw // 2, sh // 2 + 50,
-            text="RIDGE MEDIA  ×  TALBOT MEDIA",
+            text="RIDGE MEDIA  |  TALBOT MEDIA",
             font=("Arial", 10, "bold"),
             fill="#888888",
             tags="branding",

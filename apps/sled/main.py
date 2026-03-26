@@ -6,11 +6,18 @@ import logging
 import os
 import signal
 import sys
+from pathlib import Path
+
+_repo_root = Path(__file__).resolve().parent.parent.parent
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     datefmt="%H:%M:%S",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(os.path.join(_repo_root, "ridge_rig.log"), mode="a"),
+    ],
 )
 logger = logging.getLogger("ridge.sled")
 
