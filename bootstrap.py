@@ -41,8 +41,8 @@ def setup_firewall() -> None:
     print("  Firewall rules added.")
 
 
-def setup_venv_and_install(role: str = "admin") -> None:
-    """Create venv and pip install the monorepo (+ sled sub-package for rigs)."""
+def setup_venv_and_install() -> None:
+    """Create venv and pip install the monorepo."""
     venv_dir = os.path.join(os.getcwd(), "venv")
     if not os.path.exists(venv_dir):
         print("  Creating virtual environment...")
@@ -51,11 +51,6 @@ def setup_venv_and_install(role: str = "admin") -> None:
     pip = os.path.join(venv_dir, "Scripts", "pip.exe") if os.name == "nt" else os.path.join(venv_dir, "bin", "pip")
     print("  Installing Python packages...")
     subprocess.run([pip, "install", "-e", "."], check=True, capture_output=True)
-    if role == "rig":
-        # Install sled-specific deps (Pillow, opencv, numpy for splash screen)
-        sled_dir = os.path.join("apps", "sled")
-        print("  Installing sled dependencies...")
-        subprocess.run([pip, "install", "-e", sled_dir], check=True, capture_output=True)
     print("  Python packages installed.")
 
 
@@ -149,7 +144,7 @@ def main() -> None:
         setup_firewall()
 
         _print_step(2, total, "Creating Python environment...")
-        setup_venv_and_install(role="rig")
+        setup_venv_and_install()
 
         _print_step(3, total, "Writing rig config...")
         create_rig_config(admin_ip, rig_id, rig_type)
