@@ -57,6 +57,8 @@ class RigGroup(BaseModel):
     sun_angle: int = 48  # -80 to 80 degrees (time of day)
     time_mult: int = 1  # Time speed multiplier (1 = real-time)
     session_duration_min: int = 30  # Session countdown timer (minutes)
+    ambient_temp: int = 26  # Ambient temperature °C
+    track_grip: int = 100  # Track grip 0-100%
 
 
 class RigGroupCreate(BaseModel):
@@ -82,6 +84,8 @@ class RigGroupUpdate(BaseModel):
     sun_angle: int | None = None
     time_mult: int | None = None
     session_duration_min: int | None = None
+    ambient_temp: int | None = None
+    track_grip: int | None = None
 
 
 class RigGroupAddRig(BaseModel):

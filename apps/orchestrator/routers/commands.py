@@ -121,6 +121,8 @@ def create_router(state: AppState) -> APIRouter:
                     payload["session_duration_min"] = group.session_duration_min
                     payload["sun_angle"] = group.sun_angle
                     payload["time_mult"] = group.time_mult
+                    payload["ambient_temp"] = group.ambient_temp
+                    payload["track_grip"] = group.track_grip
                     # Solo groups always run offline; multiplayer uses AC server
                     payload["use_server"] = group.mode == "multiplayer"
                 background_tasks.add_task(dispatch_command, str(rig["ip"]), COMMAND_PORT, payload)

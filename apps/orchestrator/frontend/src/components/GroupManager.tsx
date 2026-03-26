@@ -21,6 +21,8 @@ interface RigGroup {
     sun_angle: number
     time_mult: number
     session_duration_min: number
+    ambient_temp: number
+    track_grip: number
 }
 
 interface ServerInfo {
@@ -630,6 +632,39 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
                                     onChange={e => updateGroup(selectedGroup.id, { session_duration_min: parseInt(e.target.value) || 30 })}
                                     className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-ridge-brand transition-all"
                                 />
+                            </div>
+                        </div>
+
+                        {/* ---- Track Conditions ---- */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="glass rounded-2xl p-4 border border-white/10">
+                                <label className="flex items-center gap-1.5 text-[9px] uppercase font-black text-white/40 tracking-widest mb-2">
+                                    <Sun size={10} /> Temperature
+                                </label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="range" min={5} max={45}
+                                        value={selectedGroup.ambient_temp ?? 26}
+                                        onChange={e => updateGroup(selectedGroup.id, { ambient_temp: parseInt(e.target.value) })}
+                                        className="flex-1 accent-ridge-brand cursor-pointer"
+                                    />
+                                    <span className="text-xs font-black tabular-nums w-12 text-right">{selectedGroup.ambient_temp ?? 26}°C</span>
+                                </div>
+                            </div>
+
+                            <div className="glass rounded-2xl p-4 border border-white/10">
+                                <label className="flex items-center gap-1.5 text-[9px] uppercase font-black text-white/40 tracking-widest mb-2">
+                                    <Gauge size={10} /> Track Grip
+                                </label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="range" min={50} max={100}
+                                        value={selectedGroup.track_grip ?? 100}
+                                        onChange={e => updateGroup(selectedGroup.id, { track_grip: parseInt(e.target.value) })}
+                                        className="flex-1 accent-ridge-brand cursor-pointer"
+                                    />
+                                    <span className="text-xs font-black tabular-nums w-10 text-right">{selectedGroup.track_grip ?? 100}%</span>
+                                </div>
                             </div>
                         </div>
 

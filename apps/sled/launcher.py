@@ -14,8 +14,9 @@ IS_WINDOWS = os.name == "nt"
 
 
 def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | None:
-    """Generate a multi-session race.ini for direct acs.exe launch.
+    """Generate a race.ini for direct acs.exe launch.
 
+    Format closely matches Content Manager's output for maximum compatibility.
     Returns the path to the generated INI, or None on failure.
     """
     try:
@@ -48,21 +49,15 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         cfg_path = os.path.join(documents, "Assetto Corsa", "cfg", "race.ini")
         os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
 
-        # Build session blocks — RACE must be SESSION_0 for grid starts.
-        # When practice/qualy are specified, they go AFTER the race session
-        # in the INI to avoid AC defaulting to pit starts.
-        sessions: list[str] = []
-        session_id = 0
-
+        # ── Timing params ──
         practice_time = int(str(params.get("practice_time", 0) or 0))
         qualy_time = int(str(params.get("qualy_time", 0) or 0))
         race_laps = int(str(params.get("race_laps", 10) or 10))
         race_time = int(str(params.get("race_time", 0) or 0))
 
-        # AI settings
+        # ── AI settings ──
         ai_count = int(str(params.get("ai_count", 0) or 0))
-        ai_difficulty = int(str(params.get("ai_difficulty", 80) or 80))
-        # Ensure car_pool has at least the player's car for AI to use
+        ai_difficulty = int(str(params.get("ai_difficulty", 100) or 100))
         if not car_pool:
             car_pool = [car]
 
@@ -71,128 +66,218 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         if os.path.isdir(ac_cars_dir):
             valid_pool = [c for c in car_pool if os.path.isdir(os.path.join(ac_cars_dir, c))]
             if not valid_pool:
-                valid_pool = [car]  # Fallback to player's car (known to exist)
-                logger.warning("No car_pool cars found locally — AI bots will use player car: %s", car)
+                valid_pool = [car]
+                logger.warning("No car_pool cars found locally — using player car: %s", car)
             elif len(valid_pool) < len(car_pool):
                 removed = set(car_pool) - set(valid_pool)
                 logger.warning("Filtered unavailable cars from AI pool: %s", removed)
             car_pool = valid_pool
         else:
-            # Can't verify — just ensure player car is in pool
             if car not in car_pool:
                 car_pool.insert(0, car)
 
-        # AC dedicated server doesn't support AI — force offline if bots requested
+        # AC dedicated server doesn't support AI
         use_server = bool(params.get("use_server", False))
         if ai_count > 0 and use_server:
-            logger.info("AI bots requested — switching to offline mode (server doesn't support AI)")
+            logger.info("AI bots requested — switching to offline mode")
             use_server = False
-
-        # RACE session is always SESSION_0 for grid start
-        race_type = 3 if race_laps > 0 else 2
-        sessions.append(
-            f"\n[SESSION_{session_id}]\n"
-            f"NAME=Grand Prix\n"
-            f"TYPE={race_type}\n"
-            f"LAPS={race_laps}\n"
-            f"DURATION_MINUTES={race_time}\n"
-            f"WAIT_TIME=0\n"
-            f"START_RULE=1\n"  # 1 = teleport to grid (avoids floating)
-        )
-        session_id += 1
-
-        if practice_time > 0:
-            sessions.append(
-                f"\n[SESSION_{session_id}]\n"
-                f"NAME=Practice\n"
-                f"TYPE=0\n"
-                f"DURATION_MINUTES={practice_time}\n"
-                f"WAIT_TIME=0\n"
-            )
-            session_id += 1
-
-        if qualy_time > 0:
-            sessions.append(
-                f"\n[SESSION_{session_id}]\n"
-                f"NAME=Qualifying\n"
-                f"TYPE=1\n"
-                f"DURATION_MINUTES={qualy_time}\n"
-                f"WAIT_TIME=0\n"
-            )
-            session_id += 1
 
         total_cars = 1 + ai_count
         server_ip = str(params.get("server_ip", config.orchestrator_ip))
 
-        content = (
+        # ── Lighting / time-of-day ──
+        sun_angle = float(str(params.get("sun_angle", -16) or -16))
+        time_mult = float(str(params.get("time_mult", 1) or 1))
+        ambient_temp = int(str(params.get("ambient_temp", 26) or 26))
+        track_grip = int(str(params.get("track_grip", 100) or 100))
+
+        # ── Build INI matching Content Manager format ──
+        lines: list[str] = []
+
+        # [RACE] — main section
+        lines.append(
             f"[RACE]\n"
             f"VERSION=1.1\n"
             f"MODEL={car}\n"
             f"TRACK={track}\n"
             f"CONFIG_TRACK=\n"
             f"CARS={total_cars}\n"
-            f"AI_LEVEL={ai_difficulty if ai_count > 0 else 0}\n"
+            f"AI_LEVEL={ai_difficulty if ai_count > 0 else 100}\n"
             f"FIXED_SETUP=0\n"
             f"PENALTIES=1\n"
-            f"JUMP_START_PENALTY=1\n"
+            f"JUMP_START_PENALTY=0\n"
             f"AUTO_START=0\n"
             f"OPEN_CONTROL_CONFIG=0\n"
             f"PIT_MODE=0\n"
-            f"CONF_MODE=\n\n"
-            f"[CAR_0]\n"
-            f"MODEL={car}\n"
-            f"SKIN=0_official\n"
-            f"DRIVER_NAME={config.rig_id}\n"
-            f"NATIONALITY=Italy\n"
-            f"NATION_CODE=ITA\n"
-            f"TEAM=Ridge Racing\n"
-            f"GUID=\n"
-            f"BALLAST=0\n"
-            f"RESTRICTOR=0\n"
-            f"SPECTATOR_MODE=0\n"
-            f"STARTING_POSITION=1\n\n"  # 1 = pole position (1-indexed)
+            f"CONF_MODE=\n"
+            f"MODEL_CONFIG=\n"
+            f"SKIN=\n"
+            f"DRIFT_MODE=0"
         )
 
-        # Add AI opponent entries
+        # [CAR_0] — player car (matches CM format)
+        lines.append(
+            f"\n[CAR_0]\n"
+            f"SETUP=\n"
+            f"SKIN=\n"
+            f"MODEL=-\n"
+            f"MODEL_CONFIG=\n"
+            f"BALLAST=0\n"
+            f"RESTRICTOR=0\n"
+            f"DRIVER_NAME={config.rig_id}\n"
+            f"NATIONALITY=ITA\n"
+            f"NATION_CODE=ITA"
+        )
+
+        # AI opponent entries
         for i in range(ai_count):
             ai_car = car_pool[i % len(car_pool)] if car_pool else car
-            content += (
-                f"[CAR_{i + 1}]\n"
+            lines.append(
+                f"\n[CAR_{i + 1}]\n"
                 f"MODEL={ai_car}\n"
                 f"SKIN=\n"
-                f"DRIVER_NAME=AI Driver {i + 1}\n"
-                f"NATIONALITY=Italy\n"
-                f"NATION_CODE=ITA\n"
-                f"TEAM=AI\n"
-                f"GUID=\n"
+                f"SETUP=\n"
+                f"MODEL_CONFIG=\n"
                 f"BALLAST=0\n"
                 f"RESTRICTOR=0\n"
-                f"SPECTATOR_MODE=0\n"
-                f"AI=auto\n"
-                f"STARTING_POSITION={i + 2}\n\n"  # 2-indexed: player is 1
+                f"DRIVER_NAME=AI Driver {i + 1}\n"
+                f"NATIONALITY=ITA\n"
+                f"NATION_CODE=ITA\n"
+                f"AI=auto"
             )
 
-        content += (
-            f"{''.join(sessions) if not use_server else ''}"
-            f"[REMOTE]\n"
+        # [DYNAMIC_TRACK]
+        lines.append(
+            f"\n[DYNAMIC_TRACK]\n"
+            f"SESSION_START={track_grip}\n"
+            f"RANDOMNESS=0\n"
+            f"LAP_GAIN=1\n"
+            f"SESSION_TRANSFER=100"
+        )
+
+        # [WIND]
+        lines.append(
+            f"\n[WIND]\n"
+            f"SPEED_KMH_MIN=0\n"
+            f"SPEED_KMH_MAX=0\n"
+            f"DIRECTION_DEG=90"
+        )
+
+        # [TEMPERATURE]
+        road_temp = max(0, ambient_temp - 3)  # Road is typically a bit cooler
+        lines.append(
+            f"\n[TEMPERATURE]\n"
+            f"AMBIENT={ambient_temp}\n"
+            f"ROAD={road_temp}"
+        )
+
+        # Sessions — only for offline (non-server) mode
+        if not use_server:
+            session_id = 0
+            # Practice (SESSION_0 — matches CM using TYPE=1 for practice)
+            lines.append(
+                f"\n[SESSION_{session_id}]\n"
+                f"NAME=Practice\n"
+                f"TYPE=1\n"
+                f"DURATION_MINUTES={practice_time}\n"
+                f"SPAWN_SET=START"
+            )
+            session_id += 1
+
+            # Race session
+            race_type = 3 if race_laps > 0 else 2
+            lines.append(
+                f"\n[SESSION_{session_id}]\n"
+                f"NAME=Race\n"
+                f"TYPE={race_type}\n"
+                f"LAPS={race_laps}\n"
+                f"DURATION_MINUTES={race_time}\n"
+                f"SPAWN_SET=START"
+            )
+
+        # [GROOVE]
+        lines.append(
+            f"\n[GROOVE]\n"
+            f"VIRTUAL_LAPS=10\n"
+            f"MAX_LAPS=30\n"
+            f"STARTING_LAPS=0"
+        )
+
+        # [GHOST_CAR]
+        lines.append(
+            f"\n[GHOST_CAR]\n"
+            f"RECORDING=0\n"
+            f"PLAYING=0\n"
+            f"LOAD=0\n"
+            f"FILE=\n"
+            f"ENABLED=0"
+        )
+
+        # [LAP_INVALIDATOR]
+        lines.append(
+            f"\n[LAP_INVALIDATOR]\n"
+            f"ALLOWED_TYRES_OUT=-1"
+        )
+
+        # [HEADER]
+        lines.append(
+            f"\n[HEADER]\n"
+            f"VERSION=2"
+        )
+
+        # [REMOTE]
+        lines.append(
+            f"\n[REMOTE]\n"
             f"ACTIVE={'1' if use_server else '0'}\n"
             f"SERVER_IP={server_ip}\n"
             f"SERVER_PORT=9600\n"
             f"NAME={config.rig_id}\n"
             f"TEAM=Ridge-Link\n"
             f"GUID=\n"
-            f"PASS=ridge\n\n"
-            f"[LIGHTING]\n"
-            f"SPECULAR_MULT=1.0\n"
-            f"CLOUD_SPEED=0.5\n\n"
-            f"[WEATHER]\n"
-            f"NAME={weather}\n\n"
-            f"[BENCHMARK]\n"
-            f"ACTIVE=0\n"
+            f"PASS=ridge"
         )
 
+        # [LIGHTING] — this is where sun angle and time multiplier go
+        lines.append(
+            f"\n[LIGHTING]\n"
+            f"SPECULAR_MULT=1.0\n"
+            f"CLOUD_SPEED=0.200\n"
+            f"SUN_ANGLE={sun_angle:.2f}\n"
+            f"TIME_MULT={time_mult:.1f}"
+        )
+
+        # [WEATHER]
+        lines.append(
+            f"\n[WEATHER]\n"
+            f"NAME={weather}"
+        )
+
+        # Trailing standard sections
+        lines.append(
+            f"\n[BENCHMARK]\n"
+            f"ACTIVE=0"
+        )
+        lines.append(
+            f"\n[REPLAY]\n"
+            f"ACTIVE=0"
+        )
+        lines.append(
+            f"\n[RESTART]\n"
+            f"ACTIVE=0"
+        )
+        lines.append(
+            f"\n[__PREVIEW_GENERATION]\n"
+            f"ACTIVE=0"
+        )
+        lines.append(
+            f"\n[OPTIONS]\n"
+            f"USE_MPH=0"
+        )
+
+        content = "\n".join(lines)
+
         with open(cfg_path, "w") as f:
-            f.write(content.strip())
+            f.write(content)
 
         # --- Verification: re-read and confirm AI difficulty ---
         if ai_count > 0:
@@ -212,8 +297,8 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             except Exception as ve:
                 logger.warning("AI difficulty verification failed: %s", ve)
 
-        logger.info("Wrote race.ini: CAR=%s TRACK=%s AI=%d/%d%% SERVER=%s",
-                     car, track, ai_count, ai_difficulty, use_server)
+        logger.info("Wrote race.ini: CAR=%s TRACK=%s AI=%d/%d%% SERVER=%s SUN=%.1f TIME_MULT=%.1f",
+                     car, track, ai_count, ai_difficulty, use_server, sun_angle, time_mult)
         return cfg_path
 
     except Exception as e:
