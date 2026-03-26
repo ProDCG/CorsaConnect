@@ -230,11 +230,12 @@ class DesktopBlocker:
             return None
         try:
             img = Image.open(path).convert("RGBA")
-            # Invert dark logos (black on white JPGs) for visibility on dark background
-            if filename.endswith(".jpg"):
-                rgb = img.convert("RGB")
-                rgb = ImageOps.invert(rgb)
-                img = rgb.convert("RGBA")
+            # Invert dark logos for visibility on dark background
+            # Invert RGB channels while preserving alpha transparency
+            r, g, b, a = img.split()
+            rgb = Image.merge("RGB", (r, g, b))
+            rgb = ImageOps.invert(rgb)
+            img = Image.merge("RGBA", (*rgb.split(), a))
             # Scale to max_height preserving aspect ratio
             ratio = max_height / img.height
             new_size = (int(img.width * ratio), max_height)
@@ -317,30 +318,7 @@ class DesktopBlocker:
         # Top accent line
         self.canvas.create_rectangle(0, 0, sw, 3, fill=BRAND_COLOR, outline="", tags="branding")
 
-        # Main title — centered
-        self.canvas.create_text(
-            sw // 2, sh // 2 - 60,
-            text="RIDGE",
-            font=("Arial", 72, "bold italic"),
-            fill=BRAND_COLOR,
-            tags="branding",
-        )
-        self.canvas.create_text(
-            sw // 2, sh // 2 + 10,
-            text="RACING",
-            font=("Arial", 36, "bold italic"),
-            fill="#FFFFFF",
-            tags="branding",
-        )
-
-        # Version tagline — centered below title
-        self.canvas.create_text(
-            sw // 2, sh // 2 + 55,
-            text="POWERED BY RIDGE-LINK v2.0",
-            font=("Arial", 8, "bold"),
-            fill="#333333",
-            tags="branding",
-        )
+        # Main title removed — video background + logos only
 
         # --- Bottom-right: Talbot Media + RSR logos ---
         # Load logos asynchronously (after mainloop starts)
@@ -370,7 +348,7 @@ class DesktopBlocker:
             30, sh - 55,
             text=self.rig_id,
             font=("Arial", 18, "bold italic"),
-            fill=BRAND_COLOR,
+            fill="#FFFFFF",
             anchor="w",
             tags="branding",
         )
@@ -396,8 +374,8 @@ class DesktopBlocker:
 
         # Run in background thread to avoid blocking UI
         def _load():
-            talbot = self._load_logo("talbot_media_logo.jpg", max_height=120)
-            rsr = self._load_logo("rsr_logo.jpg", max_height=120)
+            talbot = self._load_logo("talbot_media_logo.png", max_height=120)
+            rsr = self._load_logo("rsr_logo.png", max_height=120)
             self.root.after_idle(lambda: self._place_logos(talbot, rsr))
 
         threading.Thread(target=_load, daemon=True).start()
@@ -419,9 +397,13 @@ class DesktopBlocker:
 
             self._logo_refs.append(talbot)
             self.canvas.create_image(x_start, y_base, anchor="nw", image=talbot, tags="branding")
-            self.canvas.create_text(
-                x_start + talbot.width() + gap // 2 + cross_width // 2, y_base + talbot.height() // 2,
-                text="\u2715", font=("Arial", 14, "bold"), fill=BRAND_COLOR, tags="branding",
+            # White vertical separator line
+            line_x = x_start + talbot.width() + gap // 2 + cross_width // 2
+            line_top = y_base + 10
+            line_bot = y_base + talbot.height() - 10
+            self.canvas.create_line(
+                line_x, line_top, line_x, line_bot,
+                fill="#FFFFFF", width=2, tags="branding",
             )
             self._logo_refs.append(rsr)
             self.canvas.create_image(x_start + talbot.width() + cross_width + gap, y_base, anchor="nw", image=rsr, tags="branding")
