@@ -90,10 +90,16 @@ class DesktopBlocker:
         self.root.title("Ridge-Link")
 
         # Fullscreen, always on top, no decorations
-        self.root.attributes("-fullscreen", True)
-        self.root.attributes("-topmost", True)
-        self.root.configure(bg=BG_COLOR, cursor="none")
         self.root.overrideredirect(True)
+        try:
+            self.root.attributes("-fullscreen", True)
+        except tk.TclError:
+            pass  # Linux with overrideredirect doesn't support -fullscreen
+        try:
+            self.root.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        self.root.configure(bg=BG_COLOR, cursor="none")
 
         # Block Alt-F4 (but NOT everything else)
         self.root.protocol("WM_DELETE_WINDOW", lambda: None)
@@ -162,28 +168,46 @@ class DesktopBlocker:
     # Asset loading helpers
     # ------------------------------------------------------------------
 
-    def _fetch_asset(self, filename: str) -> bytes | None:
-        """Download an asset from the orchestrator's static server."""
+    def _resolve_asset_path(self, filename: str) -> str | None:
+        """Find an asset on the local filesystem."""
+        # Try paths relative to this file (splash.py is in apps/sled/)
+        base = Path(__file__).resolve().parent.parent  # -> apps/
+        candidates = [
+            base / "orchestrator" / "frontend" / "public" / "assets" / filename,
+            base.parent / "apps" / "orchestrator" / "frontend" / "public" / "assets" / filename,
+            base.parent / "frontend" / "public" / "assets" / filename,
+        ]
+        for p in candidates:
+            if p.exists():
+                logger.info("Resolved asset locally: %s", p)
+                return str(p)
+
+        # Fallback: try HTTP from orchestrator
         url = f"http://{self.orchestrator_ip}:8000/assets/{filename}"
         try:
+            import tempfile
             with urlrequest.urlopen(url, timeout=5) as resp:
                 data = resp.read()
-            logger.info("Fetched asset: %s (%d bytes)", filename, len(data))
-            return data
+            tmp = tempfile.NamedTemporaryFile(suffix=Path(filename).suffix, delete=False)
+            tmp.write(data)
+            tmp.flush()
+            tmp.close()
+            logger.info("Fetched asset via HTTP: %s (%d bytes)", filename, len(data))
+            return tmp.name
         except Exception as e:
-            logger.warning("Failed to fetch asset %s: %s", filename, e)
+            logger.warning("Failed to resolve asset %s: %s", filename, e)
             return None
 
     def _load_logo(self, filename: str, max_height: int = 50) -> "ImageTk.PhotoImage | None":
-        """Fetch a logo from the orchestrator and return a Tk-compatible image."""
+        """Load a logo from local filesystem or orchestrator and return a Tk-compatible image."""
         if not HAS_PIL:
             return None
-        raw = self._fetch_asset(filename)
-        if not raw:
+        path = self._resolve_asset_path(filename)
+        if not path:
             return None
         try:
-            img = Image.open(BytesIO(raw)).convert("RGBA")
-            # Invert dark logos for visibility on dark background
+            img = Image.open(path).convert("RGBA")
+            # Invert dark logos (black on white JPGs) for visibility on dark background
             if filename.endswith(".jpg"):
                 rgb = img.convert("RGB")
                 rgb = ImageOps.invert(rgb)
@@ -203,17 +227,14 @@ class DesktopBlocker:
             logger.info("Video background disabled (cv2=%s, PIL=%s)", HAS_CV2, HAS_PIL)
             return
 
-        # Download video to temp file
-        raw = self._fetch_asset("sled_background.mp4")
-        if not raw:
+        # Find video file locally or download it
+        video_path = self._resolve_asset_path("sled_background.mp4")
+        if not video_path:
+            logger.warning("sled_background.mp4 not found — no video background")
             return
 
-        import tempfile
-        self._video_tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
-        self._video_tmp.write(raw)
-        self._video_tmp.flush()
-        self._video_path = self._video_tmp.name
-        logger.info("Video background cached: %s", self._video_path)
+        self._video_path = video_path
+        logger.info("Video background source: %s", self._video_path)
 
         self._video_running = True
         self._bg_photo = None  # Keep reference so GC doesn't collect it
