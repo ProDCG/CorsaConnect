@@ -118,6 +118,8 @@ def create_router(state: AppState) -> APIRouter:
                     payload["ai_count"] = group.ai_count
                     payload["ai_difficulty"] = group.ai_difficulty
                     payload["car_pool"] = group.car_pool
+                    # Solo groups always run offline; multiplayer uses AC server
+                    payload["use_server"] = group.mode == "multiplayer"
                 background_tasks.add_task(dispatch_command, str(rig["ip"]), COMMAND_PORT, payload)
                 responses.append(f"Sled {rig_id}")
 

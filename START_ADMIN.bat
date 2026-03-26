@@ -1,4 +1,5 @@
 @echo off
+title Ridge-Link Admin
 REM ═══════════════════════════════════════════════════
 REM  RIDGE-LINK ADMIN LAUNCHER
 REM  Double-click to start. Opens dashboard automatically.

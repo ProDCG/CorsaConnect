@@ -174,9 +174,18 @@ class DesktopBlocker:
             tags="branding",
         )
 
-        # Tagline
+        # Collaboration line
         self.canvas.create_text(
             sw // 2, sh // 2 + 50,
+            text="RIDGE MEDIA  ×  TALBOT MEDIA",
+            font=("Arial", 10, "bold"),
+            fill="#888888",
+            tags="branding",
+        )
+
+        # Version tagline
+        self.canvas.create_text(
+            sw // 2, sh // 2 + 72,
             text="POWERED BY RIDGE-LINK v2.0",
             font=("Arial", 8, "bold"),
             fill="#333333",

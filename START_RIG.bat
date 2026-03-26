@@ -1,4 +1,5 @@
 @echo off
+title Ridge-Link Rig
 REM ═══════════════════════════════════════════════════
 REM  RIDGE-LINK RIG LAUNCHER
 REM  Double-click to start. No terminal needed.
@@ -50,7 +51,7 @@ if not exist "apps\sled\config.json" (
 
 REM --- Launch ---
 if exist "venv\Scripts\pythonw.exe" (
-    start "" /B "venv\Scripts\pythonw.exe" -m apps.sled.splash
+    start "Ridge-Link Rig" /B "venv\Scripts\pythonw.exe" -m apps.sled.splash
 ) else (
-    start "" /MIN "venv\Scripts\python.exe" -m apps.sled.splash
+    start "Ridge-Link Rig" /MIN "venv\Scripts\python.exe" -m apps.sled.splash
 )

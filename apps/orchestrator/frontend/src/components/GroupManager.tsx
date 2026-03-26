@@ -176,6 +176,10 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
                 practice_time: group.practice_time,
                 qualy_time: group.qualy_time,
                 race_laps: group.race_laps,
+                ai_count: group.ai_count,
+                ai_difficulty: group.ai_difficulty,
+                car_pool: group.car_pool,
+                use_server: group.mode === 'multiplayer',
             })
         })
     }

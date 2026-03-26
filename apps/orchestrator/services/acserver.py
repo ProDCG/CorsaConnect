@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import subprocess
 import textwrap
 from dataclasses import dataclass, field
@@ -129,10 +130,18 @@ class ACServerManager:
         rig_ids = group.rig_ids if group else []
         self._write_entry_list(config_dir, rig_ids, cars, ai_count, ai_difficulty)
 
-        # Start acServer.exe
+        # Copy acServer.exe into config_dir so it finds cfg/ relative to itself
+        local_exe = os.path.join(config_dir, os.path.basename(self.ac_server_exe))
+        try:
+            shutil.copy2(self.ac_server_exe, local_exe)
+        except Exception as e:
+            logger.error("Failed to copy acServer.exe to %s: %s", config_dir, e)
+            return {"status": "error", "message": f"Could not copy server binary: {e}"}
+
+        # Start acServer.exe from config_dir
         try:
             proc = subprocess.Popen(
-                [self.ac_server_exe],
+                [local_exe],
                 cwd=config_dir,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
