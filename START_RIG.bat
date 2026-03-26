@@ -50,8 +50,5 @@ if not exist "apps\sled\config.json" (
 )
 
 REM --- Launch ---
-if exist "venv\Scripts\pythonw.exe" (
-    start "Ridge-Link Rig" /B "venv\Scripts\pythonw.exe" -m apps.sled.splash
-) else (
-    start "Ridge-Link Rig" /MIN "venv\Scripts\python.exe" -m apps.sled.splash
-)
+REM Use python.exe (not pythonw.exe) so stderr is available for crash logs
+start "Ridge-Link Rig" /MIN "venv\Scripts\python.exe" -m apps.sled.splash 2>"ridge_crash.log"

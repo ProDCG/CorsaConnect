@@ -27,17 +27,18 @@ from pathlib import Path
 from urllib import request as urlrequest
 from urllib.error import URLError
 
+_LOG_HANDLERS: list[logging.Handler] = [logging.StreamHandler()]
+try:
+    _log_file = os.path.join(Path(__file__).resolve().parent.parent.parent, "ridge_rig.log")
+    _LOG_HANDLERS.append(logging.FileHandler(_log_file, mode="a"))
+except Exception:
+    pass  # Log file creation failed — continue without it
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [SPLASH] %(levelname)s: %(message)s",
     datefmt="%H:%M:%S",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(
-            os.path.join(Path(__file__).resolve().parent.parent.parent, "ridge_rig.log"),
-            mode="a",
-        ),
-    ],
+    handlers=_LOG_HANDLERS,
 )
 logger = logging.getLogger("ridge.splash")
 
@@ -610,4 +611,18 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        import traceback
+
+        _crash_log = os.path.join(
+            Path(__file__).resolve().parent.parent.parent, "ridge_crash.log"
+        )
+        try:
+            with open(_crash_log, "a") as _f:
+                _f.write(f"\n{'='*60}\nCRASH at {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                traceback.print_exc(file=_f)
+        except Exception:
+            pass
+        raise
