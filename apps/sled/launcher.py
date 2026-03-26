@@ -48,7 +48,9 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         cfg_path = os.path.join(documents, "Assetto Corsa", "cfg", "race.ini")
         os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
 
-        # Build session blocks
+        # Build session blocks — RACE must be SESSION_0 for grid starts.
+        # When practice/qualy are specified, they go AFTER the race session
+        # in the INI to avoid AC defaulting to pit starts.
         sessions: list[str] = []
         session_id = 0
 
@@ -86,6 +88,19 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             logger.info("AI bots requested — switching to offline mode (server doesn't support AI)")
             use_server = False
 
+        # RACE session is always SESSION_0 for grid start
+        race_type = 3 if race_laps > 0 else 2
+        sessions.append(
+            f"\n[SESSION_{session_id}]\n"
+            f"NAME=Grand Prix\n"
+            f"TYPE={race_type}\n"
+            f"LAPS={race_laps}\n"
+            f"DURATION_MINUTES={race_time}\n"
+            f"WAIT_TIME=0\n"
+            f"START_RULE=2\n"  # 2 = standing start from grid
+        )
+        session_id += 1
+
         if practice_time > 0:
             sessions.append(
                 f"\n[SESSION_{session_id}]\n"
@@ -105,17 +120,6 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
                 f"WAIT_TIME=0\n"
             )
             session_id += 1
-
-
-        race_type = 3 if race_laps > 0 else 2
-        sessions.append(
-            f"\n[SESSION_{session_id}]\n"
-            f"NAME=Grand Prix\n"
-            f"TYPE={race_type}\n"
-            f"LAPS={race_laps}\n"
-            f"DURATION_MINUTES={race_time}\n"
-            f"WAIT_TIME=0\n"
-        )
 
         total_cars = 1 + ai_count
         server_ip = str(params.get("server_ip", config.orchestrator_ip))
@@ -146,7 +150,7 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             f"BALLAST=0\n"
             f"RESTRICTOR=0\n"
             f"SPECTATOR_MODE=0\n"
-            f"STARTING_POSITION=0\n\n"
+            f"STARTING_POSITION=1\n\n"  # 1 = pole position (1-indexed)
         )
 
         # Add AI opponent entries
