@@ -105,18 +105,7 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
                 f"WAIT_TIME=0\n"
             )
             session_id += 1
-        elif ai_count > 0 and practice_time == 0:
-            # Force a short qualifying when bots are present but no
-            # practice/qualifying was configured — prevents floating cars
-            # on the grid (AC needs a session to initialise physics).
-            sessions.append(
-                f"\n[SESSION_{session_id}]\n"
-                f"NAME=Qualifying\n"
-                f"TYPE=1\n"
-                f"DURATION_MINUTES=2\n"
-                f"WAIT_TIME=0\n"
-            )
-            session_id += 1
+
 
         race_type = 3 if race_laps > 0 else 2
         sessions.append(
@@ -155,7 +144,8 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             f"GUID=\n"
             f"BALLAST=0\n"
             f"RESTRICTOR=0\n"
-            f"SPECTATOR_MODE=0\n\n"
+            f"SPECTATOR_MODE=0\n"
+            f"STARTING_POSITION=0\n\n"
         )
 
         # Add AI opponent entries
@@ -173,7 +163,8 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
                 f"BALLAST=0\n"
                 f"RESTRICTOR=0\n"
                 f"SPECTATOR_MODE=0\n"
-                f"AI=auto\n\n"
+                f"AI=auto\n"
+                f"STARTING_POSITION={i + 1}\n\n"
             )
 
         content += (
