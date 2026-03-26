@@ -30,10 +30,16 @@ from urllib.error import URLError
 
 # Optional deps — graceful fallback if missing
 try:
-    from PIL import Image, ImageTk, ImageOps
+    from PIL import Image, ImageOps
     HAS_PIL = True
+    try:
+        from PIL import ImageTk
+        HAS_IMAGETK = True
+    except ImportError:
+        HAS_IMAGETK = False
 except ImportError:
     HAS_PIL = False
+    HAS_IMAGETK = False
 
 try:
     import cv2
@@ -41,6 +47,23 @@ try:
     HAS_CV2 = True
 except ImportError:
     HAS_CV2 = False
+
+
+def _pil_to_tk(pil_img: "Image.Image") -> tk.PhotoImage:
+    """Convert a PIL Image to a Tkinter PhotoImage via PPM bytes.
+
+    Works without ImageTk by using the raw PPM format that Tkinter
+    natively understands.
+    """
+    if HAS_IMAGETK:
+        return ImageTk.PhotoImage(pil_img)
+    # Fallback: convert to PPM data and use tk.PhotoImage
+    rgb = pil_img.convert("RGB")
+    data = rgb.tobytes("raw", "PPM")
+    # Build a proper PPM header
+    w, h = rgb.size
+    ppm = f"P6\n{w} {h}\n255\n".encode() + rgb.tobytes()
+    return tk.PhotoImage(data=ppm)
 
 _LOG_HANDLERS: list[logging.Handler] = [logging.StreamHandler()]
 try:
@@ -198,7 +221,7 @@ class DesktopBlocker:
             logger.warning("Failed to resolve asset %s: %s", filename, e)
             return None
 
-    def _load_logo(self, filename: str, max_height: int = 50) -> "ImageTk.PhotoImage | None":
+    def _load_logo(self, filename: str, max_height: int = 50) -> "tk.PhotoImage | None":
         """Load a logo from local filesystem or orchestrator and return a Tk-compatible image."""
         if not HAS_PIL:
             return None
@@ -216,7 +239,7 @@ class DesktopBlocker:
             ratio = max_height / img.height
             new_size = (int(img.width * ratio), max_height)
             img = img.resize(new_size, Image.LANCZOS)
-            return ImageTk.PhotoImage(img)
+            return _pil_to_tk(img)
         except Exception as e:
             logger.warning("Failed to load logo %s: %s", filename, e)
             return None
@@ -266,7 +289,7 @@ class DesktopBlocker:
             frame = (frame * 0.35).astype(np.uint8)  # Dim to 35%
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(frame)
-            photo = ImageTk.PhotoImage(img)
+            photo = _pil_to_tk(img)
 
             # Schedule canvas update on main thread
             self.root.after_idle(self._update_bg_frame, photo)
@@ -274,7 +297,7 @@ class DesktopBlocker:
 
         cap.release()
 
-    def _update_bg_frame(self, photo: "ImageTk.PhotoImage") -> None:
+    def _update_bg_frame(self, photo: "tk.PhotoImage") -> None:
         """Update the background canvas image (must run on main thread)."""
         self._bg_photo = photo  # Prevent GC
         self.canvas.itemconfig(self._bg_canvas_id, image=photo)
@@ -321,7 +344,7 @@ class DesktopBlocker:
 
         # --- Bottom-right: Talbot Media + RSR logos ---
         # Load logos asynchronously (after mainloop starts)
-        self._logo_refs: list[ImageTk.PhotoImage] = []  # Prevent GC
+        self._logo_refs: list = []  # Prevent GC on PhotoImage refs
         self.root.after(1000, self._load_and_place_logos)
 
         # Fallback text (will be hidden if logos load successfully)
