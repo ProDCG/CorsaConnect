@@ -113,16 +113,16 @@ class DesktopBlocker:
         self.root.title("Ridge-Link")
 
         # Fullscreen, always on top, no decorations
+        # Use overrideredirect for borderless + geometry for fullscreen coverage.
+        # Do NOT use -fullscreen with overrideredirect — they conflict on many WMs.
         self.root.overrideredirect(True)
-        try:
-            self.root.attributes("-fullscreen", True)
-        except tk.TclError:
-            pass  # Linux with overrideredirect doesn't support -fullscreen
         try:
             self.root.attributes("-topmost", True)
         except tk.TclError:
             pass
         self.root.configure(bg=BG_COLOR, cursor="none")
+        # Cover the entire screen
+        self.root.geometry(f"{self.root.winfo_screenwidth()}x{self.root.winfo_screenheight()}+0+0")
 
         # Block Alt-F4 (but NOT everything else)
         self.root.protocol("WM_DELETE_WINDOW", lambda: None)
@@ -604,20 +604,13 @@ class DesktopBlocker:
             # FREEUSE — completely hide the splash window
             self._hide_car_selection()
             self.root.attributes("-topmost", False)
-            self.root.attributes("-fullscreen", False)
             self.root.overrideredirect(False)
             self.root.withdraw()  # Completely hide (iconify doesn't work with overrideredirect)
             self.canvas.itemconfig(self.mode_indicator, text="FREEUSE", fill="#00CC66")
             logger.info("FREEUSE mode — splash hidden, desktop accessible")
         else:
             # LOCKOUT — restore fullscreen blocker
-            self.root.deiconify()  # Show the window again
-            self.root.overrideredirect(True)
-            self.root.attributes("-fullscreen", True)
-            self.root.attributes("-topmost", True)
-            self.root.configure(cursor="none")
-            self.root.lift()
-            self.root.focus_force()
+            self._restore_for_lockout()
             self.canvas.itemconfig(self.mode_indicator, text="LOCKOUT", fill="#333333")
             self._hide_car_selection()
             logger.info("LOCKOUT mode — splash restored")
@@ -638,7 +631,6 @@ class DesktopBlocker:
             # HIDE splash completely so AC can render fullscreen
             self._hide_car_selection()
             self.root.attributes("-topmost", False)
-            self.root.attributes("-fullscreen", False)
             self.root.overrideredirect(False)
             self.root.withdraw()
             self.update_status("RACE IN PROGRESS")
@@ -664,8 +656,10 @@ class DesktopBlocker:
         try:
             self.root.deiconify()
             self.root.overrideredirect(True)
-            self.root.attributes("-fullscreen", True)
             self.root.attributes("-topmost", True)
+            sw = self.root.winfo_screenwidth()
+            sh = self.root.winfo_screenheight()
+            self.root.geometry(f"{sw}x{sh}+0+0")
             self.root.configure(cursor="none")
             self.root.lift()
             self.root.focus_force()
