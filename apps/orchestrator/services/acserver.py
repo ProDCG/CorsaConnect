@@ -157,11 +157,16 @@ class ACServerManager:
 
         # Launch acServer.exe from its own directory
         try:
+            # Log server output to a file for debugging
+            log_path = os.path.join(config_dir, "server_output.log")
+            log_file = open(log_path, "w")  # noqa: SIM115
+            logger.info("AC server log → %s", log_path)
+
             proc = subprocess.Popen(
                 [self.ac_server_exe],
                 cwd=ac_server_dir,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
                 creationflags=subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0,  # type: ignore[attr-defined]
             )
             server = ACServerInstance(
@@ -179,12 +184,22 @@ class ACServerManager:
             )
             self._servers[group_id] = server
             logger.info("AC server started for '%s' on port %d (PID: %d)", group_name, udp_port, proc.pid)
+
+            # Dump the generated configs to the orchestrator log for quick debugging
+            cfg_path = os.path.join(config_dir, "cfg", "server_cfg.ini")
+            try:
+                with open(cfg_path) as f:
+                    logger.info("=== server_cfg.ini for '%s' ===\n%s", group_name, f.read())
+            except Exception:
+                pass
+
             return {
                 "status": "success",
                 "group_id": group_id,
                 "port": udp_port,
                 "http_port": http_port,
                 "pid": proc.pid,
+                "log_path": log_path,
             }
         except Exception as e:
             logger.error("Failed to start AC server: %s", e)

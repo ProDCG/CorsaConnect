@@ -369,11 +369,27 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
                 matches = [l for l in written_content.splitlines() if check_key in l]
                 for m in matches:
                     logger.info("VERIFY %s: %s", check_key, m.strip())
+
+            # Explicitly log the [REMOTE] section for multiplayer debugging
+            remote_lines = []
+            in_remote = False
+            for line in written_content.splitlines():
+                if line.strip() == "[REMOTE]":
+                    in_remote = True
+                elif line.strip().startswith("[") and in_remote:
+                    break
+                if in_remote:
+                    remote_lines.append(line)
+            if remote_lines:
+                logger.info("=== [REMOTE] SECTION ===")
+                for rl in remote_lines:
+                    logger.info("  %s", rl)
+                logger.info("========================")
         except Exception as ve:
             logger.warning("Verification read failed: %s", ve)
 
-        logger.info("Wrote race.ini: CAR=%s TRACK=%s AI=%d/%d%% SERVER=%s SUN=%.1f TIME_MULT=%.1f",
-                     car, track, ai_count, ai_difficulty, use_server, sun_angle, time_mult)
+        logger.info("Wrote race.ini: CAR=%s TRACK=%s AI=%d/%d%% SERVER=%s SERVER_IP=%s SERVER_PORT=%s SUN=%.1f TIME_MULT=%.1f",
+                     car, track, ai_count, ai_difficulty, use_server, server_ip, server_port, sun_angle, time_mult)
         return cfg_path
 
     except Exception as e:
