@@ -722,7 +722,7 @@ function App() {
                                             </span>
                                         </div>
 
-                                        {rig.telemetry ? (
+                                        {rig.status === 'racing' && rig.telemetry ? (
                                             <div className="space-y-3">
                                                 {/* Speed + RPM Hero */}
                                                 {(has('velocity') || has('rpms')) && (
@@ -851,9 +851,10 @@ function App() {
                                                 )}
                                             </div>
                                         ) : (
-                                            <div className="py-8 text-center">
-                                                <Activity size={24} className="mx-auto mb-2 text-white/10" />
-                                                <p className="text-[9px] uppercase font-black tracking-widest text-white/15">Waiting for signal</p>
+                                            <div className="py-10 text-center">
+                                                <Monitor size={24} className="mx-auto mb-2 text-white/10" />
+                                                <p className="text-[9px] uppercase font-black tracking-widest text-white/15">Waiting for race to start</p>
+                                                <p className="text-[8px] text-white/10 mt-1">{rig.status === 'idle' ? 'Rig idle' : rig.status === 'ready' ? 'Rig ready' : rig.status}</p>
                                             </div>
                                         )}
                                     </div>
