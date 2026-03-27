@@ -1,4 +1,4 @@
-import { Activity, Cpu, Monitor, Zap, Power, RotateCcw, Play, Check, Image, Car, Settings2, Flag, Clock, ShieldCheck, LayoutGrid, Users, Lock, Unlock, Wrench, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Activity, Cpu, Monitor, Zap, Power, RotateCcw, Play, Check, Image, Car, Settings2, Flag, Clock, ShieldCheck, LayoutGrid, Users, Lock, Unlock, Wrench, ChevronLeft, ChevronRight, Thermometer, Fuel, Gauge } from 'lucide-react'
 import Kiosk from './Kiosk'
 import Lobby from './Lobby'
 import GroupManager from './components/GroupManager'
@@ -15,13 +15,7 @@ interface Rig {
     mod_version: string
     last_seen: number
     telemetry?: {
-        velocity: [number, number, number]
-        gforce: [number, number, number]
-        normalized_pos: number
-        completed_laps: number
-        gas: number
-        brake: number
-        gear: number
+        [key: string]: any
     }
 }
 
@@ -85,19 +79,57 @@ function App() {
     const [leaderboardFilter, setLeaderboardFilter] = useState<'all' | 'recent'>('all')
     const [leaderboardTrack, setLeaderboardTrack] = useState<string>('')
     const [presets, setPresets] = useState<any[]>([])
-    const [activeTelemFields, setActiveTelemFields] = useState<string[]>(['velocity', 'gforce', 'normalized_pos', 'gear', 'completed_laps', 'gas'])
+    const [activeTelemFields, setActiveTelemFields] = useState<string[]>(['velocity', 'rpms', 'gforce', 'normalized_pos', 'gear', 'completed_laps', 'gas', 'brake', 'position'])
     const [showRigPanel, setShowRigPanel] = useState(true)
 
-    const TELEM_FIELDS = [
-        { id: 'velocity', name: 'Velocity (KM/H)', icon: Zap },
-        { id: 'gforce', name: 'G-Force', icon: Activity },
-        { id: 'normalized_pos', name: 'Circuit Progress', icon: LayoutGrid },
-        { id: 'gear', name: 'Gear', icon: Settings2 },
-        { id: 'completed_laps', name: 'Lap Count', icon: Flag },
-        { id: 'gas', name: 'Throttle Input', icon: Power },
-        { id: 'brake', name: 'Brake Input', icon: ShieldCheck },
-        { id: 'rpms', name: 'Engine RPM', icon: Activity },
-        { id: 'status', name: 'Engine Status', icon: Monitor },
+    // Categorized telemetry channels
+    const TELEM_CATEGORIES = [
+        { category: 'Driving', icon: Zap, fields: [
+            { id: 'velocity', name: 'Speed (km/h)' },
+            { id: 'rpms', name: 'Engine RPM' },
+            { id: 'gear', name: 'Gear' },
+            { id: 'gas', name: 'Throttle' },
+            { id: 'brake', name: 'Brake' },
+            { id: 'clutch', name: 'Clutch' },
+            { id: 'gforce', name: 'G-Force' },
+            { id: 'engine_torque', name: 'Torque' },
+        ]},
+        { category: 'Race', icon: Flag, fields: [
+            { id: 'position', name: 'Position' },
+            { id: 'completed_laps', name: 'Laps Done' },
+            { id: 'remaining_laps', name: 'Laps Left' },
+            { id: 'normalized_pos', name: 'Track Progress' },
+            { id: 'current_lap_time', name: 'Current Lap' },
+            { id: 'last_lap_time', name: 'Last Lap' },
+            { id: 'best_lap_time', name: 'Best Lap' },
+            { id: 'max_speed', name: 'Top Speed' },
+            { id: 'is_lap_valid', name: 'Lap Valid' },
+        ]},
+        { category: 'Tyres', icon: Settings2, fields: [
+            { id: 'tyre_temps', name: 'Tyre Temps' },
+            { id: 'tyre_wear', name: 'Tyre Wear' },
+            { id: 'tyre_psi', name: 'Tyre Pressure' },
+        ]},
+        { category: 'Brakes', icon: ShieldCheck, fields: [
+            { id: 'brake_temps', name: 'Brake Temps' },
+            { id: 'brake_bias', name: 'Brake Bias' },
+        ]},
+        { category: 'Fuel', icon: Fuel, fields: [
+            { id: 'fuel_percent', name: 'Fuel Level' },
+            { id: 'fuel', name: 'Fuel (L/gal)' },
+        ]},
+        { category: 'Electronics', icon: Cpu, fields: [
+            { id: 'abs', name: 'ABS' },
+            { id: 'tc', name: 'Traction Control' },
+            { id: 'drs', name: 'DRS' },
+        ]},
+        { category: 'Conditions', icon: Thermometer, fields: [
+            { id: 'air_temp', name: 'Air Temp' },
+            { id: 'road_temp', name: 'Track Temp' },
+        ]},
+        { category: 'Damage', icon: Wrench, fields: [
+            { id: 'damage', name: 'Car Damage' },
+        ]},
     ]
 
     const ALL_CARS = [
@@ -615,126 +647,221 @@ function App() {
                     )}
 
                     {/* LIVE MONITOR VIEW */}
-                    {activeTab === 'monitor' && (
+                    {activeTab === 'monitor' && (() => {
+                        const t = (rig: Rig, key: string, fallback: any = 0) => rig.telemetry?.[key] ?? fallback
+                        const has = (id: string) => activeTelemFields.includes(id)
+
+                        // 2x2 corner grid helper
+                        const CornerGrid = ({ label, fl, fr, rl, rr, unit, color }: { label: string, fl: number, fr: number, rl: number, rr: number, unit: string, color?: string }) => (
+                            <div className="bg-black/30 p-2.5 rounded-xl">
+                                <p className="text-[7px] font-black uppercase text-white/25 mb-1.5">{label}</p>
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] font-bold tabular-nums">
+                                    <span className={color || 'text-white/60'}>FL {fl}{unit}</span>
+                                    <span className={color || 'text-white/60'}>FR {fr}{unit}</span>
+                                    <span className={color || 'text-white/60'}>RL {rl}{unit}</span>
+                                    <span className={color || 'text-white/60'}>RR {rr}{unit}</span>
+                                </div>
+                            </div>
+                        )
+
+                        return (
                         <div className="space-y-6">
-                            {/* Telemetry Master Checklist */}
-                            <div className="glass rounded-3xl p-6 border border-white/10 mb-8">
-                                <h3 className="text-sm font-black italic uppercase italic tracking-tighter mb-4 flex items-center gap-2">
-                                    <Monitor size={16} className="text-ridge-brand" /> Telemetry Data Master Selection
-                                </h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {TELEM_FIELDS.map(field => (
-                                        <button
-                                            key={field.id}
-                                            onClick={() => toggleTelemField(field.id)}
-                                            className={`px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeTelemFields.includes(field.id)
-                                                ? 'bg-ridge-brand/10 border-ridge-brand text-ridge-brand'
-                                                : 'bg-white/5 border-white/10 text-white/30 hover:border-white/20'
-                                                }`}
-                                        >
-                                            <field.icon size={12} />
-                                            {field.name}
-                                        </button>
+                            {/* Channel Selector — categorized columns */}
+                            <div className="glass rounded-2xl p-5 border border-white/10">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-white/30">Data Channels</h3>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setActiveTelemFields(TELEM_CATEGORIES.flatMap(c => c.fields.map(f => f.id)))}
+                                            className="text-[8px] font-black uppercase tracking-widest text-ridge-brand/60 hover:text-ridge-brand px-2 py-0.5 rounded border border-ridge-brand/20 hover:border-ridge-brand/40 transition-all">All On</button>
+                                        <button onClick={() => setActiveTelemFields([])}
+                                            className="text-[8px] font-black uppercase tracking-widest text-white/20 hover:text-white/40 px-2 py-0.5 rounded border border-white/10 hover:border-white/20 transition-all">All Off</button>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4">
+                                    {TELEM_CATEGORIES.map(cat => (
+                                        <div key={cat.category}>
+                                            <div className="flex items-center gap-1.5 mb-2">
+                                                <cat.icon size={10} className="text-white/25" />
+                                                <span className="text-[8px] font-black uppercase tracking-widest text-white/30">{cat.category}</span>
+                                            </div>
+                                            <div className="space-y-1">
+                                                {cat.fields.map(field => (
+                                                    <button
+                                                        key={field.id}
+                                                        onClick={() => toggleTelemField(field.id)}
+                                                        className={`w-full text-left px-2 py-1 rounded text-[9px] font-bold transition-all ${
+                                                            activeTelemFields.includes(field.id)
+                                                                ? 'bg-ridge-brand/15 text-ridge-brand'
+                                                                : 'text-white/20 hover:text-white/40 hover:bg-white/5'
+                                                        }`}
+                                                    >
+                                                        {field.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {/* Rig Telemetry Cards */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
                                 {rigs.map((rig: Rig) => (
-                                    <div key={rig.rig_id} className="bg-white/5 border border-white/10 rounded-3xl p-6 relative overflow-hidden group">
-                                        <div className="flex justify-between items-start mb-6">
+                                    <div key={rig.rig_id} className={`rounded-2xl p-5 relative overflow-hidden border transition-all ${rig.status === 'racing' ? 'bg-white/5 border-ridge-brand/30' : 'bg-white/[0.02] border-white/5'}`}>
+                                        {/* Header */}
+                                        <div className="flex justify-between items-center mb-4">
                                             <div>
-                                                <h3 className="text-xl font-black italic uppercase italic tracking-tighter">{rig.rig_id}</h3>
-                                                <p className="text-[8px] font-black uppercase text-white/30 tracking-widest leading-none mt-1">Status // {rig.status}</p>
+                                                <h3 className="text-base font-black italic uppercase tracking-tight">{rig.driver_name || rig.rig_id}</h3>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    {rig.driver_name && <span className="text-[8px] font-mono text-white/20">{rig.rig_id}</span>}
+                                                    {rig.telemetry?.car_model && <span className="text-[8px] font-bold text-white/15 uppercase">{rig.telemetry.car_model}</span>}
+                                                </div>
                                             </div>
-                                            <div className={`px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest ${rig.status === 'racing' ? 'bg-green-500 text-white' : 'bg-white/10 text-white/40'}`}>
-                                                {rig.status === 'racing' ? 'Live Telemetry' : 'Standby'}
-                                            </div>
+                                            <span className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest ${rig.status === 'racing' ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-white/20'}`}>
+                                                {rig.status === 'racing' ? 'LIVE' : rig.status.toUpperCase()}
+                                            </span>
                                         </div>
 
                                         {rig.telemetry ? (
-                                            <div className="space-y-6">
-                                                {/* DYNAMIC FIELDS GRID */}
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    {activeTelemFields.includes('velocity') && (
-                                                        <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
-                                                            <p className="text-[8px] font-black uppercase opacity-40 mb-1">Velocity</p>
-                                                            <div className="flex items-baseline gap-2">
-                                                                <span className="text-2xl font-black italic tabular-nums">{rig.telemetry?.velocity?.[0] ?? 0}</span>
-                                                                <span className="text-[10px] font-bold text-ridge-brand">KM/H</span>
+                                            <div className="space-y-3">
+                                                {/* Speed + RPM Hero */}
+                                                {(has('velocity') || has('rpms')) && (
+                                                    <div className="flex gap-3">
+                                                        {has('velocity') && (
+                                                            <div className="flex-1 bg-black/30 p-3 rounded-xl">
+                                                                <p className="text-[7px] font-black uppercase text-white/25 mb-0.5">Speed</p>
+                                                                <div className="flex items-baseline gap-1">
+                                                                    <span className="text-3xl font-black italic tabular-nums leading-none">{Math.round(t(rig, 'velocity', [0])?.[0] ?? 0)}</span>
+                                                                    <span className="text-[9px] font-bold text-ridge-brand">km/h</span>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    )}
-                                                    {activeTelemFields.includes('gforce') && (
-                                                        <div className="bg-black/20 p-4 rounded-2xl border border-white/5">
-                                                            <p className="text-[8px] font-black uppercase opacity-40 mb-1">Force (G-Lat)</p>
-                                                            <div className="flex items-baseline gap-2">
-                                                                <span className="text-2xl font-black italic tabular-nums">{rig.telemetry?.gforce?.[0] ?? 0}</span>
-                                                                <span className="text-[10px] font-bold text-blue-400">G</span>
+                                                        )}
+                                                        {has('rpms') && (
+                                                            <div className="flex-1 bg-black/30 p-3 rounded-xl">
+                                                                <p className="text-[7px] font-black uppercase text-white/25 mb-0.5">RPM</p>
+                                                                <span className="text-3xl font-black italic tabular-nums leading-none">{Number(t(rig, 'rpms')).toLocaleString()}</span>
                                                             </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {activeTelemFields.includes('normalized_pos') && (
-                                                    <div className="space-y-2">
-                                                        <div className="flex justify-between text-[8px] font-black uppercase tracking-widest mb-1">
-                                                            <span>Circuit Progress</span>
-                                                            <span>{Math.round((rig.telemetry?.normalized_pos ?? 0) * 100)}%</span>
-                                                        </div>
-                                                        <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                                                            <div
-                                                                className="h-full bg-ridge-brand transition-all duration-300"
-                                                                style={{ width: `${(rig.telemetry?.normalized_pos ?? 0) * 100}%` }}
-                                                            />
-                                                        </div>
+                                                        )}
                                                     </div>
                                                 )}
 
-                                                <div className="grid grid-cols-3 gap-2">
-                                                    {activeTelemFields.includes('gear') && (
-                                                        <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/5 border border-white/5">
-                                                            <span className="text-[8px] font-black uppercase opacity-30 mb-1">Gear</span>
-                                                            <span className="text-xl font-black italic">
-                                                                {(rig.telemetry?.gear ?? 0) === -1 ? 'R' : (rig.telemetry?.gear ?? 0) === 0 ? 'N' : rig.telemetry?.gear}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                    {activeTelemFields.includes('completed_laps') && (
-                                                        <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/5 border border-white/5">
-                                                            <span className="text-[8px] font-black uppercase opacity-30 mb-1">Laps</span>
-                                                            <span className="text-xl font-black italic">{rig.telemetry?.completed_laps ?? 0}</span>
-                                                        </div>
-                                                    )}
-                                                    {activeTelemFields.includes('gas') && (
-                                                        <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/5 border border-white/5">
-                                                            <span className="text-[8px] font-black uppercase opacity-30 mb-1">Throttle</span>
-                                                            <span className="text-xl font-black italic text-green-500">{Math.round((rig.telemetry?.gas ?? 0) * 100)}%</span>
-                                                        </div>
-                                                    )}
+                                                {/* Compact stats row */}
+                                                {(() => {
+                                                    const cells: JSX.Element[] = []
+                                                    if (has('gear')) cells.push(<div key="gear" className="bg-black/30 p-2 rounded-xl text-center"><p className="text-[7px] font-black uppercase text-white/25">Gear</p><span className="text-lg font-black italic">{t(rig,'gear') === -1 ? 'R' : t(rig,'gear') === 0 ? 'N' : t(rig,'gear')}</span></div>)
+                                                    if (has('completed_laps')) cells.push(<div key="laps" className="bg-black/30 p-2 rounded-xl text-center"><p className="text-[7px] font-black uppercase text-white/25">Laps</p><span className="text-lg font-black italic">{t(rig,'completed_laps')}/{t(rig,'total_laps','-')}</span></div>)
+                                                    if (has('position')) cells.push(<div key="pos" className="bg-black/30 p-2 rounded-xl text-center"><p className="text-[7px] font-black uppercase text-white/25">Pos</p><span className="text-lg font-black italic text-amber-400">P{t(rig,'position')}</span></div>)
+                                                    if (has('remaining_laps')) cells.push(<div key="rem" className="bg-black/30 p-2 rounded-xl text-center"><p className="text-[7px] font-black uppercase text-white/25">Left</p><span className="text-lg font-black italic">{t(rig,'remaining_laps')}</span></div>)
+                                                    if (has('gforce')) cells.push(<div key="gf" className="bg-black/30 p-2 rounded-xl text-center"><p className="text-[7px] font-black uppercase text-white/25">G-Lat</p><span className="text-lg font-black italic text-blue-400">{Number(t(rig,'gforce',[0,0,0])?.[0] ?? 0).toFixed(1)}</span></div>)
+                                                    if (has('max_speed')) cells.push(<div key="maxspd" className="bg-black/30 p-2 rounded-xl text-center"><p className="text-[7px] font-black uppercase text-white/25">Top</p><span className="text-lg font-black italic">{t(rig,'max_speed')}</span></div>)
+                                                    if (has('engine_torque')) cells.push(<div key="torq" className="bg-black/30 p-2 rounded-xl text-center"><p className="text-[7px] font-black uppercase text-white/25">Nm</p><span className="text-lg font-black italic">{Math.round(t(rig,'engine_torque'))}</span></div>)
+                                                    if (has('clutch')) cells.push(<div key="clutch" className="bg-black/30 p-2 rounded-xl text-center"><p className="text-[7px] font-black uppercase text-white/25">Clutch</p><span className="text-lg font-black italic">{Math.round(t(rig,'clutch') * 100)}%</span></div>)
+                                                    if (cells.length === 0) return null
+                                                    return <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${Math.min(cells.length, 4)}, 1fr)` }}>{cells}</div>
+                                                })()}
+
+                                                {/* Lap times */}
+                                                {(has('current_lap_time') || has('last_lap_time') || has('best_lap_time')) && (
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        {has('current_lap_time') && <div className="bg-black/30 p-2 rounded-xl text-center"><p className="text-[7px] font-black uppercase text-white/25">Current</p><span className="text-[11px] font-black tabular-nums text-white/70">{t(rig,'current_lap_time','--:--')}</span></div>}
+                                                        {has('last_lap_time') && <div className="bg-black/30 p-2 rounded-xl text-center"><p className="text-[7px] font-black uppercase text-white/25">Last</p><span className="text-[11px] font-black tabular-nums text-white/70">{t(rig,'last_lap_time','--:--')}</span></div>}
+                                                        {has('best_lap_time') && <div className="bg-black/30 p-2 rounded-xl text-center"><p className="text-[7px] font-black uppercase text-white/25">Best</p><span className="text-[11px] font-black tabular-nums text-purple-400">{t(rig,'best_lap_time','--:--')}</span></div>}
+                                                    </div>
+                                                )}
+
+                                                {/* Throttle + Brake bars */}
+                                                {(has('gas') || has('brake')) && (
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {has('gas') && (
+                                                            <div>
+                                                                <div className="flex justify-between text-[7px] font-black uppercase text-white/25 mb-1"><span>Throttle</span><span className="text-green-400">{Math.round(t(rig,'gas') * 100)}%</span></div>
+                                                                <div className="h-2 bg-black/40 rounded-full overflow-hidden"><div className="h-full bg-green-500 transition-all duration-75 rounded-full" style={{ width: `${t(rig,'gas') * 100}%` }} /></div>
+                                                            </div>
+                                                        )}
+                                                        {has('brake') && (
+                                                            <div>
+                                                                <div className="flex justify-between text-[7px] font-black uppercase text-white/25 mb-1"><span>Brake</span><span className="text-red-400">{Math.round(t(rig,'brake') * 100)}%</span></div>
+                                                                <div className="h-2 bg-black/40 rounded-full overflow-hidden"><div className="h-full bg-red-500 transition-all duration-75 rounded-full" style={{ width: `${t(rig,'brake') * 100}%` }} /></div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* Circuit Progress */}
+                                                {has('normalized_pos') && (
+                                                    <div>
+                                                        <div className="flex justify-between text-[7px] font-black uppercase text-white/25 mb-1"><span>Track Progress</span><span>{Math.round(t(rig,'normalized_pos') * 100)}%</span></div>
+                                                        <div className="h-1 bg-black/40 rounded-full overflow-hidden"><div className="h-full bg-ridge-brand transition-all duration-300 rounded-full" style={{ width: `${t(rig,'normalized_pos') * 100}%` }} /></div>
+                                                    </div>
+                                                )}
+
+                                                {/* Fuel */}
+                                                {(has('fuel_percent') || has('fuel')) && (
+                                                    <div className="flex gap-3">
+                                                        {has('fuel_percent') && (
+                                                            <div className="flex-1">
+                                                                <div className="flex justify-between text-[7px] font-black uppercase text-white/25 mb-1"><span>Fuel</span><span className="text-amber-400">{t(rig,'fuel_percent')}%</span></div>
+                                                                <div className="h-2 bg-black/40 rounded-full overflow-hidden"><div className="h-full bg-amber-500 transition-all duration-300 rounded-full" style={{ width: `${t(rig,'fuel_percent')}%` }} /></div>
+                                                            </div>
+                                                        )}
+                                                        {has('fuel') && <div className="bg-black/30 px-3 py-1.5 rounded-xl text-center shrink-0"><p className="text-[7px] font-black uppercase text-white/25">L</p><span className="text-sm font-black italic tabular-nums">{t(rig,'fuel')}</span></div>}
+                                                    </div>
+                                                )}
+
+                                                {/* Tyres */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                    {has('tyre_temps') && <CornerGrid label="Tyre Temp °C" fl={t(rig,'tyre_temp_fl')} fr={t(rig,'tyre_temp_fr')} rl={t(rig,'tyre_temp_rl')} rr={t(rig,'tyre_temp_rr')} unit="°" />}
+                                                    {has('tyre_wear') && <CornerGrid label="Tyre Wear %" fl={t(rig,'tyre_wear_fl')} fr={t(rig,'tyre_wear_fr')} rl={t(rig,'tyre_wear_rl')} rr={t(rig,'tyre_wear_rr')} unit="%" color="text-green-400/70" />}
+                                                    {has('tyre_psi') && <CornerGrid label="Tyre PSI" fl={t(rig,'tyre_psi_fl')} fr={t(rig,'tyre_psi_fr')} rl={t(rig,'tyre_psi_rl')} rr={t(rig,'tyre_psi_rr')} unit="" />}
                                                 </div>
 
-                                                {/* Additional telemetry fields */}
-                                                <div className="grid grid-cols-2 gap-2 mt-2">
-                                                    {activeTelemFields.includes('brake') && (
-                                                        <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/5 border border-white/5">
-                                                            <span className="text-[8px] font-black uppercase opacity-30 mb-1">Brake</span>
-                                                            <span className="text-xl font-black italic text-red-500">{Math.round((rig.telemetry?.brake ?? 0) * 100)}%</span>
-                                                        </div>
-                                                    )}
+                                                {/* Brakes */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                    {has('brake_temps') && <CornerGrid label="Brake Temp °C" fl={t(rig,'brake_temp_fl')} fr={t(rig,'brake_temp_fr')} rl={t(rig,'brake_temp_rl')} rr={t(rig,'brake_temp_rr')} unit="°" color="text-orange-400/70" />}
+                                                    {has('brake_bias') && <div className="bg-black/30 p-2.5 rounded-xl"><p className="text-[7px] font-black uppercase text-white/25 mb-1">Brake Bias</p><span className="text-lg font-black italic">{t(rig,'brake_bias')}%</span><span className="text-[8px] text-white/20 ml-1">front</span></div>}
                                                 </div>
+
+                                                {/* Electronics */}
+                                                {(has('abs') || has('tc') || has('drs')) && (
+                                                    <div className="flex gap-2 flex-wrap">
+                                                        {has('abs') && <div className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${t(rig,'abs_active') ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-white/5 text-white/20 border-white/5'}`}>ABS {t(rig,'abs_level')}</div>}
+                                                        {has('tc') && <div className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${t(rig,'tc_active') ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-white/5 text-white/20 border-white/5'}`}>TC {t(rig,'tc_level')}</div>}
+                                                        {has('drs') && <div className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${t(rig,'drs_enabled') ? 'bg-green-500/20 text-green-400 border-green-500/30' : t(rig,'drs_available') ? 'bg-yellow-500/10 text-yellow-400/60 border-yellow-500/20' : 'bg-white/5 text-white/20 border-white/5'}`}>{t(rig,'drs_enabled') ? 'DRS ON' : t(rig,'drs_available') ? 'DRS RDY' : 'DRS'}</div>}
+                                                        {has('is_lap_valid') && <div className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${t(rig,'is_lap_valid') ? 'bg-green-500/10 text-green-400/60 border-green-500/20' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>{t(rig,'is_lap_valid') ? 'VALID' : 'INVALID'}</div>}
+                                                    </div>
+                                                )}
+
+                                                {/* Conditions */}
+                                                {(has('air_temp') || has('road_temp')) && (
+                                                    <div className="flex gap-3">
+                                                        {has('air_temp') && <div className="bg-black/30 p-2 rounded-xl text-center flex-1"><p className="text-[7px] font-black uppercase text-white/25">Air</p><span className="text-sm font-black italic">{t(rig,'air_temp')}°C</span></div>}
+                                                        {has('road_temp') && <div className="bg-black/30 p-2 rounded-xl text-center flex-1"><p className="text-[7px] font-black uppercase text-white/25">Track</p><span className="text-sm font-black italic">{t(rig,'road_temp')}°C</span></div>}
+                                                    </div>
+                                                )}
+
+                                                {/* Damage */}
+                                                {has('damage') && t(rig,'damage_avg') > 0 && (
+                                                    <div className="bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl">
+                                                        <p className="text-[7px] font-black uppercase text-red-400/60 mb-1">Damage</p>
+                                                        <div className="grid grid-cols-4 gap-2 text-[10px] font-bold tabular-nums text-red-400/80">
+                                                            <span>F: {t(rig,'damage_front')}</span><span>R: {t(rig,'damage_rear')}</span>
+                                                            <span>L: {t(rig,'damage_left')}</span><span>R: {t(rig,'damage_right')}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         ) : (
-                                            <div className="py-12 text-center opacity-20">
-                                                <Activity size={32} className="mx-auto mb-2" />
-                                                <p className="text-[10px] uppercase font-black tracking-widest">Waiting for Engine Signal</p>
+                                            <div className="py-8 text-center">
+                                                <Activity size={24} className="mx-auto mb-2 text-white/10" />
+                                                <p className="text-[9px] uppercase font-black tracking-widest text-white/15">Waiting for signal</p>
                                             </div>
                                         )}
                                     </div>
                                 ))}
                             </div>
                         </div>
-                    )}
+                        )
+                    })()}
 
                     {/* LEADERBOARD VIEW */}
                     {activeTab === 'leaderboard' && (() => {
@@ -1002,17 +1129,18 @@ function App() {
 
             {/* Right Rig Status Panel */}
             {showRigPanel && (
-                <aside className="w-72 border-l border-white/5 bg-[#0a0a0a] flex flex-col overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
-                        <span className="text-[9px] font-black uppercase tracking-[0.3em] text-white/30">Rig Status</span>
-                        <button onClick={() => setShowRigPanel(false)} className="text-white/20 hover:text-white/50 transition-colors" title="Hide panel">
-                            <ChevronRight size={14} />
+                <aside className="w-80 border-l border-white/5 bg-[#0a0a0a] flex flex-col overflow-hidden">
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+                        <span className="text-[10px] font-black uppercase tracking-[0.25em] text-white/40">Rig Status</span>
+                        <button onClick={() => setShowRigPanel(false)} className="text-white/30 hover:text-white/60 transition-colors p-1 hover:bg-white/5 rounded" title="Hide panel">
+                            <ChevronRight size={16} />
                         </button>
                     </div>
                     <div className="flex-1 overflow-y-auto">
                         {rigs.length === 0 && (
-                            <div className="px-4 py-12 text-center">
-                                <p className="text-[10px] text-white/15 font-black uppercase tracking-widest">No rigs connected</p>
+                            <div className="px-5 py-16 text-center">
+                                <Activity size={20} className="mx-auto mb-2 text-white/10" />
+                                <p className="text-[10px] text-white/20 font-black uppercase tracking-widest">No rigs connected</p>
                             </div>
                         )}
                         {rigs.map((rig: Rig) => {
@@ -1022,36 +1150,36 @@ function App() {
                                 rig.status === 'offline' ? 'bg-red-500' : 'bg-zinc-600'
                             const laps = rig.telemetry?.completed_laps ?? 0
                             return (
-                                <div key={rig.rig_id} className="px-4 py-3 border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                                <div key={rig.rig_id} className="px-5 py-3.5 border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                                     {/* Row 1: Name + status */}
-                                    <div className="flex items-center justify-between mb-1">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusColor}`} />
-                                            <span className="text-xs font-black italic uppercase tracking-tight truncate">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <div className={`w-2 h-2 rounded-full shrink-0 ${statusColor}`} />
+                                            <span className="text-sm font-black italic uppercase tracking-tight truncate">
                                                 {rig.driver_name || rig.rig_id}
                                             </span>
                                         </div>
-                                        <span className={`text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded shrink-0 ${
+                                        <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded shrink-0 ${
                                             rig.status === 'racing' ? 'bg-ridge-brand/20 text-ridge-brand' :
                                             rig.status === 'ready' ? 'bg-green-500/20 text-green-400' :
                                             rig.status === 'setup' ? 'bg-blue-500/20 text-blue-400' :
-                                            'bg-white/5 text-white/20'
+                                            'bg-white/5 text-white/30'
                                         }`}>{rig.status}</span>
                                     </div>
 
-                                    {/* Row 2: Rig ID (if name set) + meta */}
+                                    {/* Row 2: Rig ID + meta + lock */}
                                     <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2.5">
                                             {rig.driver_name && (
-                                                <span className="text-[8px] font-mono text-white/15">{rig.rig_id}</span>
+                                                <span className="text-[9px] font-mono text-white/25">{rig.rig_id}</span>
                                             )}
                                             {rig.status === 'racing' && (
-                                                <span className="text-[8px] font-black text-white/30">
-                                                    <Flag size={7} className="inline mr-0.5" />Lap {laps}
+                                                <span className="text-[9px] font-black text-white/40 flex items-center gap-0.5">
+                                                    <Flag size={8} /> Lap {laps}
                                                 </span>
                                             )}
                                             {rig.selected_car && (
-                                                <span className="text-[7px] font-bold text-white/15 uppercase truncate max-w-20">
+                                                <span className="text-[8px] font-bold text-white/20 uppercase truncate max-w-24">
                                                     {rig.selected_car.split('_').slice(1, 3).join(' ')}
                                                 </span>
                                             )}
@@ -1067,14 +1195,14 @@ function App() {
                                                     body: JSON.stringify({ mode: newMode })
                                                 })
                                             }}
-                                            className={`p-1 rounded transition-all ${
+                                            className={`p-1.5 rounded-md transition-all ${
                                                 (rig.mode || 'lockout') === 'lockout'
-                                                    ? 'text-white/15 hover:text-amber-400'
-                                                    : 'text-green-400/60 hover:text-red-400'
+                                                    ? 'text-white/25 hover:text-amber-400 hover:bg-amber-500/10'
+                                                    : 'text-green-400 hover:text-red-400 hover:bg-red-500/10 bg-green-500/10'
                                             }`}
                                             title={(rig.mode || 'lockout') === 'lockout' ? 'Unlock' : 'Lock'}
                                         >
-                                            {(rig.mode || 'lockout') === 'lockout' ? <Lock size={10} /> : <Unlock size={10} />}
+                                            {(rig.mode || 'lockout') === 'lockout' ? <Lock size={13} /> : <Unlock size={13} />}
                                         </button>
                                     </div>
                                 </div>
@@ -1088,10 +1216,10 @@ function App() {
             {!showRigPanel && (
                 <button
                     onClick={() => setShowRigPanel(true)}
-                    className="fixed top-1/2 right-0 -translate-y-1/2 z-50 bg-[#0a0a0a] border border-white/10 border-r-0 rounded-l-lg px-1 py-3 text-white/20 hover:text-white/50 transition-colors"
+                    className="fixed top-1/2 right-0 -translate-y-1/2 z-50 bg-[#0a0a0a] border border-white/10 border-r-0 rounded-l-lg px-1.5 py-4 text-white/25 hover:text-white/60 transition-colors"
                     title="Show rig panel"
                 >
-                    <ChevronLeft size={12} />
+                    <ChevronLeft size={14} />
                 </button>
             )}
         </div>

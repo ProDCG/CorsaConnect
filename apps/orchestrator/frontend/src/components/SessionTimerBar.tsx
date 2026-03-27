@@ -91,6 +91,17 @@ export default function SessionTimerBar() {
         return () => clearInterval(interval)
     }, [groups])
 
+    // Track groups that have been auto-killed to prevent duplicate calls
+    const killedGroupsRef = useRef<Set<string>>(new Set())
+
+    // Clear killed tracking when timers change
+    useEffect(() => {
+        const activeIds = new Set(activeTimers.map(t => t.groupId))
+        killedGroupsRef.current.forEach(id => {
+            if (!activeIds.has(id)) killedGroupsRef.current.delete(id)
+        })
+    }, [activeTimers])
+
     // Use requestAnimationFrame to update timer text directly via DOM refs
     // This avoids the setState-per-second that was causing full re-renders/flicker
     useEffect(() => {
@@ -142,6 +153,16 @@ export default function SessionTimerBar() {
                     const badge = timerRef.current?.querySelector(`[data-expired-id="${timerId}"]`)
                     if (badge) {
                         (badge as HTMLElement).style.display = remaining <= 0 ? 'inline-block' : 'none'
+                    }
+
+                    // Auto-kill: session expired → send KILL_RACE to the group
+                    if (remaining <= 0 && timerId && !killedGroupsRef.current.has(timerId)) {
+                        killedGroupsRef.current.add(timerId)
+                        fetch(`/api/command/group/${timerId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'KILL_RACE', rig_id: '__group__' })
+                        }).catch(() => { /* best effort */ })
                     }
                 }
             })
