@@ -45,6 +45,20 @@ class RigGroup(BaseModel):
     name: str
     mode: str = "multiplayer"  # multiplayer | solo
     rig_ids: list[str] = Field(default_factory=list)
+    # Per-group race settings
+    track: str = "monza"
+    weather: str = "3_clear"
+    car_pool: list[str] = Field(default_factory=lambda: ["ks_ferrari_488_gt3"])
+    ai_count: int = 0
+    ai_difficulty: int = 80  # 0-100 (AC's AI strength)
+    practice_time: int = 0
+    qualy_time: int = 0
+    race_laps: int = 10
+    sun_angle: int = 48  # -80 to 80 degrees (time of day)
+    time_mult: int = 1  # Time speed multiplier (1 = real-time)
+    session_duration_min: int = 30  # Session countdown timer (minutes)
+    ambient_temp: int = 26  # Ambient temperature °C
+    track_grip: int = 100  # Track grip 0-100%
 
 
 class RigGroupCreate(BaseModel):
@@ -59,6 +73,19 @@ class RigGroupUpdate(BaseModel):
 
     name: str | None = None
     mode: str | None = None
+    track: str | None = None
+    weather: str | None = None
+    car_pool: list[str] | None = None
+    ai_count: int | None = None
+    ai_difficulty: int | None = None
+    practice_time: int | None = None
+    qualy_time: int | None = None
+    race_laps: int | None = None
+    sun_angle: int | None = None
+    time_mult: int | None = None
+    session_duration_min: int | None = None
+    ambient_temp: int | None = None
+    track_grip: int | None = None
 
 
 class RigGroupAddRig(BaseModel):
@@ -86,6 +113,9 @@ class Command(BaseModel):
     use_server: bool = False
     session_time: int | None = None  # Legacy support
     server_ip: str | None = None
+    ai_count: int = 0
+    ai_difficulty: int = 80
+    car_pool: list[str] = Field(default_factory=list)
 
 
 # --- Settings Models ---
@@ -95,12 +125,13 @@ class GlobalSettings(BaseModel):
     """Global race/session configuration."""
 
     practice_time: int = 0
-    qualy_time: int = 10
+    qualy_time: int = 0
     race_laps: int = 10
     race_time: int = 0
     allow_drs: bool = True
     selected_track: str = "monza"
     selected_weather: str = "3_clear"
+    content_folder: str = r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa"
 
 
 class Branding(BaseModel):

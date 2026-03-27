@@ -6,6 +6,7 @@ import logging
 import time
 
 from fastapi import APIRouter, Request
+from pydantic import BaseModel
 
 from apps.orchestrator.state import AppState
 from shared.models import LeaderboardEntry, RigStatusUpdate
@@ -13,6 +14,12 @@ from shared.models import LeaderboardEntry, RigStatusUpdate
 logger = logging.getLogger("ridge.rigs")
 
 router = APIRouter(tags=["rigs"])
+
+
+class ModeUpdate(BaseModel):
+    """Payload for changing a rig's mode."""
+
+    mode: str  # "lockout" or "freeuse"
 
 
 def create_router(state: AppState) -> APIRouter:
@@ -43,18 +50,30 @@ def create_router(state: AppState) -> APIRouter:
             current_status = str(rig.get("status", "idle"))
             new_status = update.status
 
-            # Don't let heartbeats downgrade READY/RACING to SETUP/IDLE easily
+            # Prevent heartbeats from accidentally downgrading RACING/READY
+            # to IDLE/SETUP within 10 seconds of the last state change.
             if current_status in ("racing", "ready") and new_status in ("idle", "setup"):
                 last_seen = rig.get("last_seen")
-                if isinstance(last_seen, (int, float)) and time.time() - last_seen > 5:
+                if isinstance(last_seen, (int, float)) and time.time() - last_seen < 10:
+                    logger.debug("Rig %s: blocking heartbeat downgrade %s -> %s (too soon)",
+                                  rig_id, current_status, new_status)
+                else:
+                    # Enough time has passed — allow the transition (e.g. AC truly finished)
                     state.update_rig_field(rig_id, "status", new_status)
+                    logger.info("Rig %s: stale %s -> %s (allowed after timeout)",
+                                 rig_id, current_status, new_status)
             else:
                 state.update_rig_field(rig_id, "status", new_status)
                 if current_status != new_status:
                     logger.info("Rig %s -> %s", rig_id, new_status)
 
-        if update.selected_car:
-            state.update_rig_field(rig_id, "selected_car", update.selected_car)
+        # Only accept car selection from explicit selection calls, NOT heartbeats.
+        # Heartbeats include cpu_temp/telemetry — car picks never do.
+        is_heartbeat = update.cpu_temp is not None or update.telemetry is not None
+        if update.selected_car is not None and not is_heartbeat:
+            if str(update.selected_car) not in ("", "None"):
+                state.update_rig_field(rig_id, "selected_car", update.selected_car)
+                logger.info("Rig %s car -> %s (explicit selection)", rig_id, update.selected_car)
         if update.cpu_temp:
             state.update_rig_field(rig_id, "cpu_temp", update.cpu_temp)
         if update.telemetry:
@@ -76,4 +95,39 @@ def create_router(state: AppState) -> APIRouter:
 
         return {"status": "success"}
 
+    @router.get("/rigs/{rig_id}/mode")
+    async def get_rig_mode(rig_id: str) -> dict[str, object]:
+        """Get a rig's current mode (lockout/freeuse) and status."""
+        rig = state.get_rig(rig_id)
+        if not rig:
+            return {"mode": "lockout", "status": "unknown", "car_pool": []}
+
+        # Find which group this rig belongs to, and use that group's car_pool
+        car_pool: list[str] = list(state.car_pool)  # fallback to global
+        session_duration_min: int = 30  # default
+        for g in state.get_groups():
+            if rig_id in g.rig_ids:
+                car_pool = list(g.car_pool)
+                session_duration_min = g.session_duration_min
+                break
+
+        return {
+            "mode": rig.get("mode", "lockout"),
+            "status": rig.get("status", "idle"),
+            "selected_car": rig.get("selected_car"),
+            "car_pool": car_pool,
+            "session_duration_min": session_duration_min,
+        }
+
+    @router.post("/rigs/{rig_id}/mode")
+    async def set_rig_mode(rig_id: str, update: ModeUpdate) -> dict[str, str]:
+        """Toggle a rig between lockout and freeuse mode."""
+        rig = state.get_rig(rig_id)
+        if not rig:
+            return {"status": "error", "message": "Rig not found"}
+        state.update_rig_field(rig_id, "mode", update.mode)
+        logger.info("Rig %s mode -> %s", rig_id, update.mode)
+        return {"status": "success", "mode": update.mode}
+
     return router
+

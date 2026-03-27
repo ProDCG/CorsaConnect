@@ -74,7 +74,16 @@ class AppState:
             try:
                 with open(self._groups_file) as f:
                     raw = json.load(f)
+                # Migrate old car IDs
+                for g in raw:
+                    if "car_pool" in g:
+                        g["car_pool"] = [
+                            c.replace("ks_porsche_911_gt3_r", "ks_porsche_911_gt3_rs")
+                            if c == "ks_porsche_911_gt3_r" else c
+                            for c in g["car_pool"]
+                        ]
                 self._groups = {g["id"]: RigGroup(**g) for g in raw}
+                self._save_groups()  # persist the migration
             except Exception:
                 logger.warning("Could not load groups file, starting fresh")
 
@@ -108,6 +117,7 @@ class AppState:
                 self._rigs[rig_id] = {
                     "rig_id": rig_id,
                     "status": "idle",
+                    "mode": "lockout",
                     "cpu_temp": 0,
                     "mod_version": "unknown",
                     "last_seen": time.time(),
@@ -163,15 +173,18 @@ class AppState:
             self._save_groups()
         return group
 
-    def update_group(self, group_id: str, name: str | None = None, mode: str | None = None) -> RigGroup | None:
+    def update_group(self, group_id: str, **kwargs: object) -> RigGroup | None:
         with self._lock:
             group = self._groups.get(group_id)
             if not group:
                 return None
-            if name is not None:
-                group.name = name
-            if mode is not None:
-                group.mode = mode
+            for field in ("name", "mode", "track", "weather", "car_pool",
+                          "ai_count", "ai_difficulty", "practice_time",
+                          "qualy_time", "race_laps", "sun_angle",
+                          "time_mult", "session_duration_min"):
+                value = kwargs.get(field)
+                if value is not None:
+                    setattr(group, field, value)
             self._save_groups()
             return group
 

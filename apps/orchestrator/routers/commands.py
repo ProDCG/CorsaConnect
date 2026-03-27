@@ -29,8 +29,11 @@ def create_router(state: AppState) -> APIRouter:
     def _prepare_payload(command: Command, rig: dict[str, object]) -> dict[str, object]:
         """Build the final command payload, injecting car selection if needed."""
         payload = command.model_dump()
-        if not payload.get("car") and rig.get("selected_car"):
-            payload["car"] = rig["selected_car"]
+        # Always inject the rig's selected car from state (this is what the user actually picked)
+        rig_car = rig.get("selected_car")
+        if rig_car and str(rig_car) not in ("", "None"):
+            payload["car"] = str(rig_car)
+            logger.info("Injecting car '%s' for rig %s", rig_car, rig.get("rig_id"))
         return payload
 
     @router.post("/command")
@@ -105,6 +108,23 @@ def create_router(state: AppState) -> APIRouter:
             else:
                 state.update_rig_field(rig_id, "status", new_status)
                 payload = _prepare_payload(command, rig)
+                # Inject group settings for LAUNCH_RACE
+                if command.action == "LAUNCH_RACE":
+                    payload["track"] = payload.get("track") or group.track
+                    payload["weather"] = payload.get("weather") or group.weather
+                    payload["race_laps"] = payload.get("race_laps") or group.race_laps
+                    payload["practice_time"] = payload.get("practice_time") or group.practice_time
+                    payload["qualy_time"] = payload.get("qualy_time") or group.qualy_time
+                    payload["ai_count"] = group.ai_count
+                    payload["ai_difficulty"] = group.ai_difficulty
+                    payload["car_pool"] = group.car_pool
+                    payload["session_duration_min"] = group.session_duration_min
+                    payload["sun_angle"] = group.sun_angle
+                    payload["time_mult"] = group.time_mult
+                    payload["ambient_temp"] = group.ambient_temp
+                    payload["track_grip"] = group.track_grip
+                    # Solo groups always run offline; multiplayer uses AC server
+                    payload["use_server"] = group.mode == "multiplayer"
                 background_tasks.add_task(dispatch_command, str(rig["ip"]), COMMAND_PORT, payload)
                 responses.append(f"Sled {rig_id}")
 

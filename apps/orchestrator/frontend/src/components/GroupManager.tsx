@@ -1,11 +1,42 @@
-import { useState, useEffect } from 'react'
-import { Users, Plus, Trash2, UserPlus, UserMinus, Zap, Play, Power } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight } from 'lucide-react'
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
 
 interface RigGroup {
     id: string
     name: string
     mode: 'multiplayer' | 'solo'
     rig_ids: string[]
+    track: string
+    weather: string
+    car_pool: string[]
+    ai_count: number
+    ai_difficulty: number
+    practice_time: number
+    qualy_time: number
+    race_laps: number
+    sun_angle: number
+    time_mult: number
+    session_duration_min: number
+    ambient_temp: number
+    track_grip: number
+}
+
+interface ServerInfo {
+    group_id: string
+    group_name: string
+    port: number
+    http_port: number
+    track: string
+    cars: string[]
+    status: string
+    pid: number | null
+    ai_count: number
+    ai_difficulty: number
+    max_clients: number
 }
 
 interface Rig {
@@ -14,281 +45,667 @@ interface Rig {
     status: string
     selected_car?: string | null
     group_id?: string | null
+    mode?: string
 }
+
+interface CatalogCar { id: string; name: string; brand: string; car_class: string }
+interface CatalogTrack { id: string; name: string }
+interface CatalogWeather { id: string; name: string }
 
 interface GroupManagerProps {
     rigs: Rig[]
-    raceSettings: {
-        selected_track: string
-        selected_weather: string
-        practice_time: number
-        qualy_time: number
-        race_laps: number
-        race_time: number
-        allow_drs: boolean
-        useMultiplayer: boolean
-    }
 }
 
-export default function GroupManager({ rigs, raceSettings }: GroupManagerProps) {
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
+const TIME_STEPS = [
+    { angle: -16,  label: 'Dawn' },
+    { angle: 8,    label: 'Sunrise' },
+    { angle: 24,   label: 'Morning' },
+    { angle: 40,   label: 'Late Morning' },
+    { angle: 56,   label: 'Midday' },
+    { angle: 72,   label: 'Early Afternoon' },
+    { angle: 88,   label: 'Afternoon' },
+    { angle: 104,  label: 'Late Afternoon' },
+    { angle: 120,  label: 'Sunset' },
+    { angle: 136,  label: 'Dusk' },
+    { angle: 163,  label: 'Night' },
+]
+
+function angleToStepIndex(angle: number): number {
+    let best = 0
+    let bestDist = Math.abs(angle - TIME_STEPS[0].angle)
+    for (let i = 1; i < TIME_STEPS.length; i++) {
+        const d = Math.abs(angle - TIME_STEPS[i].angle)
+        if (d < bestDist) { best = i; bestDist = d }
+    }
+    return best
+}
+
+/** Strip common AC prefixes (ks_, ac_, etc.) and format for display */
+function displayName(id: string): string {
+    let name = id
+    // Strip common prefixes
+    for (const prefix of ['ks_', 'ac_', 'acu_', 'rss_', 'tc_']) {
+        if (name.toLowerCase().startsWith(prefix)) {
+            name = name.slice(prefix.length)
+            break
+        }
+    }
+    // Replace underscores with spaces, title case
+    return name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
+
+export default function GroupManager({ rigs }: GroupManagerProps) {
     const [groups, setGroups] = useState<RigGroup[]>([])
+    const [servers, setServers] = useState<ServerInfo[]>([])
+    const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
     const [newGroupName, setNewGroupName] = useState('')
     const [newGroupMode, setNewGroupMode] = useState<'multiplayer' | 'solo'>('multiplayer')
 
-    const fetchGroups = async () => {
+    // Catalogs from backend
+    const [cars, setCars] = useState<CatalogCar[]>([])
+    const [tracks, setTracks] = useState<CatalogTrack[]>([])
+    const [weather, setWeather] = useState<CatalogWeather[]>([])
+
+    /* ---- Data fetching ---- */
+
+    const fetchGroups = useCallback(async () => {
         try {
             const res = await fetch('/api/groups/')
             const data = await res.json()
-            if (Array.isArray(data)) setGroups(data)
-        } catch (err) {
-            console.error('Failed to fetch groups:', err)
-        }
-    }
+            if (Array.isArray(data)) {
+                setGroups(prev => {
+                    const nj = JSON.stringify(data)
+                    return nj !== JSON.stringify(prev) ? data : prev
+                })
+            }
+        } catch { /* offline */ }
+    }, [])
+
+    const fetchServers = useCallback(async () => {
+        try {
+            const res = await fetch('/api/server/list')
+            const data = await res.json()
+            if (Array.isArray(data)) {
+                setServers(prev => {
+                    const nj = JSON.stringify(data)
+                    return nj !== JSON.stringify(prev) ? data : prev
+                })
+            }
+        } catch { /* offline */ }
+    }, [])
+
+    const fetchCatalogs = useCallback(async () => {
+        try {
+            const res = await fetch('/api/catalogs')
+            const data = await res.json()
+            setCars(data.cars || [])
+            setTracks(data.tracks || [])
+            setWeather(data.weather || [])
+        } catch { /* offline */ }
+    }, [])
 
     useEffect(() => {
-        fetchGroups()
-        const interval = setInterval(fetchGroups, 3000)
+        fetchGroups(); fetchServers(); fetchCatalogs()
+        const interval = setInterval(() => { fetchGroups(); fetchServers() }, 3000)
         return () => clearInterval(interval)
-    }, [])
+    }, [fetchGroups, fetchServers, fetchCatalogs])
+
+    /* ---- Group CRUD ---- */
 
     const createGroup = async () => {
         if (!newGroupName.trim()) return
-        try {
-            await fetch('/api/groups/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newGroupName, mode: newGroupMode })
-            })
-            setNewGroupName('')
-            fetchGroups()
-        } catch (err) {
-            console.error('Failed to create group:', err)
-        }
+        const res = await fetch('/api/groups/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newGroupName, mode: newGroupMode })
+        })
+        const created = await res.json()
+        setNewGroupName('')
+        fetchGroups()
+        if (created.id) setSelectedGroupId(created.id)
     }
 
     const deleteGroup = async (groupId: string) => {
-        try {
-            await fetch(`/api/groups/${groupId}`, { method: 'DELETE' })
-            fetchGroups()
-        } catch (err) {
-            console.error('Failed to delete group:', err)
-        }
+        await fetch(`/api/groups/${groupId}`, { method: 'DELETE' })
+        if (selectedGroupId === groupId) setSelectedGroupId(null)
+        fetchGroups()
+    }
+
+    const updateGroup = async (groupId: string, updates: Partial<RigGroup>) => {
+        await fetch(`/api/groups/${groupId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates)
+        })
+        fetchGroups()
     }
 
     const addRigToGroup = async (groupId: string, rigId: string) => {
-        try {
-            await fetch(`/api/groups/${groupId}/rigs`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ rig_id: rigId })
-            })
-            fetchGroups()
-        } catch (err) {
-            console.error('Failed to add rig:', err)
-        }
+        await fetch(`/api/groups/${groupId}/rigs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rig_id: rigId })
+        })
+        fetchGroups()
     }
 
     const removeRigFromGroup = async (groupId: string, rigId: string) => {
-        try {
-            await fetch(`/api/groups/${groupId}/rigs/${rigId}`, { method: 'DELETE' })
-            fetchGroups()
-        } catch (err) {
-            console.error('Failed to remove rig:', err)
-        }
+        await fetch(`/api/groups/${groupId}/rigs/${rigId}`, { method: 'DELETE' })
+        fetchGroups()
     }
+
+    const setRigCar = async (rigId: string, carId: string) => {
+        await fetch(`/api/rigs/${rigId}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selected_car: carId })
+        })
+    }
+
+    /* ---- Group commands ---- */
 
     const sendGroupCommand = async (groupId: string, action: string) => {
-        try {
-            await fetch(`/api/command/group/${groupId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    rig_id: 'GROUP',
-                    action,
-                    track: raceSettings.selected_track,
-                    weather: raceSettings.selected_weather,
-                    practice_time: raceSettings.practice_time,
-                    qualy_time: raceSettings.qualy_time,
-                    race_laps: raceSettings.race_laps,
-                    race_time: raceSettings.race_time,
-                    allow_drs: raceSettings.allow_drs,
-                    use_server: raceSettings.useMultiplayer
-                })
+        const group = groups.find(g => g.id === groupId)
+        if (!group) return
+        await fetch(`/api/command/group/${groupId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                rig_id: 'GROUP',
+                action,
+                track: group.track,
+                weather: group.weather,
+                practice_time: group.practice_time,
+                qualy_time: group.qualy_time,
+                race_laps: group.race_laps,
+                ai_count: group.ai_count,
+                ai_difficulty: group.ai_difficulty,
+                car_pool: group.car_pool,
+                use_server: group.mode === 'multiplayer',
             })
-        } catch (err) {
-            console.error('Group command failed:', err)
-        }
+        })
     }
 
-    // Rigs not assigned to any group
+    const startServerForGroup = async (groupId: string) => {
+        const group = groups.find(g => g.id === groupId)
+        if (!group) return
+        const res = await fetch('/api/server/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                group_id: groupId,
+                track: group.track,
+                cars: group.car_pool,
+                race_laps: group.race_laps,
+                practice_time: group.practice_time,
+                qualy_time: group.qualy_time,
+                weather: group.weather,
+                max_clients: group.rig_ids.length + group.ai_count + 2,
+                ai_count: group.ai_count,
+                ai_difficulty: group.ai_difficulty,
+                sun_angle: group.sun_angle,
+                time_mult: group.time_mult,
+            })
+        })
+        const data = await res.json()
+        if (data.status === 'error') alert(`Server failed: ${data.message}`)
+        fetchServers()
+    }
+
+    const stopServerForGroup = async (groupId: string) => {
+        await fetch(`/api/server/stop/${groupId}`, { method: 'POST' })
+        fetchServers()
+    }
+
+    /* ---- Derived data ---- */
+
     const assignedRigIds = new Set(groups.flatMap(g => g.rig_ids))
     const unassignedRigs = rigs.filter(r => !assignedRigIds.has(r.rig_id))
+    const getServerForGroup = (gid: string) => servers.find(s => s.group_id === gid)
+    const selectedGroup = groups.find(g => g.id === selectedGroupId) || null
+    const selectedServer = selectedGroupId ? getServerForGroup(selectedGroupId) : null
+    const isSelectedServerRunning = selectedServer?.status === 'running'
+
+    /* ---- Render ---- */
 
     return (
-        <div className="space-y-8 max-w-5xl">
-            {/* Create Group */}
-            <div className="glass rounded-3xl p-8 border border-white/10">
-                <h2 className="text-xl font-black italic uppercase mb-6 flex items-center gap-2">
-                    <Users className="text-ridge-brand" size={20} /> Rig Groups
-                </h2>
-                <div className="flex gap-4 mb-6">
-                    <input
-                        type="text"
-                        placeholder="Group name..."
-                        value={newGroupName}
-                        onChange={e => setNewGroupName(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && createGroup()}
-                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-ridge-brand transition-all font-bold"
-                    />
+        <div className="flex h-[calc(100vh-120px)]">
+            {/* ===== LEFT SIDEBAR — Group List ===== */}
+            <div className="w-72 border-r border-white/10 bg-black/20 flex flex-col shrink-0">
+                {/* Create group */}
+                <div className="p-4 border-b border-white/10">
+                    <div className="flex gap-2 mb-2">
+                        <input
+                            type="text"
+                            placeholder="New group..."
+                            value={newGroupName}
+                            onChange={e => setNewGroupName(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && createGroup()}
+                            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 outline-none focus:border-ridge-brand transition-all font-bold text-xs"
+                        />
+                        <button
+                            onClick={createGroup}
+                            disabled={!newGroupName.trim()}
+                            className="bg-ridge-brand hover:bg-orange-600 disabled:opacity-30 disabled:cursor-not-allowed p-2 rounded-lg transition-all"
+                        >
+                            <Plus size={14} />
+                        </button>
+                    </div>
                     <select
                         value={newGroupMode}
                         onChange={e => setNewGroupMode(e.target.value as 'multiplayer' | 'solo')}
-                        className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-ridge-brand transition-all font-bold appearance-none"
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 outline-none font-bold text-[10px] uppercase appearance-none cursor-pointer"
                     >
                         <option value="multiplayer">Multiplayer</option>
                         <option value="solo">Solo</option>
                     </select>
-                    <button
-                        onClick={createGroup}
-                        className="bg-ridge-brand hover:bg-orange-600 px-6 py-3 rounded-xl font-black uppercase text-xs flex items-center gap-2 transition-all"
-                    >
-                        <Plus size={16} /> Create
-                    </button>
                 </div>
+
+                {/* Group list */}
+                <div className="flex-1 overflow-y-auto">
+                    {groups.map(group => {
+                        const serverInfo = getServerForGroup(group.id)
+                        const isActive = selectedGroupId === group.id
+                        const isRunning = serverInfo?.status === 'running'
+                        const isLive = group.rig_ids.some(rid => rigs.find(r => r.rig_id === rid && r.status === 'racing'))
+                        return (
+                            <button
+                                key={group.id}
+                                onClick={() => setSelectedGroupId(group.id)}
+                                className={`w-full text-left p-4 border-b border-white/5 transition-all group ${
+                                    isActive
+                                        ? 'bg-ridge-brand/10 border-l-2 border-l-ridge-brand'
+                                        : 'hover:bg-white/5 border-l-2 border-l-transparent'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        {isRunning && <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shrink-0" />}
+                                        <span className="font-black italic text-sm uppercase tracking-tight truncate">{group.name}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest ${
+                                            group.mode === 'multiplayer'
+                                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                                : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                        }`}>{group.mode === 'multiplayer' ? 'MP' : 'SOLO'}</span>
+                                        {isLive && (
+                                            <span className="px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1 animate-pulse">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-red-500" /> LIVE
+                                            </span>
+                                        )}
+                                        <ChevronRight size={12} className="text-white/20" />
+                                    </div>
+                                </div>
+                                <div className="text-[9px] text-white/30 font-mono mt-1">
+                                    {group.rig_ids.length} rigs · {group.ai_count} AI · {group.race_laps} laps
+                                </div>
+                            </button>
+                        )
+                    })}
+                    {groups.length === 0 && (
+                        <div className="p-8 text-center">
+                            <Users size={32} className="mx-auto mb-3 text-white/10" />
+                            <p className="text-xs text-white/20 font-bold uppercase">No groups</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Unassigned rigs tray */}
+                {unassignedRigs.length > 0 && (
+                    <div className="border-t border-white/10 p-3">
+                        <h4 className="text-[9px] text-white/30 font-black uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                            <UserPlus size={10} className="text-amber-400" /> Unassigned ({unassignedRigs.length})
+                        </h4>
+                        <div className="flex flex-wrap gap-1.5">
+                            {unassignedRigs.map(rig => (
+                                <div
+                                    key={rig.rig_id}
+                                    className="bg-black/30 px-2 py-1 rounded-lg border border-white/5 text-[9px] font-bold flex items-center gap-1.5 cursor-pointer hover:border-ridge-brand/30 transition-all"
+                                    onClick={() => selectedGroupId && addRigToGroup(selectedGroupId, rig.rig_id)}
+                                    title={selectedGroupId ? `Click to add to selected group` : 'Select a group first'}
+                                >
+                                    <div className={`w-1.5 h-1.5 rounded-full ${rig.status === 'racing' ? 'bg-ridge-brand' : 'bg-white/20'}`} />
+                                    {rig.rig_id}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
-            {/* Group Cards */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {groups.map(group => (
-                    <div key={group.id} className="bg-white/5 border border-white/10 rounded-3xl p-6 relative">
-                        <div className="flex justify-between items-start mb-4">
+            {/* ===== RIGHT PANEL — Selected Group Detail ===== */}
+            <div className="flex-1 overflow-y-auto">
+                {selectedGroup ? (
+                    <div className="p-6 space-y-6 max-w-5xl">
+                        {/* Group Header + Actions */}
+                        <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="text-xl font-black italic uppercase tracking-tighter">{group.name}</h3>
-                                <div className="flex items-center gap-2 mt-1">
+                                <h2 className="text-2xl font-black italic uppercase tracking-tighter flex items-center gap-3">
+                                    {selectedGroup.name}
                                     <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${
-                                        group.mode === 'multiplayer'
+                                        selectedGroup.mode === 'multiplayer'
                                             ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                                             : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                    }`}>
-                                        {group.mode}
-                                    </span>
-                                    <span className="text-[10px] text-white/30 font-mono">{group.rig_ids.length} rigs</span>
-                                </div>
+                                    }`}>{selectedGroup.mode}</span>
+                                    {isSelectedServerRunning && (
+                                        <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-green-500/20 text-green-400 border border-green-500/30 flex items-center gap-1">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Server :{selectedServer?.port}
+                                        </span>
+                                    )}
+                                </h2>
                             </div>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => sendGroupCommand(group.id, 'LAUNCH_RACE')}
-                                    className="bg-ridge-brand/20 hover:bg-ridge-brand/40 text-ridge-brand p-2 rounded-lg transition-all"
-                                    title="Start Race for Group"
-                                >
-                                    <Play size={16} />
+                            <div className="flex items-center gap-2">
+                                {selectedGroup.mode === 'multiplayer' && (
+                                    isSelectedServerRunning ? (
+                                        <button onClick={() => stopServerForGroup(selectedGroup.id)}
+                                            className="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-xl transition-all flex items-center gap-2 text-xs font-black uppercase">
+                                            <Server size={14} /> Stop Server
+                                        </button>
+                                    ) : (
+                                        <button onClick={() => startServerForGroup(selectedGroup.id)}
+                                            className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-4 py-2 rounded-xl transition-all flex items-center gap-2 text-xs font-black uppercase">
+                                            <Server size={14} /> Deploy Server
+                                        </button>
+                                    )
+                                )}
+                                <button onClick={() => sendGroupCommand(selectedGroup.id, 'LAUNCH_RACE')}
+                                    disabled={selectedGroup.mode === 'multiplayer' && !isSelectedServerRunning}
+                                    className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 text-xs font-black uppercase ${
+                                        selectedGroup.mode === 'multiplayer' && !isSelectedServerRunning
+                                            ? 'bg-white/5 text-white/20 cursor-not-allowed'
+                                            : 'bg-ridge-brand/10 hover:bg-ridge-brand/20 text-ridge-brand'
+                                    }`}
+                                    title={selectedGroup.mode === 'multiplayer' && !isSelectedServerRunning ? 'Deploy server first' : 'Start Race'}>
+                                    <Play size={14} /> {selectedGroup.mode === 'multiplayer' && !isSelectedServerRunning ? 'Server Required' : 'Start Race'}
                                 </button>
-                                <button
-                                    onClick={() => sendGroupCommand(group.id, 'KILL_RACE')}
-                                    className="bg-red-500/20 hover:bg-red-500/40 text-red-400 p-2 rounded-lg transition-all"
-                                    title="Kill Race for Group"
-                                >
-                                    <Power size={16} />
+                                <button onClick={() => sendGroupCommand(selectedGroup.id, 'KILL_RACE')}
+                                    className="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-xl transition-all flex items-center gap-2 text-xs font-black uppercase">
+                                    <Power size={14} /> Kill
                                 </button>
-                                <button
-                                    onClick={() => deleteGroup(group.id)}
-                                    className="bg-white/5 hover:bg-red-500/20 text-white/30 hover:text-red-400 p-2 rounded-lg transition-all"
-                                    title="Delete Group"
-                                >
-                                    <Trash2 size={16} />
+                                <button onClick={() => deleteGroup(selectedGroup.id)}
+                                    className="bg-white/5 hover:bg-red-500/20 text-white/20 hover:text-red-400 p-2 rounded-xl transition-all">
+                                    <Trash2 size={14} />
                                 </button>
                             </div>
                         </div>
 
-                        {/* Assigned Rigs */}
-                        <div className="space-y-2 mb-4">
-                            {group.rig_ids.map(rigId => {
-                                const rig = rigs.find(r => r.rig_id === rigId)
-                                return (
-                                    <div key={rigId} className="flex items-center justify-between bg-black/20 p-3 rounded-xl border border-white/5">
-                                        <div className="flex items-center gap-3">
+                        {/* ---- Rig Assignment Row ---- */}
+                        <div className="glass rounded-2xl p-5 border border-white/10">
+                            <h3 className="text-[9px] font-black uppercase tracking-widest text-white/40 mb-3 flex items-center gap-1.5">
+                                <Users size={10} /> Assigned Rigs ({selectedGroup.rig_ids.length})
+                            </h3>
+                            <div className="flex flex-wrap gap-2">
+                                {selectedGroup.rig_ids.map(rigId => {
+                                    const rig = rigs.find(r => r.rig_id === rigId)
+                                    return (
+                                        <div key={rigId} className="bg-black/30 border border-white/5 rounded-xl px-3 py-2.5 flex items-center gap-3 group hover:border-white/15 transition-all">
                                             <div className={`w-2 h-2 rounded-full ${
                                                 rig?.status === 'racing' ? 'bg-ridge-brand animate-pulse' :
                                                 rig?.status === 'ready' ? 'bg-green-500' :
-                                                rig ? 'bg-white/30' : 'bg-red-500'
+                                                rig?.status === 'setup' ? 'bg-blue-500 animate-pulse' :
+                                                rig ? 'bg-white/20' : 'bg-red-500'
                                             }`} />
-                                            <span className="font-black italic text-sm">{rigId}</span>
-                                            {rig?.selected_car && (
-                                                <span className="text-[8px] font-bold uppercase text-white/30">
-                                                    {rig.selected_car.split('_').slice(1).join(' ')}
-                                                </span>
-                                            )}
+                                            <span className="font-black italic text-xs">{rigId}</span>
+
+                                            {/* Per-rig car selector — shows all globally available cars */}
+                                            <select
+                                                value={rig?.selected_car || ''}
+                                                onChange={e => setRigCar(rigId, e.target.value)}
+                                                className="bg-white/5 border border-white/10 rounded-lg px-2 py-0.5 text-[10px] font-bold outline-none focus:border-ridge-brand appearance-none max-w-40 cursor-pointer"
+                                            >
+                                                <option value="">Auto</option>
+                                                {cars.map(car => (
+                                                    <option key={car.id} value={car.id}>{displayName(car.id)}</option>
+                                                ))}
+                                            </select>
+
+                                            <button onClick={() => removeRigFromGroup(selectedGroup.id, rigId)}
+                                                className="text-white/10 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
+                                                <UserMinus size={12} />
+                                            </button>
                                         </div>
-                                        <button
-                                            onClick={() => removeRigFromGroup(group.id, rigId)}
-                                            className="text-white/20 hover:text-red-400 transition-colors"
-                                        >
-                                            <UserMinus size={14} />
-                                        </button>
-                                    </div>
-                                )
-                            })}
-                            {group.rig_ids.length === 0 && (
-                                <div className="text-center py-4 text-white/10 text-[10px] uppercase font-black tracking-widest border border-dashed border-white/5 rounded-xl">
-                                    No rigs assigned
-                                </div>
-                            )}
+                                    )
+                                })}
+
+                                {/* Add / move rig dropdown — shows ALL rigs with current group label */}
+                                {rigs.filter(r => !selectedGroup.rig_ids.includes(r.rig_id)).length > 0 && (
+                                    <select
+                                        className="bg-white/5 border border-dashed border-white/10 rounded-xl px-3 py-2.5 text-[10px] font-bold outline-none cursor-pointer hover:border-ridge-brand/40 transition-all appearance-none"
+                                        value=""
+                                        onChange={e => { if (e.target.value) { addRigToGroup(selectedGroup.id, e.target.value) } }}
+                                    >
+                                        <option value="" disabled>+ Add / move rig...</option>
+                                        {rigs.filter(r => !selectedGroup.rig_ids.includes(r.rig_id)).map(r => {
+                                            const currentGroup = groups.find(g => g.rig_ids.includes(r.rig_id))
+                                            return (
+                                                <option key={r.rig_id} value={r.rig_id}>
+                                                    {r.rig_id}{currentGroup ? ` (in ${currentGroup.name})` : ''}
+                                                </option>
+                                            )
+                                        })}
+                                    </select>
+                                )}
+
+                                {selectedGroup.rig_ids.length === 0 && rigs.length === 0 && (
+                                    <div className="text-[10px] text-white/20 font-bold uppercase py-2">No rigs available</div>
+                                )}
+                            </div>
                         </div>
 
-                        {/* Add Rig Dropdown */}
-                        {unassignedRigs.length > 0 && (
-                            <div className="flex gap-2">
+                        {/* ---- Configuration Panels ---- */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {/* Track */}
+                            <div className="glass rounded-2xl p-4 border border-white/10">
+                                <label className="flex items-center gap-1.5 text-[9px] uppercase font-black text-white/40 tracking-widest mb-2">
+                                    <Map size={10} /> Circuit
+                                </label>
                                 <select
-                                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-ridge-brand appearance-none"
-                                    defaultValue=""
-                                    onChange={e => {
-                                        if (e.target.value) {
-                                            addRigToGroup(group.id, e.target.value)
-                                            e.target.value = ''
-                                        }
-                                    }}
+                                    value={selectedGroup.track}
+                                    onChange={e => updateGroup(selectedGroup.id, { track: e.target.value })}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-ridge-brand appearance-none cursor-pointer transition-all"
                                 >
-                                    <option value="" disabled>Add rig...</option>
-                                    {unassignedRigs.map(r => (
-                                        <option key={r.rig_id} value={r.rig_id}>{r.rig_id}</option>
+                                    {tracks.map(t => (
+                                        <option key={t.id} value={t.id}>{displayName(t.id)}</option>
                                     ))}
                                 </select>
-                                <button className="bg-white/5 hover:bg-white/10 p-2 rounded-lg transition-all text-white/30 hover:text-white">
-                                    <UserPlus size={14} />
-                                </button>
+                            </div>
+
+                            {/* Time of Day — stepped labels instead of degrees */}
+                            <div className="glass rounded-2xl p-4 border border-white/10">
+                                <label className="flex items-center gap-1.5 text-[9px] uppercase font-black text-white/40 tracking-widest mb-2">
+                                    <Sun size={10} /> Time of Day
+                                </label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="range" min={0} max={TIME_STEPS.length - 1} step={1}
+                                        value={angleToStepIndex(selectedGroup.sun_angle ?? 48)}
+                                        onChange={e => {
+                                            const step = TIME_STEPS[parseInt(e.target.value)]
+                                            updateGroup(selectedGroup.id, { sun_angle: step.angle })
+                                        }}
+                                        className="flex-1 accent-ridge-brand cursor-pointer"
+                                    />
+                                    <span className="text-xs font-black w-28 text-right">
+                                        {TIME_STEPS[angleToStepIndex(selectedGroup.sun_angle ?? 48)].label}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Weather — only for solo mode */}
+                            {selectedGroup.mode === 'solo' && (
+                                <div className="glass rounded-2xl p-4 border border-white/10">
+                                    <label className="flex items-center gap-1.5 text-[9px] uppercase font-black text-white/40 tracking-widest mb-2">
+                                        <Cloud size={10} /> Weather
+                                    </label>
+                                    <select
+                                        value={selectedGroup.weather}
+                                        onChange={e => updateGroup(selectedGroup.id, { weather: e.target.value })}
+                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-ridge-brand appearance-none cursor-pointer transition-all"
+                                    >
+                                        {weather.map(w => (
+                                            <option key={w.id} value={w.id}>{w.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            {/* Time Speed — shown for both modes */}
+                            <div className="glass rounded-2xl p-4 border border-white/10">
+                                <label className="flex items-center gap-1.5 text-[9px] uppercase font-black text-white/40 tracking-widest mb-2">
+                                    <Clock size={10} /> Time Speed
+                                </label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="range" min={1} max={100}
+                                        value={selectedGroup.time_mult ?? 1}
+                                        onChange={e => updateGroup(selectedGroup.id, { time_mult: parseInt(e.target.value) })}
+                                        className="flex-1 accent-ridge-brand cursor-pointer"
+                                    />
+                                    <span className="text-xs font-black tabular-nums w-8 text-right">{selectedGroup.time_mult ?? 1}x</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                            {/* Race Laps */}
+                            <div className="glass rounded-2xl p-4 border border-white/10">
+                                <label className="flex items-center gap-1.5 text-[9px] uppercase font-black text-white/40 tracking-widest mb-2">
+                                    <Flag size={10} /> Race Laps
+                                </label>
+                                <input
+                                    type="number" min={1} max={100}
+                                    value={selectedGroup.race_laps}
+                                    onChange={e => updateGroup(selectedGroup.id, { race_laps: parseInt(e.target.value) || 10 })}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-ridge-brand transition-all"
+                                />
+                            </div>
+
+                            {/* Practice */}
+                            <div className="glass rounded-2xl p-4 border border-white/10">
+                                <label className="flex items-center gap-1.5 text-[9px] uppercase font-black text-white/40 tracking-widest mb-2">
+                                    <Timer size={10} /> Practice (min)
+                                </label>
+                                <input
+                                    type="number" min={0} max={60}
+                                    value={selectedGroup.practice_time}
+                                    onChange={e => updateGroup(selectedGroup.id, { practice_time: parseInt(e.target.value) || 0 })}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-ridge-brand transition-all"
+                                />
+                            </div>
+
+                            {/* Qualifying */}
+                            <div className="glass rounded-2xl p-4 border border-white/10">
+                                <label className="flex items-center gap-1.5 text-[9px] uppercase font-black text-white/40 tracking-widest mb-2">
+                                    <Trophy size={10} /> Qualifying (min)
+                                </label>
+                                <input
+                                    type="number" min={0} max={60}
+                                    value={selectedGroup.qualy_time}
+                                    onChange={e => updateGroup(selectedGroup.id, { qualy_time: parseInt(e.target.value) || 0 })}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-ridge-brand transition-all"
+                                />
+                            </div>
+
+                            {/* AI Drivers */}
+                            <div className="glass rounded-2xl p-4 border border-white/10">
+                                <label className="flex items-center gap-1.5 text-[9px] uppercase font-black text-white/40 tracking-widest mb-2">
+                                    <Cpu size={10} /> AI Drivers
+                                </label>
+                                <input
+                                    type="number" min={0} max={30}
+                                    value={selectedGroup.ai_count}
+                                    onChange={e => updateGroup(selectedGroup.id, { ai_count: parseInt(e.target.value) || 0 })}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-ridge-brand transition-all"
+                                />
+                            </div>
+
+                            {/* Session Timer */}
+                            <div className="glass rounded-2xl p-4 border border-white/10">
+                                <label className="flex items-center gap-1.5 text-[9px] uppercase font-black text-white/40 tracking-widest mb-2">
+                                    <Clock size={10} /> Session (min)
+                                </label>
+                                <input
+                                    type="number" min={1} max={480}
+                                    value={selectedGroup.session_duration_min ?? 30}
+                                    onChange={e => updateGroup(selectedGroup.id, { session_duration_min: parseInt(e.target.value) || 30 })}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-ridge-brand transition-all"
+                                />
+                            </div>
+                        </div>
+
+                        {/* ---- Track Conditions ---- */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="glass rounded-2xl p-4 border border-white/10">
+                                <label className="flex items-center gap-1.5 text-[9px] uppercase font-black text-white/40 tracking-widest mb-2">
+                                    <Sun size={10} /> Temperature
+                                </label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="range" min={5} max={45}
+                                        value={selectedGroup.ambient_temp ?? 26}
+                                        onChange={e => updateGroup(selectedGroup.id, { ambient_temp: parseInt(e.target.value) })}
+                                        className="flex-1 accent-ridge-brand cursor-pointer"
+                                    />
+                                    <span className="text-xs font-black tabular-nums w-12 text-right">{selectedGroup.ambient_temp ?? 26}°C</span>
+                                </div>
+                            </div>
+
+                            <div className="glass rounded-2xl p-4 border border-white/10">
+                                <label className="flex items-center gap-1.5 text-[9px] uppercase font-black text-white/40 tracking-widest mb-2">
+                                    <Gauge size={10} /> Track Grip
+                                </label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="range" min={50} max={100}
+                                        value={selectedGroup.track_grip ?? 100}
+                                        onChange={e => updateGroup(selectedGroup.id, { track_grip: parseInt(e.target.value) })}
+                                        className="flex-1 accent-ridge-brand cursor-pointer"
+                                    />
+                                    <span className="text-xs font-black tabular-nums w-10 text-right">{selectedGroup.track_grip ?? 100}%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* AI Difficulty slider */}
+                        {selectedGroup.ai_count > 0 && (
+                            <div className="glass rounded-2xl p-4 border border-white/10">
+                                <label className="flex items-center gap-1.5 text-[9px] uppercase font-black text-white/40 tracking-widest mb-2">
+                                    <Gauge size={10} /> AI Difficulty
+                                </label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="range" min={0} max={100}
+                                        value={selectedGroup.ai_difficulty}
+                                        onChange={e => updateGroup(selectedGroup.id, { ai_difficulty: parseInt(e.target.value) })}
+                                        className="flex-1 accent-ridge-brand cursor-pointer"
+                                    />
+                                    <span className="text-xs font-black tabular-nums w-8 text-right">{selectedGroup.ai_difficulty}%</span>
+                                </div>
                             </div>
                         )}
+
+
                     </div>
-                ))}
+                ) : (
+                    /* Empty state */
+                    <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                            <Settings size={48} className="mx-auto mb-4 text-white/10" />
+                            <p className="text-lg font-black italic tracking-tighter uppercase opacity-20">Select a Group</p>
+                            <p className="text-[10px] font-mono text-white/20 mt-2">Choose a group from the sidebar to configure it</p>
+                        </div>
+                    </div>
+                )}
             </div>
-
-            {groups.length === 0 && (
-                <div className="col-span-full py-16 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-3xl">
-                    <Users size={48} className="mb-4 text-white/10" />
-                    <p className="text-xl font-black italic tracking-tighter uppercase opacity-20 text-center">
-                        No Groups Created
-                    </p>
-                    <p className="text-[10px] font-mono text-white/20 mt-2">
-                        Create a group to pair rigs for multiplayer or designate solo drivers
-                    </p>
-                </div>
-            )}
-
-            {/* Unassigned Rigs */}
-            {unassignedRigs.length > 0 && groups.length > 0 && (
-                <div className="glass rounded-3xl p-6 border border-white/10">
-                    <h3 className="text-sm font-black italic uppercase tracking-tighter mb-4 flex items-center gap-2">
-                        <Zap size={16} className="text-amber-400" /> Unassigned Rigs ({unassignedRigs.length})
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                        {unassignedRigs.map(rig => (
-                            <div key={rig.rig_id} className="bg-black/20 px-4 py-2 rounded-xl border border-white/5 text-xs font-bold">
-                                {rig.rig_id}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
         </div>
     )
 }
