@@ -269,6 +269,7 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             f"SERVER_IP={server_ip}\n"
             f"SERVER_PORT={server_port}\n"
             f"SERVER_HTTP_PORT={server_http_port}\n"
+            f"REQUESTED_CAR={car}\n"
             f"NAME={str(params.get('driver_name', '')).strip() or config.rig_id}\n"
             f"TEAM=Ridge-Link\n"
             f"GUID=\n"
