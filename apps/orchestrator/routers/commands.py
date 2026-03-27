@@ -112,6 +112,7 @@ def create_router(state: AppState) -> APIRouter:
         # Resolve server IP + port for multiplayer groups
         server_ip: str | None = None
         server_port: int = 9600
+        server_http_port: int = 8081
         if command.action == "LAUNCH_RACE" and group.mode == "multiplayer":
             # Import the server manager to look up the running server's port
             from apps.orchestrator.routers.server import _manager as srv_mgr
@@ -120,6 +121,7 @@ def create_router(state: AppState) -> APIRouter:
                 if srv_info:
                     server_ip = _get_orchestrator_ip()
                     server_port = srv_info[1]
+                    server_http_port = srv_info[2]
                     logger.info(
                         "Multiplayer group '%s': server at %s:%d",
                         group.name, server_ip, server_port,
@@ -163,6 +165,7 @@ def create_router(state: AppState) -> APIRouter:
                     if server_ip and group.mode == "multiplayer":
                         payload["server_ip"] = server_ip
                         payload["server_port"] = server_port
+                        payload["server_http_port"] = server_http_port
                 background_tasks.add_task(dispatch_command, str(rig["ip"]), COMMAND_PORT, payload)
                 responses.append(f"Sled {rig_id}")
 

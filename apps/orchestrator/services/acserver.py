@@ -211,8 +211,8 @@ class ACServerManager:
         for gid in list(self._servers.keys()):
             self.stop_server(gid)
 
-    def get_server_ip_port(self, group_id: str) -> tuple[str, int] | None:
-        """Get the IP:port for a group's server (for rig connection)."""
+    def get_server_ip_port(self, group_id: str) -> tuple[str, int, int] | None:
+        """Get the IP:port:http_port for a group's server (for rig connection)."""
         server = self._servers.get(group_id)
         if server and server.process and server.process.poll() is None:
             # Return the actual LAN IP so rigs on other machines can connect
@@ -223,7 +223,7 @@ class ACServerManager:
                     lan_ip = str(s.getsockname()[0])
             except Exception:
                 lan_ip = "127.0.0.1"
-            return (lan_ip, server.port)
+            return (lan_ip, server.port, server.http_port)
         return None
 
     # ------------------------------------------------------------------
@@ -341,8 +341,7 @@ class ACServerManager:
             f"AUTOCLUTCH_ALLOWED=0\n"
             f"TYRE_BLANKETS_ALLOWED=0\n"
             f"FORCE_VIRTUAL_MIRROR=1\n"
-            f"REGISTER_TO_LOBBY=1\n"
-            f"LAN_DISCOVERY=1\n"
+            f"REGISTER_TO_LOBBY=0\n"
             f"MAX_CLIENTS={max_clients}\n"
             f"NUM_THREADS=2\n"
             f"UDP_PLUGIN_LOCAL_PORT=\n"
@@ -352,11 +351,10 @@ class ACServerManager:
             f"RACE_EXTRA_LAP=0\n"
             f"REVERSED_GRID_RACE_POSITIONS=0\n"
             f"RESULT_SCREEN_TIME=60\n"
-            f"TIME_OF_DAY_MULT={time_mult}\n"
-            f"CM_RACE_PIT_WINDOW_START_OFF=0\n"
-            f"CM_RACE_PIT_WINDOW_END_OFF=0\n"
+            f"__CM_RACE_PIT_WINDOW_START_OFF=0\n"
+            f"__CM_RACE_PIT_WINDOW_END_OFF=0\n"
             f"LOCKED_ENTRY_LIST=0\n"
-            f"TIME_OF_DAY_MULT=1\n"
+            f"TIME_OF_DAY_MULT={time_mult}\n"
             f"MAX_CONTACTS_PER_KM=-1\n"
             f"\n"
             f"[FTP]\n"
@@ -365,8 +363,8 @@ class ACServerManager:
             f"PASSWORD=\n"
             f"FOLDER=\n"
             f"LINUX=0\n"
-            f"CM_CLEAR_BEFORE_UPLOAD=0\n"
-            f"CM_DATA_ONLY=1\n"
+            f"__CM_CLEAR_BEFORE_UPLOAD=0\n"
+            f"__CM_DATA_ONLY=1\n"
             f"\n"
         )
 
@@ -383,7 +381,7 @@ class ACServerManager:
         # Qualifying session
         if qualy_time > 0:
             cfg += (
-                f"[CM_QUALIFY_OFF]\n"
+                f"[__CM_QUALIFY_OFF]\n"
                 f"NAME=Qualify\n"
                 f"TIME={qualy_time}\n"
                 f"IS_OPEN=1\n"
@@ -392,13 +390,13 @@ class ACServerManager:
 
         # Race session
         cfg += (
-            f"[CM_RACE_OFF]\n"
+            f"[__CM_RACE_OFF]\n"
             f"NAME=Race\n"
             f"TIME=0\n"
             f"IS_OPEN=1\n"
             f"WAIT_TIME=60\n"
             f"LAPS={race_laps}\n"
-            f"CM_TIME_OFF=10\n"
+            f"__CM_TIME_OFF=10\n"
             f"\n"
             f"[DYNAMIC_TRACK]\n"
             f"SESSION_START=95\n"
@@ -425,12 +423,12 @@ class ACServerManager:
             f"WEBLINK=\n"
             f"WELCOME_PATH=\n"
             f"\n"
-            f"[CM_BOOK_OFF]\n"
+            f"[__CM_BOOK_OFF]\n"
             f"NAME=Booking\n"
             f"TIME=10\n"
             f"IS_OPEN=1\n"
             f"\n"
-            f"[CM_SERVER]\n"
+            f"[__CM_SERVER]\n"
             f"DISABLE_CHECKSUMS=0\n"
             f"REGISTER_TO_CM_LOBBY=1\n"
         )
