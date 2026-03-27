@@ -605,7 +605,7 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
                             </div>
 
                             {/* Time Speed */}
-                            <SliderRow label="Speed" icon={Clock} value={selectedGroup.time_mult ?? 1} min={1} max={100} unit="x"
+                            <SliderRow label="Time Mult." icon={Clock} value={selectedGroup.time_mult ?? 1} min={1} max={100} unit="x"
                                 onChange={v => updateGroup(selectedGroup.id, { time_mult: v })} />
 
                             {/* Temperature */}
