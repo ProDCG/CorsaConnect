@@ -328,22 +328,41 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
 
 
 def launch_ac(config: SledConfig, params: dict[str, object]) -> subprocess.Popen[bytes] | None:
-    """Launch Assetto Corsa with the generated race.ini.
+    """Launch Assetto Corsa via Content Manager / CSP entry point.
+
+    Uses AssettoCorsa.exe (CM hook) instead of acs.exe so that Custom
+    Shaders Patch features like night lighting, headlights, and weather
+    effects work correctly. Falls back to acs.exe if CM isn't installed.
 
     Returns the process handle, or None on failure.
     """
     import time
 
-    ac_path = config.ac_path
+    # Prefer AssettoCorsa.exe (CM/CSP) over acs.exe (vanilla, no night)
+    ac_dir_from_config = os.path.dirname(config.ac_path)
+    steam_ac = r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa"
 
-    if not os.path.exists(ac_path):
-        # Try Steam default
-        probable = r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\acs.exe"
-        if os.path.exists(probable):
-            ac_path = probable
-        else:
-            logger.error("acs.exe not found at %s", ac_path)
-            return None
+    # Look for AssettoCorsa.exe in the configured dir, then Steam default
+    ac_path = None
+    for base_dir in [ac_dir_from_config, steam_ac]:
+        cm_exe = os.path.join(base_dir, "AssettoCorsa.exe")
+        if os.path.exists(cm_exe):
+            ac_path = cm_exe
+            logger.info("Using Content Manager entry: %s", ac_path)
+            break
+
+    # Fallback to acs.exe if CM not found
+    if not ac_path:
+        for base_dir in [ac_dir_from_config, steam_ac]:
+            acs_exe = os.path.join(base_dir, "acs.exe")
+            if os.path.exists(acs_exe):
+                ac_path = acs_exe
+                logger.warning("CM not found, falling back to acs.exe (no night/CSP): %s", ac_path)
+                break
+
+    if not ac_path:
+        logger.error("Neither AssettoCorsa.exe nor acs.exe found")
+        return None
 
     ini_path = generate_race_ini(config, params)
     if not ini_path:
