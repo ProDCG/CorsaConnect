@@ -272,7 +272,7 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             f"NAME={str(params.get('driver_name', '')).strip() or config.rig_id}\n"
             f"TEAM=Ridge-Link\n"
             f"GUID=\n"
-            f"PASS="
+            f"PASSWORD="
         )
 
         # [LIGHTING] — sun angle, time multiplier, and CM-specific weather fields
