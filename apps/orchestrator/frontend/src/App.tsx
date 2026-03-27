@@ -132,7 +132,24 @@ function App() {
                 const res = await fetch('/api/carpool')
                 const data = await res.json()
                 if (Array.isArray(data)) {
-                    setActiveCarPool(data)
+                    // If backend returns empty pool, auto-select all catalog cars
+                    if (data.length === 0) {
+                        try {
+                            const catRes = await fetch('/api/catalogs')
+                            const catData = await catRes.json()
+                            const allIds = (catData.cars || []).map((c: any) => c.id)
+                            if (allIds.length > 0) {
+                                setActiveCarPool(allIds)
+                                await fetch('/api/carpool', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ cars: allIds })
+                                })
+                            }
+                        } catch { /* fall through */ }
+                    } else {
+                        setActiveCarPool(data)
+                    }
                 }
             } catch (err) {
                 console.error("Failed to fetch car pool:", err)
@@ -396,7 +413,9 @@ function App() {
 
             {/* Main Content Area */}
             <main className="flex-1 overflow-y-auto relative">
-                <SessionTimerBar />
+                <div className="sticky top-0 z-50">
+                    <SessionTimerBar />
+                </div>
                 <header className="sticky top-0 z-40 bg-ridge-dark/80 backdrop-blur-xl p-8 flex justify-between items-center border-b border-white/5">
                     <div>
                         <h1 className="text-3xl font-black italic tracking-tighter uppercase flex items-center gap-2">

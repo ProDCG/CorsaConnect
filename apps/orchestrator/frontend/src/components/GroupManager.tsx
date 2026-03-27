@@ -315,6 +315,7 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
                         const serverInfo = getServerForGroup(group.id)
                         const isActive = selectedGroupId === group.id
                         const isRunning = serverInfo?.status === 'running'
+                        const isLive = group.rig_ids.some(rid => rigs.find(r => r.rig_id === rid && r.status === 'racing'))
                         return (
                             <button
                                 key={group.id}
@@ -336,6 +337,11 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
                                                 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                                                 : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                                         }`}>{group.mode === 'multiplayer' ? 'MP' : 'SOLO'}</span>
+                                        {isLive && (
+                                            <span className="px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1 animate-pulse">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-red-500" /> LIVE
+                                            </span>
+                                        )}
                                         <ChevronRight size={12} className="text-white/20" />
                                     </div>
                                 </div>

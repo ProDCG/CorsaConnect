@@ -279,7 +279,7 @@ class DesktopBlocker:
             logger.warning("Could not open video: %s", self._video_path)
             return
 
-        target_fps = 30
+        target_fps = 60
         frame_delay = 1.0 / target_fps
 
         while self._video_running:
