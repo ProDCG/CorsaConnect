@@ -121,16 +121,21 @@ class ACServerManager:
         os.makedirs(os.path.join(config_dir, "cfg"), exist_ok=True)
 
         # Generate configs into the per-group working directory (for reference)
-        total_slots = max_clients + ai_count
+        # Get rigs in this group for entry_list
+        group = self.state.get_group(group_id)
+        rig_ids = group.rig_ids if group else []
+
+        # Calculate total slots to match entry_list size exactly:
+        # human rigs + AI + extra open slots (same formula as _write_entry_list)
+        extra_open = max(len(cars) * 2, 8)
+        total_slots = len(rig_ids) + ai_count + extra_open
+
         self._write_server_cfg(
             config_dir, group_name, track, cars, udp_port, tcp_port, http_port,
             race_laps, practice_time, qualy_time, total_slots, weather,
             sun_angle, time_mult,
         )
 
-        # Get rigs in this group for entry_list
-        group = self.state.get_group(group_id)
-        rig_ids = group.rig_ids if group else []
         self._write_entry_list(config_dir, rig_ids, cars, ai_count, ai_difficulty)
 
         # AC dedicated server reads cfg/ relative to its own exe location,
@@ -506,11 +511,14 @@ class ACServerManager:
             )
             idx += 1
 
-        # Add a few extra open slots for late-joiners
-        for _ in range(3):
+        # Add extra open slots — cycle through ALL cars in the pool so any
+        # client can find a matching slot regardless of their selected car.
+        extra_count = max(len(cars) * 2, 8)
+        for i in range(extra_count):
+            slot_car = cars[i % len(cars)] if cars else default_car
             entries.append(
                 f"[CAR_{idx}]\n"
-                f"MODEL={default_car}\n"
+                f"MODEL={slot_car}\n"
                 f"SKIN=\n"
                 f"SPECTATOR_MODE=0\n"
                 f"DRIVERNAME=\n"
@@ -524,3 +532,5 @@ class ACServerManager:
         entry_path = os.path.join(config_dir, "cfg", "entry_list.ini")
         with open(entry_path, "w") as f:
             f.write("\n".join(entries))
+        logger.info("Wrote entry_list.ini: %d human + %d AI + %d open = %d total slots",
+                     len(rig_ids), ai_count, extra_count, idx)
