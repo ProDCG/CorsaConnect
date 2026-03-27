@@ -250,27 +250,26 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             f"PASS=ridge"
         )
 
-        # [LIGHTING] — sun angle, time multiplier, and CM-specific weather fields
-        cm_weather_type = _CM_WEATHER_TYPES.get(weather, 16)
+        # [LIGHTING] — FORCED OVERRIDE for testing (known-working values)
         lines.append(
             f"\n[LIGHTING]\n"
             f"SPECULAR_MULT=1.0\n"
             f"CLOUD_SPEED=0.200\n"
-            f"SUN_ANGLE={sun_angle:.2f}\n"
-            f"TIME_MULT={time_mult:.1f}\n"
-            f"__CM_WEATHER_TYPE={cm_weather_type}\n"
+            f"SUN_ANGLE=175.73\n"
+            f"TIME_MULT=1.0\n"
             f"__CM_WEATHER_CONTROLLER=base\n"
-            f"__TRACK_GEOTAG_LAT={_DEFAULT_GEOTAG[0]}\n"
-            f"__TRACK_GEOTAG_LONG={_DEFAULT_GEOTAG[1]}\n"
-            f"__TRACK_TIMEZONE_BASE_OFFSET=3600\n"
+            f"__CM_WEATHER_TYPE=17\n"
             f"__TRACK_TIMEZONE_OFFSET=3600\n"
+            f"__TRACK_GEOTAG_LONG=5.95238\n"
+            f"__TRACK_TIMEZONE_BASE_OFFSET=3600\n"
+            f"__TRACK_GEOTAG_LAT=50.4552\n"
             f"__TRACK_TIMEZONE_DTS=0"
         )
 
-        # [WEATHER]
+        # [WEATHER] — FORCED OVERRIDE for testing
         lines.append(
             f"\n[WEATHER]\n"
-            f"NAME={weather}"
+            f"NAME=5_light_clouds"
         )
 
         # Trailing standard sections
