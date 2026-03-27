@@ -457,7 +457,7 @@ class ACServerManager:
             f"IS_OPEN=1\n"
             f"\n"
             f"[__CM_SERVER]\n"
-            f"DISABLE_CHECKSUMS=0\n"
+            f"DISABLE_CHECKSUMS=1\n"
             f"REGISTER_TO_CM_LOBBY=1\n"
         )
 
