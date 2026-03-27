@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 import subprocess
 
 from apps.sled.config import SledConfig
@@ -11,6 +12,10 @@ from apps.sled.config import SledConfig
 logger = logging.getLogger("ridge.launcher")
 
 IS_WINDOWS = os.name == "nt"
+
+# Default track geotag — used by Content Manager for sun position calculation.
+# Using Monza (central European) coords; difference between tracks is negligible.
+_DEFAULT_GEOTAG = (45.6156, 9.2811)
 
 
 def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | None:
@@ -132,6 +137,9 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         # AI opponent entries
         for i in range(ai_count):
             ai_car = car_pool[i % len(car_pool)] if car_pool else car
+            # Randomize aggression and skill around the base difficulty (±15%)
+            aggression = max(0, min(100, ai_difficulty + random.randint(-15, 15)))
+            level = max(0, min(100, ai_difficulty + random.randint(-10, 10)))
             lines.append(
                 f"\n[CAR_{i + 1}]\n"
                 f"MODEL={ai_car}\n"
@@ -143,7 +151,9 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
                 f"DRIVER_NAME=AI Driver {i + 1}\n"
                 f"NATIONALITY=ITA\n"
                 f"NATION_CODE=ITA\n"
-                f"AI=auto"
+                f"AI=auto\n"
+                f"AI_LEVEL={level}\n"
+                f"AI_AGGRESSION={aggression}"
             )
 
         # [DYNAMIC_TRACK]
@@ -237,13 +247,20 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             f"PASS=ridge"
         )
 
-        # [LIGHTING] — this is where sun angle and time multiplier go
+        # [LIGHTING] — sun angle, time multiplier, and CM-specific weather fields
         lines.append(
             f"\n[LIGHTING]\n"
             f"SPECULAR_MULT=1.0\n"
             f"CLOUD_SPEED=0.200\n"
             f"SUN_ANGLE={sun_angle:.2f}\n"
-            f"TIME_MULT={time_mult:.1f}"
+            f"TIME_MULT={time_mult:.1f}\n"
+            f"CM_WEATHER_TYPE=-1\n"
+            f"CM_WEATHER_CONTROLLER=base\n"
+            f"TRACK_GEOTAG_LAT={_DEFAULT_GEOTAG[0]}\n"
+            f"TRACK_GEOTAG_LONG={_DEFAULT_GEOTAG[1]}\n"
+            f"TRACK_TIMEZONE_BASE_OFFSET=3600\n"
+            f"TRACK_TIMEZONE_OFFSET=3600\n"
+            f"TRACK_TIMEZONE_DTS=0"
         )
 
         # [WEATHER]
