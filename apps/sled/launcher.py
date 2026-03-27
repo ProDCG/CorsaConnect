@@ -299,23 +299,24 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         with open(cfg_path, "w") as f:
             f.write(content)
 
-        # --- Verification: re-read and confirm AI difficulty ---
-        if ai_count > 0:
-            try:
-                with open(cfg_path) as f:
-                    written = f.read()
-                for line in written.splitlines():
-                    if line.startswith("AI_LEVEL="):
-                        written_level = int(line.split("=", 1)[1])
-                        if written_level == ai_difficulty:
-                            logger.info("AI DIFFICULTY VERIFIED: requested=%d written=%d ✓",
-                                         ai_difficulty, written_level)
-                        else:
-                            logger.warning("AI DIFFICULTY MISMATCH: requested=%d written=%d",
-                                            ai_difficulty, written_level)
-                        break
-            except Exception as ve:
-                logger.warning("AI difficulty verification failed: %s", ve)
+        # --- DIAGNOSTIC: dump full race.ini content to log ---
+        logger.info("=" * 60)
+        logger.info("RACE.INI WRITTEN TO: %s", cfg_path)
+        logger.info("=" * 60)
+        try:
+            with open(cfg_path) as f:
+                written_content = f.read()
+            for line in written_content.splitlines():
+                logger.info("  %s", line)
+            logger.info("=" * 60)
+
+            # Verify critical values
+            for check_key in ["SUN_ANGLE", "__CM_WEATHER_TYPE", "NAME=", "TRACK="]:
+                matches = [l for l in written_content.splitlines() if check_key in l]
+                for m in matches:
+                    logger.info("VERIFY %s: %s", check_key, m.strip())
+        except Exception as ve:
+            logger.warning("Verification read failed: %s", ve)
 
         logger.info("Wrote race.ini: CAR=%s TRACK=%s AI=%d/%d%% SERVER=%s SUN=%.1f TIME_MULT=%.1f",
                      car, track, ai_count, ai_difficulty, use_server, sun_angle, time_mult)
@@ -331,6 +332,8 @@ def launch_ac(config: SledConfig, params: dict[str, object]) -> subprocess.Popen
 
     Returns the process handle, or None on failure.
     """
+    import time
+
     ac_path = config.ac_path
 
     if not os.path.exists(ac_path):
@@ -347,9 +350,27 @@ def launch_ac(config: SledConfig, params: dict[str, object]) -> subprocess.Popen
         return None
 
     try:
+        # Pre-launch verification: re-read race.ini to ensure nothing overwrote it
+        logger.info("--- PRE-LAUNCH CHECK (500ms after write) ---")
+        time.sleep(0.5)
+
+        try:
+            with open(ini_path) as f:
+                pre_launch = f.read()
+            sun_lines = [l for l in pre_launch.splitlines() if "SUN_ANGLE" in l]
+            weather_lines = [l for l in pre_launch.splitlines() if l.startswith("NAME=")]
+            logger.info("PRE-LAUNCH SUN_ANGLE: %s", sun_lines)
+            logger.info("PRE-LAUNCH WEATHER: %s", weather_lines)
+            logger.info("PRE-LAUNCH file size: %d bytes", len(pre_launch))
+        except Exception as e:
+            logger.warning("PRE-LAUNCH check failed: %s", e)
+
         ac_dir = os.path.dirname(ac_path)
-        cmd = [ac_path, f"-race={ini_path}"]
-        logger.info("Executing: %s", " ".join(cmd))
+        # NOTE: acs.exe reads race.ini from Documents/Assetto Corsa/cfg/ automatically
+        # No -race= flag needed — AC doesn't support custom config paths
+        cmd = [ac_path]
+        logger.info("Executing: %s (cwd=%s)", " ".join(cmd), ac_dir)
+        logger.info("race.ini location: %s", ini_path)
         return subprocess.Popen(cmd, cwd=ac_dir)  # type: ignore[return-value]
     except Exception as e:
         logger.error("Engine launch failed: %s", e)
