@@ -109,13 +109,18 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             if car not in car_pool:
                 car_pool.insert(0, car)
 
-        # AC dedicated server doesn't support AI
+        # When connecting to a dedicated server, the CLIENT only has 1 car
+        # (the player). AI opponents are handled by the server's entry_list.ini.
         use_server = bool(params.get("use_server", False))
-        if ai_count > 0 and use_server:
-            logger.info("AI bots requested — switching to offline mode")
-            use_server = False
+        if use_server:
+            # Client connects as single player — server manages AI
+            client_ai_count = 0
+            total_cars = 1
+            logger.info("Server mode: client will connect with 1 car (AI handled by server)")
+        else:
+            client_ai_count = ai_count
+            total_cars = 1 + ai_count
 
-        total_cars = 1 + ai_count
         server_ip = str(params.get("server_ip", config.orchestrator_ip))
 
         # ── Lighting / time-of-day ──
@@ -135,7 +140,7 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             f"TRACK={track}\n"
             f"CONFIG_TRACK=\n"
             f"CARS={total_cars}\n"
-            f"AI_LEVEL={ai_difficulty if ai_count > 0 else 100}\n"
+            f"AI_LEVEL={ai_difficulty if client_ai_count > 0 else 100}\n"
             f"FIXED_SETUP=0\n"
             f"PENALTIES=1\n"
             f"JUMP_START_PENALTY=1\n"
@@ -163,8 +168,8 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             f"NATION_CODE=ITA"
         )
 
-        # AI opponent entries
-        for i in range(ai_count):
+        # AI opponent entries — only for OFFLINE mode (server handles AI in multiplayer)
+        for i in range(client_ai_count):
             ai_car = car_pool[i % len(car_pool)] if car_pool else car
             # Randomize aggression and skill around the base difficulty (±15%)
             aggression = max(0, min(100, ai_difficulty + random.randint(-15, 15)))
