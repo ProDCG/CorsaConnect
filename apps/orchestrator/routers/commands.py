@@ -112,7 +112,7 @@ def create_router(state: AppState) -> APIRouter:
         # Resolve server IP + port for multiplayer groups
         server_ip: str | None = None
         server_port: int = 9600
-        server_http_port: int = 8081
+        server_http_port: int = 8080
         if command.action == "LAUNCH_RACE" and group.mode == "multiplayer":
             # Import the server manager to look up the running server's port
             from apps.orchestrator.routers.server import _manager as srv_mgr

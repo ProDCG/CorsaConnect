@@ -74,6 +74,8 @@ class CommandHandler:
                 "allow_drs": payload.get("allow_drs", True),
                 "use_server": payload.get("use_server", False),
                 "server_ip": payload.get("server_ip") or self.config.orchestrator_ip,
+                "server_port": payload.get("server_port", 9600),
+                "server_http_port": payload.get("server_http_port", 8080),
                 "ai_count": payload.get("ai_count", 0),
                 "ai_difficulty": payload.get("ai_difficulty", 80),
                 "car_pool": payload.get("car_pool", []),
