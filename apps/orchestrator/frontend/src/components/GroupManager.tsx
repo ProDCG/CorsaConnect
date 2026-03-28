@@ -27,11 +27,11 @@ interface RigGroup {
 }
 
 const AI_STEPS = [
-    { value: 0,   label: 'Rookie' },
-    { value: 20,  label: 'Beginner' },
-    { value: 40,  label: 'Easy' },
-    { value: 60,  label: 'Medium' },
-    { value: 80,  label: 'Hard' },
+    { value: 0, label: 'Rookie' },
+    { value: 20, label: 'Beginner' },
+    { value: 40, label: 'Easy' },
+    { value: 60, label: 'Medium' },
+    { value: 80, label: 'Hard' },
     { value: 100, label: 'Pro' },
 ]
 
@@ -71,17 +71,17 @@ interface GroupManagerProps {
 /* ------------------------------------------------------------------ */
 
 const TIME_STEPS = [
-    { angle: -16,  label: 'Dawn' },
-    { angle: 8,    label: 'Sunrise' },
-    { angle: 24,   label: 'Morning' },
-    { angle: 40,   label: 'Late Morning' },
-    { angle: 56,   label: 'Midday' },
-    { angle: 72,   label: 'Early Afternoon' },
-    { angle: 88,   label: 'Afternoon' },
-    { angle: 104,  label: 'Late Afternoon' },
-    { angle: 120,  label: 'Sunset' },
-    { angle: 136,  label: 'Dusk' },
-    { angle: 163,  label: 'Night' },
+    { angle: -16, label: 'Dawn' },
+    { angle: 8, label: 'Sunrise' },
+    { angle: 24, label: 'Morning' },
+    { angle: 40, label: 'Late Morning' },
+    { angle: 56, label: 'Midday' },
+    { angle: 72, label: 'Early Afternoon' },
+    { angle: 88, label: 'Afternoon' },
+    { angle: 104, label: 'Late Afternoon' },
+    { angle: 120, label: 'Sunset' },
+    { angle: 136, label: 'Dusk' },
+    { angle: 163, label: 'Night' },
 ]
 
 function angleToStepIndex(angle: number): number {
@@ -393,11 +393,10 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
                             <button
                                 key={group.id}
                                 onClick={() => setSelectedGroupId(group.id)}
-                                className={`w-full text-left p-4 border-b border-white/5 transition-all group ${
-                                    isActive
+                                className={`w-full text-left p-4 border-b border-white/5 transition-all group ${isActive
                                         ? 'bg-ridge-brand/10 border-l-2 border-l-ridge-brand'
                                         : 'hover:bg-white/5 border-l-2 border-l-transparent'
-                                }`}
+                                    }`}
                             >
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2 min-w-0">
@@ -405,11 +404,10 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
                                         <span className="font-black italic text-sm uppercase tracking-tight truncate">{group.name}</span>
                                     </div>
                                     <div className="flex items-center gap-1.5 shrink-0">
-                                        <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest ${
-                                            group.mode === 'multiplayer'
+                                        <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest ${group.mode === 'multiplayer'
                                                 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                                                 : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                        }`}>{group.mode === 'multiplayer' ? 'MP' : 'SOLO'}</span>
+                                            }`}>{group.mode === 'multiplayer' ? 'MP' : 'SOLO'}</span>
                                         {isLive && (
                                             <span className="px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1 animate-pulse">
                                                 <div className="w-1.5 h-1.5 rounded-full bg-red-500" /> LIVE
@@ -464,11 +462,10 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
                             <div>
                                 <h2 className="text-2xl font-black italic uppercase tracking-tighter flex items-center gap-3">
                                     {selectedGroup.name}
-                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${
-                                        selectedGroup.mode === 'multiplayer'
+                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${selectedGroup.mode === 'multiplayer'
                                             ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                                             : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                    }`}>{selectedGroup.mode}</span>
+                                        }`}>{selectedGroup.mode}</span>
                                     {isSelectedServerRunning && (
                                         <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-green-500/20 text-green-400 border border-green-500/30 flex items-center gap-1">
                                             <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Server :{selectedServer?.port}
@@ -522,12 +519,11 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
                                     const rig = rigs.find(r => r.rig_id === rigId)
                                     return (
                                         <div key={rigId} className="bg-black/30 border border-white/5 rounded-xl px-3 py-2.5 flex items-center gap-3 group hover:border-white/15 transition-all">
-                                            <div className={`w-2 h-2 rounded-full ${
-                                                rig?.status === 'racing' ? 'bg-ridge-brand animate-pulse' :
-                                                rig?.status === 'ready' ? 'bg-green-500' :
-                                                rig?.status === 'setup' ? 'bg-blue-500 animate-pulse' :
-                                                rig ? 'bg-white/20' : 'bg-red-500'
-                                            }`} />
+                                            <div className={`w-2 h-2 rounded-full ${rig?.status === 'racing' ? 'bg-ridge-brand animate-pulse' :
+                                                    rig?.status === 'ready' ? 'bg-green-500' :
+                                                        rig?.status === 'setup' ? 'bg-blue-500 animate-pulse' :
+                                                            rig ? 'bg-white/20' : 'bg-red-500'
+                                                }`} />
                                             <span className="font-black italic text-xs">{rigId}</span>
 
                                             {/* Per-rig car selector */}
@@ -609,10 +605,27 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
                                 )}
                                 <div>
                                     <label className="flex items-center gap-1 text-[9px] uppercase font-black text-white/50 tracking-widest mb-1"><Sun size={9} /> Time of Day</label>
-                                    <Select value={String(angleToStepIndex(selectedGroup.sun_angle ?? 48))}
-                                        onChange={e => updateGroup(selectedGroup.id, { sun_angle: TIME_STEPS[parseInt(e.target.value)].angle })}>
-                                        {TIME_STEPS.map((step, i) => <option key={i} value={String(i)}>{step.label}</option>)}
-                                    </Select>
+                                    {(() => {
+                                        // Multiplayer AC server clamps sun_angle to -80..80
+                                        const availableSteps = selectedGroup.mode === 'multiplayer'
+                                            ? TIME_STEPS.filter(s => s.angle >= -80 && s.angle <= 80)
+                                            : TIME_STEPS
+                                        const currentIdx = (() => {
+                                            let best = 0
+                                            let bestDist = Math.abs((selectedGroup.sun_angle ?? 48) - availableSteps[0].angle)
+                                            for (let i = 1; i < availableSteps.length; i++) {
+                                                const d = Math.abs((selectedGroup.sun_angle ?? 48) - availableSteps[i].angle)
+                                                if (d < bestDist) { best = i; bestDist = d }
+                                            }
+                                            return best
+                                        })()
+                                        return (
+                                            <Select value={String(currentIdx)}
+                                                onChange={e => updateGroup(selectedGroup.id, { sun_angle: availableSteps[parseInt(e.target.value)].angle })}>
+                                                {availableSteps.map((step, i) => <option key={i} value={String(i)}>{step.label}</option>)}
+                                            </Select>
+                                        )
+                                    })()}
                                 </div>
                             </div>
 
@@ -682,11 +695,10 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
                                     <label className="flex items-center gap-1 text-[9px] uppercase font-black text-white/50 tracking-widest"><Clock size={9} /> Session Timer</label>
                                     <button
                                         onClick={() => updateGroup(selectedGroup.id, { freeplay: !selectedGroup.freeplay })}
-                                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
-                                            selectedGroup.freeplay
+                                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${selectedGroup.freeplay
                                                 ? 'bg-amber-500/20 text-amber-400 border-2 border-amber-500/50 shadow-lg shadow-amber-500/10'
                                                 : 'bg-white/5 text-white/40 border border-white/10 hover:border-white/20'
-                                        }`}
+                                            }`}
                                     >
                                         <Zap size={10} /> {selectedGroup.freeplay ? '∞ Freeplay ON' : 'Freeplay'}
                                     </button>
