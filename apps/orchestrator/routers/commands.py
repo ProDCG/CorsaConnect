@@ -132,6 +132,13 @@ def create_router(state: AppState) -> APIRouter:
                         group.name,
                     )
 
+        # For KILL_RACE, explicitly mark ALL rigs in this group as idle
+        # (even ones that may have gone stale from _rigs dict)
+        if command.action == "KILL_RACE":
+            for rid in group.rig_ids:
+                state.update_rig_field(rid, "status", "idle")
+            logger.info("KILL_RACE: set %d rigs to idle for group '%s'", len(group.rig_ids), group.name)
+
         for rig in state.get_group_rigs(group_id):
             rig_id = str(rig["rig_id"])
 

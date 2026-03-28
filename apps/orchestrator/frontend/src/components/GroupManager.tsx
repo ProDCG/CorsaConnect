@@ -497,6 +497,8 @@ export default function GroupManager({ rigs, activeCarPool }: GroupManagerProps)
                                     if (selectedGroup.mode === 'multiplayer') {
                                         await stopServerForGroup(selectedGroup.id)
                                     }
+                                    // Force-refresh to show idle states immediately
+                                    fetchGroups()
                                 }}
                                     className="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-xl transition-all flex items-center gap-2 text-xs font-black uppercase">
                                     <Power size={14} /> Stop
@@ -653,8 +655,8 @@ export default function GroupManager({ rigs, activeCarPool }: GroupManagerProps)
                             <div className="grid grid-cols-4 gap-3">
                                 <div>
                                     <label className="flex items-center gap-1 text-[9px] uppercase font-black text-white/50 tracking-widest mb-1"><Flag size={9} /> Laps</label>
-                                    <input type="number" min={1} max={100} value={selectedGroup.race_laps}
-                                        onChange={e => updateGroup(selectedGroup.id, { race_laps: parseInt(e.target.value) || 10 })}
+                                    <input type="number" min={0} max={100} value={selectedGroup.race_laps}
+                                        onChange={e => updateGroup(selectedGroup.id, { race_laps: parseInt(e.target.value) ?? 0 })}
                                         className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-bold outline-none focus:border-ridge-brand" />
                                 </div>
                                 <div>
