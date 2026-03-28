@@ -305,9 +305,9 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
         })
     }
 
-    const startServerForGroup = async (groupId: string) => {
+    const startServerForGroup = async (groupId: string): Promise<boolean> => {
         const group = groups.find(g => g.id === groupId)
-        if (!group) return
+        if (!group) return false
         const res = await fetch('/api/server/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -327,8 +327,12 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
             })
         })
         const data = await res.json()
-        if (data.status === 'error') alert(`Server failed: ${data.message}`)
         fetchServers()
+        if (data.status === 'error') {
+            alert(`Server failed: ${data.message}`)
+            return false
+        }
+        return true
     }
 
     const stopServerForGroup = async (groupId: string) => {
@@ -476,10 +480,11 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
                                 <button
                                     onClick={async () => {
                                         if (selectedGroup.mode === 'multiplayer' && !isSelectedServerRunning) {
-                                            // Deploy server first, then launch race after a short delay
-                                            await startServerForGroup(selectedGroup.id)
-                                            // Small delay to let the server spin up
-                                            await new Promise(r => setTimeout(r, 2000))
+                                            // Deploy server first — abort if it fails
+                                            const ok = await startServerForGroup(selectedGroup.id)
+                                            if (!ok) return
+                                            // Let the server spin up before connecting clients
+                                            await new Promise(r => setTimeout(r, 3000))
                                         }
                                         sendGroupCommand(selectedGroup.id, 'LAUNCH_RACE')
                                     }}

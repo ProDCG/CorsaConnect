@@ -461,22 +461,21 @@ class ACServerManager:
         # Qualifying session
         if qualy_time > 0:
             cfg += (
-                f"[__CM_QUALIFY_OFF]\n"
+                f"[QUALIFY]\n"
                 f"NAME=Qualify\n"
                 f"TIME={qualy_time}\n"
                 f"IS_OPEN=1\n"
                 f"\n"
             )
 
-        # Race session
+        # Race session — always required
         cfg += (
-            f"[__CM_RACE_OFF]\n"
+            f"[RACE]\n"
             f"NAME=Race\n"
             f"TIME=0\n"
             f"IS_OPEN=1\n"
             f"WAIT_TIME=60\n"
             f"LAPS={race_laps}\n"
-            f"__CM_TIME_OFF=10\n"
             f"\n"
             f"[DYNAMIC_TRACK]\n"
             f"SESSION_START=95\n"
@@ -502,11 +501,6 @@ class ACServerManager:
             f"EXSERVERHIDEWIN=0\n"
             f"WEBLINK=\n"
             f"WELCOME_PATH=\n"
-            f"\n"
-            f"[__CM_BOOK_OFF]\n"
-            f"NAME=Booking\n"
-            f"TIME=10\n"
-            f"IS_OPEN=1\n"
             f"\n"
             f"[__CM_SERVER]\n"
             f"DISABLE_CHECKSUMS=1\n"
