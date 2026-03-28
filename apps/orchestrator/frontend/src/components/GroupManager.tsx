@@ -490,17 +490,15 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
                                     <Play size={14} /> Start Race
                                 </button>
 
-                                {/* Stop Server — only shows when server is running */}
-                                {selectedGroup.mode === 'multiplayer' && isSelectedServerRunning && (
-                                    <button onClick={() => stopServerForGroup(selectedGroup.id)}
-                                        className="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-xl transition-all flex items-center gap-2 text-xs font-black uppercase">
-                                        <Server size={14} /> Stop Server
-                                    </button>
-                                )}
-
-                                <button onClick={() => sendGroupCommand(selectedGroup.id, 'KILL_RACE')}
+                                {/* Single STOP button — kills race on all rigs + stops server */}
+                                <button onClick={async () => {
+                                    await sendGroupCommand(selectedGroup.id, 'KILL_RACE')
+                                    if (selectedGroup.mode === 'multiplayer') {
+                                        await stopServerForGroup(selectedGroup.id)
+                                    }
+                                }}
                                     className="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-xl transition-all flex items-center gap-2 text-xs font-black uppercase">
-                                    <Power size={14} /> Kill
+                                    <Power size={14} /> Stop
                                 </button>
                                 <button onClick={() => deleteGroup(selectedGroup.id)}
                                     className="bg-white/5 hover:bg-red-500/20 text-white/20 hover:text-red-400 p-2 rounded-xl transition-all">
