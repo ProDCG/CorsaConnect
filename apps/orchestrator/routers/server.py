@@ -24,7 +24,7 @@ class StartServerRequest(BaseModel):
 
     group_id: str
     track: str = "monza"
-    cars: list[str] = Field(default_factory=lambda: ["ks_ferrari_488_gt3"])
+    cars: list[str] = Field(default_factory=list)
     race_laps: int = 10
     practice_time: int = 0
     qualy_time: int = 10

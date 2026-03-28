@@ -48,7 +48,7 @@ class RigGroup(BaseModel):
     # Per-group race settings
     track: str = "monza"
     weather: str = "3_clear"
-    car_pool: list[str] = Field(default_factory=lambda: ["ks_ferrari_488_gt3"])
+    car_pool: list[str] = Field(default_factory=list)
     ai_count: int = 0
     ai_difficulty: int = 80  # 0-100 (AC's AI strength)
     practice_time: int = 0

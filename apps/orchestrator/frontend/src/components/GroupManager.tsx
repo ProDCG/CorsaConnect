@@ -532,9 +532,15 @@ export default function GroupManager({ rigs }: GroupManagerProps) {
                                                     className="bg-white/5 border border-white/10 rounded-lg px-2 py-0.5 text-[10px] font-bold outline-none focus:border-ridge-brand appearance-none max-w-40 cursor-pointer pr-5"
                                                 >
                                                     <option value="">Auto</option>
-                                                    {cars.filter((car, i, arr) => arr.findIndex(c => c.id === car.id) === i).map(car => (
-                                                        <option key={car.id} value={car.id}>{displayName(car.id)}</option>
-                                                    ))}
+                                                    {(() => {
+                                                        const seen = new Set<string>();
+                                                        return cars
+                                                            .filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; })
+                                                            .sort((a, b) => displayName(a.id).localeCompare(displayName(b.id)))
+                                                            .map(car => (
+                                                                <option key={car.id} value={car.id}>{displayName(car.id)}</option>
+                                                            ));
+                                                    })()}
                                                 </select>
                                                 <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
                                             </div>

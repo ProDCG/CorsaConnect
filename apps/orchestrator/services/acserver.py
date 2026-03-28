@@ -131,6 +131,19 @@ class ACServerManager:
         ac_root = os.path.dirname(ac_server_dir)
         ac_content_cars = os.path.join(ac_root, "content", "cars")
 
+        # If no cars were provided (empty car_pool), auto-discover from disk
+        if not cars:
+            logger.info("No cars specified — scanning %s for available cars", ac_content_cars)
+            try:
+                cars = [
+                    d for d in sorted(os.listdir(ac_content_cars))
+                    if os.path.isdir(os.path.join(ac_content_cars, d))
+                ]
+                logger.info("Auto-discovered %d cars from disk", len(cars))
+            except OSError as e:
+                logger.error("Failed to scan cars directory: %s", e)
+                return {"status": "error", "message": f"No cars specified and could not scan {ac_content_cars}: {e}"}
+
         validated_cars: list[str] = []
         rejected_cars: list[str] = []
         for car_id in cars:
@@ -161,10 +174,19 @@ class ACServerManager:
                     else:
                         logger.warning("Rig '%s' selected car '%s' not found on disk — using default", rid, rc)
 
-        # Hardcode generous slot count to avoid "not enough slots"
-        total_slots = 50
-        all_cars_list = list(all_cars_set)
+        all_cars_list = sorted(set(all_cars_set))  # deduplicate and sort
         logger.info("Validated cars for server: %s", all_cars_list)
+
+        # Calculate open human slots: enough for each rig to find a slot
+        # per car model, with generous padding for flexibility
+        slots_per_car = max(4, len(rig_ids) + 2)
+        total_human_slots = len(all_cars_list) * slots_per_car
+        # Total entries = AI slots + human open slots
+        total_slots = ai_count + total_human_slots
+        logger.info(
+            "Slot calculation: %d AI + %d human (%d cars × %d per car) = %d total",
+            ai_count, total_human_slots, len(all_cars_list), slots_per_car, total_slots,
+        )
 
         self._write_server_cfg(
             config_dir, group_name, track, all_cars_list, udp_port, tcp_port, http_port,
@@ -172,7 +194,7 @@ class ACServerManager:
             sun_angle, time_mult,
         )
 
-        self._write_entry_list(config_dir, rig_ids, all_cars_list, ai_count, ai_difficulty)
+        self._write_entry_list(config_dir, rig_ids, all_cars_list, ai_count, ai_difficulty, slots_per_car)
 
         # AC dedicated server reads cfg/ relative to its own exe location,
         # so we ALSO write configs into the server's own directory.
@@ -359,7 +381,9 @@ class ACServerManager:
         time_mult: int = 1,
     ) -> None:
         """Write server_cfg.ini for an AC dedicated server."""
-        car_str = ";".join(cars) if cars else "ks_ferrari_488_gt3"
+        if not cars:
+            return  # Cannot write server config without any cars
+        car_str = ";".join(cars)
 
         cfg = (
             f"[SERVER]\n"
@@ -498,28 +522,30 @@ class ACServerManager:
     def _write_entry_list(
         self, config_dir: str, rig_ids: list[str], cars: list[str],
         ai_count: int = 0, ai_difficulty: int = 80,
+        slots_per_car: int = 4,
     ) -> None:
         """Write entry_list.ini — open slots for humans + AI bots.
 
         In pickup mode, slots don't need driver names pre-filled.  Players
         claim any open slot with a matching car MODEL when they connect.
+
+        The total number of [CAR_N] entries MUST exactly match MAX_CLIENTS
+        in server_cfg.ini, otherwise AC server will reject connections with
+        'not enough slots'.
         """
         entries = []
-        default_car = cars[0] if cars else "ks_ferrari_488_gt3"
         idx = 0
 
-        # Collect all unique cars needed: car_pool + each rig's selected car
-        all_cars = list(cars)  # start with pool
-        for rig_id in rig_ids:
-            rig = self.state.get_rig(rig_id)
-            if rig:
-                rc = str(rig.get("selected_car", ""))
-                if rc and rc != "None" and rc not in all_cars:
-                    all_cars.append(rc)
+        if not cars:
+            logger.error("No cars provided for entry_list — cannot write")
+            return
 
-        # AI bot slots
+        # Use the already-deduplicated car list passed in (includes rig selections)
+        all_cars = list(cars)
+
+        # AI bot slots — distribute across available cars
         for ai_idx in range(ai_count):
-            ai_car = all_cars[ai_idx % len(all_cars)] if all_cars else default_car
+            ai_car = all_cars[ai_idx % len(all_cars)]
             logger.info("AI Entry CAR_%d: model=%s difficulty=%d", idx, ai_car, ai_difficulty)
             entries.append(
                 f"[CAR_{idx}]\n"
@@ -537,8 +563,6 @@ class ACServerManager:
 
         # Open human slots — create multiple open slots per car so any
         # client can find a matching empty slot regardless of selection.
-        # At minimum: 2 open slots per unique car, or enough for all rigs.
-        slots_per_car = 24
         for car_model in all_cars:
             for _ in range(slots_per_car):
                 entries.append(
