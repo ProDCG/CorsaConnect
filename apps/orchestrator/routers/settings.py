@@ -140,7 +140,6 @@ def create_router(state: AppState) -> APIRouter:
         3. Send UPDATE command to all rigs (triggers UPDATE_RIG.bat → git pull + restart)
         4. Run UPDATE_ADMIN.bat on the admin PC (git pull + restart orchestrator)
         """
-        import asyncio
         import os
         import subprocess as _sp
         import time
@@ -169,20 +168,20 @@ def create_router(state: AppState) -> APIRouter:
             responses.append(f"Server stop error: {e}")
 
         # 3. Send UPDATE to all rigs (delayed slightly to let KILL_RACE take effect)
-        async def _send_updates():
-            await asyncio.sleep(2)
+        def _send_updates_sync():
+            time.sleep(2)
             for rig in state.get_rigs():
                 rig_id = str(rig["rig_id"])
                 ip = str(rig.get("ip", ""))
                 if ip and ip != "web-kiosk":
                     update_payload = {"rig_id": rig_id, "action": "UPDATE"}
                     try:
-                        from apps.orchestrator.services.dispatcher import dispatch_command_async
-                        await dispatch_command_async(ip, COMMAND_PORT, update_payload)
-                    except Exception:
-                        pass
+                        dispatch_command(ip, COMMAND_PORT, update_payload)
+                        logger.info("Sent UPDATE to %s (%s)", rig_id, ip)
+                    except Exception as e:
+                        logger.error("Failed to send UPDATE to %s: %s", rig_id, e)
 
-        background_tasks.add_task(asyncio.ensure_future, _send_updates())
+        background_tasks.add_task(_send_updates_sync)
 
         # 4. Run UPDATE_ADMIN.bat on admin (delayed to allow rig updates to dispatch)
         def _run_admin_update():

@@ -106,6 +106,7 @@ class DesktopBlocker:
         self._current_mode = "lockout"
         self._current_status = "idle"
         self._car_pool: list[str] = []
+        self._hide_scheduled: bool = False
 
         # Session countdown timer
         self._timer_end: float | None = None  # Unix timestamp when session ends
@@ -554,25 +555,30 @@ class DesktopBlocker:
         """React to status changes from orchestrator."""
         if status == "setup" and self._current_mode == "lockout":
             # Admin is assigning cars — show waiting state
+            self._hide_scheduled = False
             self._restore_for_lockout()
             self.update_status("ADMIN ASSIGNING CARS — STAND BY")
         elif status == "racing":
-            # DELAY hiding splash so AC's loading screen appears first.
-            # The splash stays on top for 3 seconds, covering the bare desktop
-            # while AC initializes. Then it withdraws underneath AC.
-            self.update_status("LAUNCHING RACE...")
-            logger.info("Racing detected — delaying splash hide for 3s")
-            self.root.after(3000, self._hide_for_racing)
+            # Only schedule the hide ONCE — polling can re-trigger _apply_status
+            # every cycle which causes flickering if we keep scheduling.
+            if not getattr(self, '_hide_scheduled', False):
+                self._hide_scheduled = True
+                self.update_status("LAUNCHING RACE...")
+                logger.info("Racing detected — will hide splash in 1.5s")
+                self.root.after(1500, self._hide_for_racing)
         elif status == "ready":
             # Keep splash visible (lockout) but lower behind AC if it opens
+            self._hide_scheduled = False
             if self._current_mode == "lockout":
                 self._restore_for_lockout()
             self.update_status("READY — WAITING FOR GREEN LIGHT")
         elif status == "syncing":
+            self._hide_scheduled = False
             self.update_status("SYNCING MODS...")
         else:
             # idle / other — restore splash IMMEDIATELY (before AC closes)
             # This ensures the splash covers the desktop before AC is killed.
+            self._hide_scheduled = False
             self.stop_session_timer()
             if self._current_mode == "lockout":
                 self._restore_for_lockout()
@@ -587,8 +593,9 @@ class DesktopBlocker:
             self.root.overrideredirect(False)
             self.root.withdraw()
             self.update_status("RACE IN PROGRESS")
-            logger.info("Splash hidden for AC (after delay)")
+            logger.info("Splash hidden for AC (after 1.5s delay)")
         else:
+            self._hide_scheduled = False
             logger.info("Skipped splash hide — status changed to %s during delay", self._current_status)
 
     def _restore_for_lockout(self) -> None:

@@ -228,8 +228,8 @@ class RigAgent:
         self.status = "idle"
         logger.info("Status set to idle — splash should restore now")
 
-        # 2. Brief pause to let splash re-assert topmost
-        time.sleep(0.5)
+        # 2. Wait for splash to fully cover the desktop before killing AC
+        time.sleep(1.0)
 
         # 3. Now kill AC behind the splash
         if self.current_process:
