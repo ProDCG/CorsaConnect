@@ -50,14 +50,48 @@ class MumbleService:
         self._lock = threading.Lock()
 
         # Check if pymumble is available
+        # On Windows, pymumble needs opus.dll which ships with Mumble installs
+        if IS_WINDOWS:
+            self._add_opus_dll_path()
+
         try:
             import pymumble_py3  # noqa: F401
             self._available = True
-        except ImportError:
+        except Exception as exc:
             logger.warning(
-                "pymumble not installed — Mumble integration disabled. "
-                "Install with: pip install pymumble"
+                "pymumble not available — Mumble integration disabled (%s). "
+                "Install with: pip install pymumble",
+                exc,
             )
+
+    @staticmethod
+    def _add_opus_dll_path() -> None:
+        """Add Mumble install directories to DLL search path so opus.dll is found."""
+        import ctypes
+
+        search_dirs = [
+            r"C:\Program Files\Mumble Server",
+            r"C:\Program Files\Mumble",
+            r"C:\Program Files (x86)\Mumble Server",
+            r"C:\Program Files (x86)\Mumble",
+        ]
+        for d in search_dirs:
+            if os.path.isdir(d):
+                try:
+                    # AddDllDirectory is the modern way (Win 8+)
+                    ctypes.windll.kernel32.AddDllDirectory(d)  # type: ignore[union-attr]
+                except Exception:
+                    pass
+                # Also try the older SetDllDirectoryW as fallback
+                try:
+                    os.add_dll_directory(d)
+                except (OSError, AttributeError):
+                    pass
+                # Last resort: prepend to PATH
+                current_path = os.environ.get("PATH", "")
+                if d.lower() not in current_path.lower():
+                    os.environ["PATH"] = d + ";" + current_path
+                    logger.debug("Added %s to PATH for opus.dll", d)
 
     # ------------------------------------------------------------------
     # Server management
