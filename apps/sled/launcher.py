@@ -446,6 +446,17 @@ def launch_ac(config: SledConfig, params: dict[str, object]) -> subprocess.Popen
             logger.warning("PRE-LAUNCH check failed: %s", e)
 
         ac_dir = os.path.dirname(ac_path)
+
+        # Ensure steam_appid.txt exists — bypasses Steam's launch interception
+        steam_appid_path = os.path.join(ac_dir, "steam_appid.txt")
+        if not os.path.exists(steam_appid_path):
+            try:
+                with open(steam_appid_path, "w") as f:
+                    f.write("244210")
+                logger.info("Created steam_appid.txt at %s", steam_appid_path)
+            except Exception as e:
+                logger.warning("Could not create steam_appid.txt: %s", e)
+
         cmd = [ac_path, f"-race={ini_path}"]
         logger.info("Executing: %s (cwd=%s)", " ".join(cmd), ac_dir)
         logger.info("race.ini location: %s", ini_path)
