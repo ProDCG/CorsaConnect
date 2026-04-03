@@ -437,28 +437,37 @@ class MumbleService:
     # User management
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _get_name(obj: Any) -> str:
+        """Safely extract 'name' from a pymumble Channel/User object."""
+        if isinstance(obj, dict):
+            return str(obj.get("name", ""))
+        return str(getattr(obj, "name", getattr(obj, "get", lambda k, d="": d)("name", "")))
+
     def _find_user_session(self, username: str) -> int | None:
         """Find a Mumble user's session ID by username."""
         if not self._mumble:
             return None
         try:
             for session_id, user in self._mumble.users.items():
-                if user["name"].lower() == username.lower():
+                uname = self._get_name(user)
+                if uname.lower() == username.lower():
                     return session_id
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Error searching for user '%s': %s", username, e)
         return None
 
     def _find_channel_id(self, channel_name: str) -> int | None:
-        """Find a channel ID by name (searches sub-channels of Ridge-Link root)."""
+        """Find a channel ID by name."""
         if not self._mumble:
             return None
         try:
             for cid, ch in self._mumble.channels.items():
-                if ch["name"] == channel_name:
+                ch_name = self._get_name(ch)
+                if ch_name == channel_name:
                     return cid
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Error searching for channel '%s': %s", channel_name, e)
         return None
 
     def _move_user(self, username: str, channel_name: str) -> bool:
@@ -473,7 +482,14 @@ class MumbleService:
 
         channel_id = self._find_channel_id(channel_name)
         if channel_id is None:
-            logger.warning("Channel '%s' not found", channel_name)
+            # Log all known channels for debugging
+            known = []
+            try:
+                for cid, ch in self._mumble.channels.items():
+                    known.append(f"{cid}='{self._get_name(ch)}'")
+            except Exception:
+                pass
+            logger.warning("Channel '%s' not found. Known channels: %s", channel_name, ", ".join(known))
             return False
 
         try:
