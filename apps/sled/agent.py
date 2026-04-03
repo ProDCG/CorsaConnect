@@ -55,8 +55,11 @@ class RigAgent:
         self._watchdog_thread.start()
 
         # Auto-launch Mumble client if enabled
+        logger.info("Mumble enabled: %s", config.mumble_enabled)
         if config.mumble_enabled:
             self.start_mumble()
+        else:
+            logger.info("Mumble auto-launch disabled in config")
 
         logger.info("Rig agent '%s' initialised", config.rig_id)
 
@@ -126,17 +129,18 @@ class RigAgent:
     def is_mumble_running() -> bool:
         """Check if a Mumble client process is currently running."""
         mumble_names = {"mumble.exe", "mumble"}
-        if IS_WINDOWS:
-            try:
-                import psutil
-                for proc in psutil.process_iter(["name"]):
-                    try:
-                        name = (proc.info.get("name") or "").lower()
-                        if name in mumble_names:
-                            return True
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
-            except ImportError:
+        try:
+            import psutil
+            for proc in psutil.process_iter(["name"]):
+                try:
+                    pinfo = proc.info
+                    name = (pinfo["name"] if isinstance(pinfo, dict) else getattr(pinfo, "name", "") or "").lower()
+                    if name in mumble_names:
+                        return True
+                except (psutil.NoSuchProcess, psutil.AccessDenied, Exception):
+                    pass
+        except ImportError:
+            if IS_WINDOWS:
                 try:
                     out = subprocess.check_output(
                         ["tasklist", "/FI", "IMAGENAME eq mumble.exe", "/NH"],
@@ -146,18 +150,6 @@ class RigAgent:
                         return True
                 except Exception:
                     pass
-        else:
-            try:
-                import psutil
-                for proc in psutil.process_iter(["name"]):
-                    try:
-                        name = (proc.info.get("name") or "").lower()
-                        if name in mumble_names:
-                            return True
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
-            except ImportError:
-                pass
         return False
 
     def start_mumble(self) -> None:

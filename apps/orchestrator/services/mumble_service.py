@@ -384,11 +384,27 @@ class MumbleService:
             return
 
         assignments = self.state.get_mumble_assignments()
+        if not assignments:
+            return
+
+        # Log connected users for visibility
+        connected_users: list[str] = []
+        if self._mumble:
+            try:
+                for sid, user in self._mumble.users.items():
+                    uname = user.get("name", "?") if isinstance(user, dict) else getattr(user, "name", "?")
+                    if uname != MUMBLE_BOT_USER:
+                        connected_users.append(uname)
+            except Exception:
+                pass
+
         for rig_id, channel_name in assignments.items():
             try:
-                self._move_user(rig_id, channel_name)
+                moved = self._move_user(rig_id, channel_name)
+                if not moved and rig_id not in connected_users:
+                    logger.debug("Rig '%s' assigned to '%s' but not connected to Mumble yet", rig_id, channel_name)
             except Exception as e:
-                logger.debug("Could not apply assignment %s -> %s: %s", rig_id, channel_name, e)
+                logger.warning("Could not apply assignment %s -> %s: %s", rig_id, channel_name, e)
 
     # ------------------------------------------------------------------
     # User management
