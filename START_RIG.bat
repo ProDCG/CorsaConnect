@@ -49,6 +49,9 @@ if not exist "apps\sled\config.json" (
     exit /b 1
 )
 
-REM --- Launch ---
-REM Use python.exe (not pythonw.exe) so stderr is available for crash logs
-start "Ridge-Link Rig" /MIN "venv\Scripts\python.exe" -m apps.sled.splash 2>"ridge_crash.log"
+REM --- Launch (hidden) ---
+REM Use pythonw.exe for no console window, with stderr redirected to crash log
+start "" /B "venv\Scripts\pythonw.exe" -m apps.sled.splash 2>"ridge_crash.log"
+
+REM Close this launcher window immediately
+exit

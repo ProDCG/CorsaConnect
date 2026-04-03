@@ -49,34 +49,27 @@ if not exist "apps\orchestrator\frontend\node_modules" (
     exit /b 1
 )
 
-REM --- Launch ---
-echo.
-echo  ========================================
-echo        RIDGE-LINK ADMIN v2.0
-echo    Starting orchestrator + dashboard...
-echo  ========================================
-echo.
-
-echo  [1/3] Backend starting...
-start "Ridge-Link Backend" /MIN "venv\Scripts\python.exe" apps\orchestrator\main.py
+REM --- Launch (hidden) ---
+REM Backend: use pythonw.exe for no console window
+start "" /B "venv\Scripts\pythonw.exe" apps\orchestrator\main.py 2>"ridge_crash.log"
 
 timeout /t 3 /nobreak >nul
 
-echo  [2/3] Starting dashboard...
-cd apps\orchestrator\frontend
-start "Ridge-Link Dashboard" /MIN cmd /c "npm run dev"
+REM Dashboard: launch hidden via VBScript if available, otherwise minimized
+if exist "deploy\run_hidden.vbs" (
+    cd apps\orchestrator\frontend
+    start "" wscript.exe "%~dp0deploy\run_hidden.vbs" "cmd /c npm run dev"
+    cd /d "%~dp0"
+) else (
+    cd apps\orchestrator\frontend
+    start "Ridge-Link Dashboard" /MIN cmd /c "npm run dev"
+    cd /d "%~dp0"
+)
 
-cd /d "%~dp0"
 timeout /t 5 /nobreak >nul
 
-echo  [3/3] Opening dashboard in browser...
+REM Open dashboard in browser
 start http://localhost:5173
 
-echo.
-echo  ========================================
-echo   READY! Dashboard is running.
-echo   Close this window to keep services running.
-echo   To stop: close the minimized terminal windows.
-echo  ========================================
-echo.
-pause
+REM Close this launcher window
+exit

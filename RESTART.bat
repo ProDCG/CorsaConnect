@@ -28,6 +28,8 @@ echo.
 echo  [3/5] Closing terminal windows...
 REM Close any leftover cmd windows titled "Ridge-Link"
 taskkill /F /FI "WINDOWTITLE eq Ridge-Link*" 2>nul
+REM Close Node.js (dashboard dev server)
+taskkill /F /IM node.exe 2>nul
 timeout /t 1 /nobreak >nul
 echo        Done.
 echo.
@@ -53,20 +55,21 @@ if exist "ridge_role" (
     exit /b 1
 )
 
-if "%ROLE%"=="admin" (
-    echo        Starting as ADMIN...
-    start "" /MIN "%~dp0START_ADMIN.bat"
-) else (
-    echo        Starting as RIG...
-    start "" /MIN "%~dp0START_RIG.bat"
-)
-
-echo.
 color 0A
+echo.
 echo  ╔═══════════════════════════════════════════╗
 echo  ║        RIDGE-LINK RECOVERED!              ║
-echo  ║   System is restarting in background.     ║
+echo  ║   System is restarting now...             ║
 echo  ╚═══════════════════════════════════════════╝
 echo.
-timeout /t 3 /nobreak >nul
+timeout /t 2 /nobreak >nul
+
+REM Launch the appropriate starter (which will run hidden)
+if "%ROLE%"=="admin" (
+    call "%~dp0START_ADMIN.bat"
+) else (
+    call "%~dp0START_RIG.bat"
+)
+
+REM This window closes automatically
 exit
