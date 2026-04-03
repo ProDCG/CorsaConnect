@@ -334,22 +334,30 @@ class MumbleService:
             return
 
         try:
-            channels = self._mumble.channels
+            # Log all existing channels for diagnostics
+            logger.info("=== Current Mumble channels ===")
+            for cid, ch in self._mumble.channels.items():
+                ch_name = ch["name"] if isinstance(ch, dict) else getattr(ch, "name", "?")
+                ch_parent = ch.get("parent", "?") if isinstance(ch, dict) else getattr(ch, "parent", "?")
+                logger.info("  Channel %d: '%s' (parent=%s)", cid, ch_name, ch_parent)
+            logger.info("=== End channels ===")
 
             # Find or create root channel
             root_id: int | None = None
-            for cid, ch in channels.items():
-                if ch["name"] == MUMBLE_ROOT_CHANNEL:
+            for cid, ch in self._mumble.channels.items():
+                ch_name = ch["name"] if isinstance(ch, dict) else getattr(ch, "name", "?")
+                if ch_name == MUMBLE_ROOT_CHANNEL:
                     root_id = cid
                     break
 
             if root_id is None:
-                # Create under the server root (channel 0)
+                logger.info("Creating root channel '%s' under server root (0)", MUMBLE_ROOT_CHANNEL)
                 self._mumble.channels.new_channel(0, MUMBLE_ROOT_CHANNEL)
-                time.sleep(1.0)
+                time.sleep(2.0)
                 # Re-fetch
                 for cid, ch in self._mumble.channels.items():
-                    if ch["name"] == MUMBLE_ROOT_CHANNEL:
+                    ch_name = ch["name"] if isinstance(ch, dict) else getattr(ch, "name", "?")
+                    if ch_name == MUMBLE_ROOT_CHANNEL:
                         root_id = cid
                         break
 
@@ -357,26 +365,45 @@ class MumbleService:
                 logger.error("Failed to create root channel '%s'", MUMBLE_ROOT_CHANNEL)
                 return
 
+            logger.info("Root channel '%s' found (id=%d)", MUMBLE_ROOT_CHANNEL, root_id)
+
             # Create sub-channels
-            existing_names = set()
-            for cid, ch in self._mumble.channels.items():
-                parent = ch.get("parent", None)
-                if parent is not None:
-                    # parent could be an int (parent_id) or differ by pymumble version
-                    parent_val = parent if isinstance(parent, int) else getattr(parent, "channel_id", None)
-                    if parent_val == root_id:
-                        existing_names.add(ch["name"])
-
             for room_name in MUMBLE_CHANNELS:
-                if room_name not in existing_names:
-                    self._mumble.channels.new_channel(root_id, room_name)
-                    time.sleep(0.5)
-                    logger.info("Created Mumble channel: %s/%s", MUMBLE_ROOT_CHANNEL, room_name)
+                # Check if already exists
+                found = False
+                for cid, ch in self._mumble.channels.items():
+                    ch_name = ch["name"] if isinstance(ch, dict) else getattr(ch, "name", "?")
+                    if ch_name == room_name:
+                        found = True
+                        logger.info("Channel '%s' already exists (id=%d)", room_name, cid)
+                        break
 
-            self._channels_ready = True
-            logger.info("Mumble channel tree ready (%d rooms)", len(MUMBLE_CHANNELS))
+                if not found:
+                    logger.info("Creating channel '%s' under '%s' (id=%d)", room_name, MUMBLE_ROOT_CHANNEL, root_id)
+                    self._mumble.channels.new_channel(root_id, room_name)
+                    time.sleep(1.0)
+
+            # Verify channels were created
+            time.sleep(1.0)
+            created_rooms = []
+            for cid, ch in self._mumble.channels.items():
+                ch_name = ch["name"] if isinstance(ch, dict) else getattr(ch, "name", "?")
+                if ch_name in MUMBLE_CHANNELS:
+                    created_rooms.append(ch_name)
+
+            logger.info("Verified channels: %s (expected %d, got %d)",
+                        created_rooms, len(MUMBLE_CHANNELS), len(created_rooms))
+
+            self._channels_ready = len(created_rooms) > 0
+            if self._channels_ready:
+                logger.info("Mumble channel tree ready (%d rooms)", len(created_rooms))
+            else:
+                logger.error(
+                    "No sub-channels were created! The bot may lack permission. "
+                    "Try registering the bot or granting it admin rights on the server."
+                )
         except Exception as e:
-            logger.error("Error creating Mumble channels: %s", e)
+            logger.error("Error creating Mumble channels: %s", e, exc_info=True)
 
     def _apply_pending_assignments(self) -> None:
         """Re-apply saved assignments for any connected users."""
