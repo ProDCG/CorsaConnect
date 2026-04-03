@@ -150,5 +150,9 @@ class CommandHandler:
                 except Exception as e:
                     logger.error("Git pull failed: %s", e)
 
+        elif action == "START_MUMBLE":
+            logger.info("Mumble launch requested from orchestrator")
+            self.agent.start_mumble()
+
         else:
             logger.warning("Unknown command action: %s", action)

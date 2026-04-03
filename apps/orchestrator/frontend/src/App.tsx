@@ -589,9 +589,19 @@ function App() {
                                             <div className={`w-2 h-2 rounded-full ${rig.simhub_connected ? 'bg-green-400 shadow-sm shadow-green-400/50' : 'bg-red-400/60'}`} />
                                             <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">SimHub</span>
                                         </div>
-                                        <div className="flex items-center gap-1.5" title={rig.mumble_connected ? 'Mumble Connected' : 'Mumble Disconnected'}>
+                                        <div
+                                            className={`flex items-center gap-1.5 ${!rig.mumble_connected ? 'cursor-pointer hover:opacity-80' : ''}`}
+                                            title={rig.mumble_connected ? 'Mumble Connected' : 'Click to launch Mumble on this rig'}
+                                            onClick={() => {
+                                                if (!rig.mumble_connected) {
+                                                    fetch(`/api/mumble/start_client/${rig.rig_id}`, { method: 'POST' })
+                                                        .then(() => console.log(`Mumble launch sent to ${rig.rig_id}`))
+                                                        .catch(e => console.error('Failed to start Mumble:', e));
+                                                }
+                                            }}
+                                        >
                                             <div className={`w-2 h-2 rounded-full ${rig.mumble_connected ? 'bg-green-400 shadow-sm shadow-green-400/50' : 'bg-red-400/60'}`} />
-                                            <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">Mumble</span>
+                                            <span className={`text-[9px] font-bold uppercase tracking-wider ${!rig.mumble_connected ? 'text-red-400/60 hover:text-red-300' : 'text-white/40'}`}>Mumble</span>
                                         </div>
                                         {rigMumbleChannel && (
                                             <div className="flex items-center gap-1 ml-auto">
