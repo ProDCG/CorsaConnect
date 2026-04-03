@@ -54,10 +54,8 @@ start "" /B "venv\Scripts\pythonw.exe" apps\orchestrator\main.py 2>"ridge_crash.
 
 timeout /t 3 /nobreak >nul
 
-REM --- Launch dashboard (minimized) ---
-cd apps\orchestrator\frontend
-start "Ridge-Link Dashboard" /MIN cmd /c "npm run dev 2>nul"
-cd /d "%~dp0"
+REM --- Launch dashboard (fully hidden via VBS) ---
+start "" wscript.exe "%~dp0deploy\run_hidden.vbs" "%~dp0deploy\start_dashboard.bat"
 
 timeout /t 5 /nobreak >nul
 
