@@ -136,11 +136,11 @@ class DesktopBlocker:
         self.root.bind("<Control-Shift-D>", self._toggle_dev_mode)
         self.root.bind("<Control-Shift-d>", self._toggle_dev_mode)
 
-        # EXIT shortcuts — MULTIPLE ways to kill splash
-        self.root.bind("<Control-Shift-Q>", lambda e: self._emergency_exit())
-        self.root.bind("<Control-Shift-q>", lambda e: self._emergency_exit())
-        self.root.bind("<Control-Alt-x>", lambda e: self._emergency_exit())
-        self.root.bind("<Control-Alt-X>", lambda e: self._emergency_exit())
+        # UNLOCK shortcuts — MULTIPLE ways to unlock splash
+        self.root.bind("<Control-Shift-Q>", lambda e: self._enter_unlocked_mode())
+        self.root.bind("<Control-Shift-q>", lambda e: self._enter_unlocked_mode())
+        self.root.bind("<Control-Alt-x>", lambda e: self._enter_unlocked_mode())
+        self.root.bind("<Control-Alt-X>", lambda e: self._enter_unlocked_mode())
 
         # Escape key: 5 rapid taps to exit (prevents accidental close)
         self._esc_count = 0
@@ -357,7 +357,7 @@ class DesktopBlocker:
         # Exit hint (very dark so customers can't see it)
         self.canvas.create_text(
             sw // 2, sh - 10,
-            text="Ctrl+Shift+Q to exit  |  Ctrl+Shift+D for dev mode  |  Esc x5 to quit",
+            text="Ctrl+Shift+Q to unlock  |  Ctrl+Shift+D for dev mode  |  Esc x5 to unlock",
             font=("Arial", 7),
             fill="#1a1a1a",
             tags="branding",
@@ -674,26 +674,57 @@ class DesktopBlocker:
     # ------------------------------------------------------------------
 
     def _handle_escape(self, event: object = None) -> None:
-        """5 rapid Escape taps to exit (prevents accidental close)."""
+        """5 rapid Escape taps to unlock (allows desktop access)."""
         self._esc_count += 1
         remaining = 5 - self._esc_count
         if remaining > 0:
-            self.update_status(f"Press Escape {remaining} more time{'s' if remaining > 1 else ''} to exit")
+            self.update_status(f"Press Escape {remaining} more time{'s' if remaining > 1 else ''} to unlock")
             if self._esc_timer:
                 self.root.after_cancel(self._esc_timer)
             self._esc_timer = self.root.after(2000, self._reset_esc)
         else:
-            self._emergency_exit()
+            self._enter_unlocked_mode()
 
     def _reset_esc(self) -> None:
         self._esc_count = 0
         self.update_status("SYSTEMS ONLINE — READY")
 
-    def _emergency_exit(self) -> None:
-        """Kill splash + all child processes."""
-        logger.info("EMERGENCY EXIT triggered")
-        self.destroy()
-        sys.exit(0)
+    def _enter_unlocked_mode(self) -> None:
+        """Unlock the splash — hide it and report to orchestrator.
+
+        Unlike the old _emergency_exit, this keeps the sled agent alive
+        so the admin can re-lock the rig from the dashboard.
+        """
+        logger.info("UNLOCK triggered — hiding splash, agent stays alive")
+        self._current_mode = "freeuse"
+
+        # Hide splash
+        try:
+            self.root.attributes("-topmost", False)
+            self.root.overrideredirect(False)
+            self.root.withdraw()
+            self.root.configure(cursor="arrow")
+        except Exception:
+            pass
+
+        self.canvas.itemconfig(self.mode_indicator, text="UNLOCKED", fill="#FFD700")
+        self.update_status("UNLOCKED — Admin can re-lock from dashboard")
+
+        # Report to orchestrator
+        self._report_unlock()
+
+    def _report_unlock(self) -> None:
+        """Tell the orchestrator this rig is now in freeuse mode."""
+        def _send():
+            try:
+                url = f"http://{self.orchestrator_ip}:8000/rigs/{self.rig_id}/mode"
+                data = json.dumps({"mode": "freeuse"}).encode()
+                req = urlrequest.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+                urlrequest.urlopen(req, timeout=3)
+                logger.info("Reported unlock to orchestrator")
+            except Exception as e:
+                logger.warning("Failed to report unlock: %s", e)
+        threading.Thread(target=_send, daemon=True).start()
 
     def destroy(self) -> None:
         """Close the splash window."""

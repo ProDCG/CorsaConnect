@@ -19,6 +19,9 @@ interface Rig {
     }
     simhub_connected?: boolean
     mumble_connected?: boolean
+    steam_connected?: boolean
+    moza_connected?: boolean
+    simcube_connected?: boolean
     mumble_channel?: string | null
 }
 
@@ -158,6 +161,7 @@ function App() {
         const fetchRigs = async () => {
             try {
                 const res = await fetch('/api/rigs')
+                if (!res.ok) return
                 const data = await res.json()
                 if (Array.isArray(data)) {
                     setRigs((prev: Rig[]) => {
@@ -168,30 +172,36 @@ function App() {
                 }
 
                 const sRes = await fetch('/api/server/status')
-                const sData = await sRes.json()
-                setServerStatus((prev: string) => sData.status !== prev ? sData.status : prev)
+                if (sRes.ok) {
+                    const sData = await sRes.json()
+                    setServerStatus((prev: string) => sData.status !== prev ? sData.status : prev)
+                }
 
                 const lRes = await fetch('/api/leaderboard')
-                const lData = await lRes.json()
-                setLeaderboard((prev: any[]) => {
-                    const newJson = JSON.stringify(lData)
-                    const oldJson = JSON.stringify(prev)
-                    return newJson !== oldJson ? lData : prev
-                })
+                if (lRes.ok) {
+                    const lData = await lRes.json()
+                    setLeaderboard((prev: any[]) => {
+                        const newJson = JSON.stringify(lData)
+                        const oldJson = JSON.stringify(prev)
+                        return newJson !== oldJson ? lData : prev
+                    })
+                }
             } catch (err) {
-                console.error("Failed to fetch rigs:", err)
+                // Backend offline — silently ignore
             }
         }
 
         const fetchCarPool = async () => {
             try {
                 const res = await fetch('/api/carpool')
+                if (!res.ok) return
                 const data = await res.json()
                 if (Array.isArray(data)) {
                     // If backend returns empty pool, auto-select all catalog cars
                     if (data.length === 0) {
                         try {
                             const catRes = await fetch('/api/catalogs')
+                            if (!catRes.ok) return
                             const catData = await catRes.json()
                             const allIds = (catData.cars || []).map((c: any) => c.id)
                             if (allIds.length > 0) {
@@ -207,44 +217,40 @@ function App() {
                         setActiveCarPool(data)
                     }
                 }
-            } catch (err) {
-                console.error("Failed to fetch car pool:", err)
-            }
+            } catch { /* offline */ }
         }
 
         const fetchBranding = async () => {
             try {
                 const res = await fetch('/api/branding')
+                if (!res.ok) return
                 const data = await res.json()
                 setBrandingFields(data)
-            } catch (err) {
-                console.error("Failed to fetch branding:", err)
-            }
+            } catch { /* offline */ }
         }
 
         const fetchPresets = async () => {
             try {
                 const res = await fetch('/api/presets')
+                if (!res.ok) return
                 const data = await res.json()
                 if (Array.isArray(data)) setPresets(data)
-            } catch (err) {
-                console.error("Failed to fetch presets:", err)
-            }
+            } catch { /* offline */ }
         }
 
         const fetchTelemConfig = async () => {
             try {
                 const res = await fetch('/api/telem_config')
+                if (!res.ok) return
                 const data = await res.json()
                 if (data.active_fields) setActiveTelemFields(data.active_fields)
-            } catch (err) {
-                console.error("Failed to fetch telem config:", err)
-            }
+            } catch { /* offline */ }
         }
 
         const fetchCatalogs = async () => {
             try {
                 const res = await fetch('/api/catalogs')
+                if (!res.ok) return
                 const data = await res.json()
                 if (data.cars) setCatalogCars(data.cars)
                 if (data.tracks) setCatalogTracks(data.tracks)
@@ -584,7 +590,7 @@ function App() {
                                     </div>
 
                                     {/* Service Status Indicators */}
-                                    <div className="flex items-center gap-3 mb-4">
+                                    <div className="flex items-center gap-3 mb-4 flex-wrap">
                                         <div className="flex items-center gap-1.5" title={rig.simhub_connected ? 'SimHub Connected' : 'SimHub Disconnected'}>
                                             <div className={`w-2 h-2 rounded-full ${rig.simhub_connected ? 'bg-green-400 shadow-sm shadow-green-400/50' : 'bg-red-400/60'}`} />
                                             <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">SimHub</span>
@@ -602,6 +608,18 @@ function App() {
                                         >
                                             <div className={`w-2 h-2 rounded-full ${rig.mumble_connected ? 'bg-green-400 shadow-sm shadow-green-400/50' : 'bg-red-400/60'}`} />
                                             <span className={`text-[9px] font-bold uppercase tracking-wider ${!rig.mumble_connected ? 'text-red-400/60 hover:text-red-300' : 'text-white/40'}`}>Mumble</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5" title={rig.steam_connected ? 'Steam Running' : 'Steam Not Running'}>
+                                            <div className={`w-2 h-2 rounded-full ${rig.steam_connected ? 'bg-green-400 shadow-sm shadow-green-400/50' : 'bg-red-400/60'}`} />
+                                            <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">Steam</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5" title={rig.moza_connected ? 'Moza Connected' : 'Moza Not Running'}>
+                                            <div className={`w-2 h-2 rounded-full ${rig.moza_connected ? 'bg-green-400 shadow-sm shadow-green-400/50' : 'bg-red-400/60'}`} />
+                                            <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">Moza</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5" title={rig.simcube_connected ? 'SimCube Connected' : 'SimCube Not Running'}>
+                                            <div className={`w-2 h-2 rounded-full ${rig.simcube_connected ? 'bg-green-400 shadow-sm shadow-green-400/50' : 'bg-red-400/60'}`} />
+                                            <span className="text-[9px] font-bold uppercase tracking-wider text-white/40">SimCube</span>
                                         </div>
                                         {rigMumbleChannel && (
                                             <div className="flex items-center gap-1 ml-auto">

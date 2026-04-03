@@ -20,6 +20,9 @@ class RigStatusUpdate(BaseModel):
     ip: str | None = None
     simhub_connected: bool | None = None
     mumble_connected: bool | None = None
+    steam_connected: bool | None = None
+    moza_connected: bool | None = None
+    simcube_connected: bool | None = None
 
 
 class Rig(BaseModel):

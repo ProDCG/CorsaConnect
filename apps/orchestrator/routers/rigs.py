@@ -181,6 +181,12 @@ def create_router(state: AppState) -> APIRouter:
             state.update_rig_field(rig_id, "simhub_connected", update.simhub_connected)
         if update.mumble_connected is not None:
             state.update_rig_field(rig_id, "mumble_connected", update.mumble_connected)
+        if update.steam_connected is not None:
+            state.update_rig_field(rig_id, "steam_connected", update.steam_connected)
+        if update.moza_connected is not None:
+            state.update_rig_field(rig_id, "moza_connected", update.moza_connected)
+        if update.simcube_connected is not None:
+            state.update_rig_field(rig_id, "simcube_connected", update.simcube_connected)
 
         return {"status": "success"}
 

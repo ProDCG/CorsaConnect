@@ -75,6 +75,9 @@ class HeartbeatService:
                     "ip": _get_local_ip(),
                     "simhub_connected": self.agent.ac_telemetry.simhub_connected,
                     "mumble_connected": self.agent.is_mumble_running(),
+                    "steam_connected": self.agent.ac_telemetry.steam_connected,
+                    "moza_connected": self.agent.ac_telemetry.moza_connected,
+                    "simcube_connected": self.agent.ac_telemetry.simcube_connected,
                 }
 
                 try:

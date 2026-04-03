@@ -510,7 +510,7 @@ class ACServerManager:
         )
 
         # Practice session — always include (AC expects at least one open session)
-        prac_time = practice_time if practice_time > 0 else 90
+        prac_time = practice_time if practice_time > 0 else 1
         cfg += (
             f"[PRACTICE]\n"
             f"NAME=Practice\n"
@@ -632,6 +632,11 @@ class ACServerManager:
                 rc = str(rig.get("selected_car", ""))
                 if rc and rc != "None" and rc in cars:
                     rig_car = rc
+                else:
+                    # No car selected — pick a random one from the pool
+                    import random
+                    rig_car = random.choice(cars) if cars else default_car
+                    logger.info("Rig '%s' has no car selected — auto-assigned '%s'", rig_id, rig_car)
                 dn = rig.get("driver_name")
                 if dn and str(dn).strip():
                     driver_name = str(dn).strip()

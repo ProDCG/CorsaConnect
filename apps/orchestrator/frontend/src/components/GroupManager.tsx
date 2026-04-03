@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap } from 'lucide-react'
+import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap, Filter } from 'lucide-react'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -186,6 +186,10 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
     const [cars, setCars] = useState<CatalogCar[]>([])
     const [tracks, setTracks] = useState<CatalogTrack[]>([])
     const [weather, setWeather] = useState<CatalogWeather[]>([])
+
+    // Car filters (category + brand)
+    const [filterCategory, setFilterCategory] = useState('All')
+    const [filterBrand, setFilterBrand] = useState('All')
 
     /* ---- Data fetching ---- */
 
@@ -496,7 +500,7 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                 <button onClick={async () => {
                                     // Fire KILL_RACE directly to each rig (same path as the working rig power button)
                                     // instead of the group command route, which queues background tasks.
-                                    const killPromises = selectedGroup.rig_ids.map(rigId =>
+                                    const killPromises: Promise<unknown>[] = selectedGroup.rig_ids.map(rigId =>
                                         fetch('/api/command', {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json' },
@@ -524,6 +528,32 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                             <h3 className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-3 flex items-center gap-1.5">
                                 <Users size={10} /> Assigned Rigs ({selectedGroup.rig_ids.length})
                             </h3>
+
+                            {/* Car Filters */}
+                            {(() => {
+                                const enabledCars = activeCarPool.length > 0
+                                    ? cars.filter(c => activeCarPool.includes(c.id))
+                                    : cars;
+                                const categories = ['All', ...Array.from(new Set(enabledCars.map(c => c.car_class).filter(Boolean))).sort()]
+                                const brands = ['All', ...Array.from(new Set(enabledCars.map(c => c.brand).filter(Boolean))).sort()]
+                                return (
+                                    <div className="flex gap-3 mb-3">
+                                        <div className="flex-1">
+                                            <label className="flex items-center gap-1 text-[8px] uppercase font-black text-white/40 tracking-widest mb-1">Category</label>
+                                            <Select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
+                                                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                            </Select>
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="flex items-center gap-1 text-[8px] uppercase font-black text-white/40 tracking-widest mb-1">Brand</label>
+                                            <Select value={filterBrand} onChange={e => setFilterBrand(e.target.value)}>
+                                                {brands.map(b => <option key={b} value={b}>{b}</option>)}
+                                            </Select>
+                                        </div>
+                                    </div>
+                                )
+                            })()}
+
                             <div className="flex flex-wrap gap-2">
                                 {selectedGroup.rig_ids.map(rigId => {
                                     const rig = rigs.find(r => r.rig_id === rigId)
@@ -536,7 +566,7 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                                 }`} />
                                             <span className="font-black italic text-xs">{rigId}</span>
 
-                                            {/* Per-rig car selector */}
+                                            {/* Per-rig car selector (filtered) */}
                                             <div className="relative">
                                                 <select
                                                     value={rig?.selected_car || ''}
@@ -547,9 +577,17 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                                     {(() => {
                                                         const seen = new Set<string>();
                                                         // Only show cars enabled in the Cars tab
-                                                        const enabledCars = activeCarPool.length > 0
+                                                        let enabledCars = activeCarPool.length > 0
                                                             ? cars.filter(c => activeCarPool.includes(c.id))
                                                             : cars;
+                                                        // Apply category filter
+                                                        if (filterCategory !== 'All') {
+                                                            enabledCars = enabledCars.filter(c => c.car_class === filterCategory)
+                                                        }
+                                                        // Apply brand filter
+                                                        if (filterBrand !== 'All') {
+                                                            enabledCars = enabledCars.filter(c => c.brand === filterBrand)
+                                                        }
                                                         return enabledCars
                                                             .filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; })
                                                             .sort((a, b) => displayName(a.id).localeCompare(displayName(b.id)))

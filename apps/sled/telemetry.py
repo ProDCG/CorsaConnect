@@ -20,6 +20,9 @@ class ACTelemetry:
     def __init__(self, simhub_url: str = "http://127.0.0.1:8888/api/getgamedata", udp_port: int = 9996) -> None:
         self.simhub_url = simhub_url
         self.simhub_connected = False
+        self.steam_connected = False
+        self.moza_connected = False
+        self.simcube_connected = False
         self._last_sh_check: float = 0.0
 
         # Physics / Graphics shared memory (Windows only)
@@ -280,6 +283,8 @@ class ACTelemetry:
             self._last_sh_check = now
             # Also check if SimHub process is running (works even without a race)
             self._check_simhub_process()
+            # Check other services too
+            self._check_service_processes()
 
         result = self._get_simhub_data()
         if result:
@@ -326,6 +331,36 @@ class ACTelemetry:
                         return
                 except Exception:
                     pass
+
+    def _check_service_processes(self) -> None:
+        """Check if Steam, Moza, and SimCube processes are running."""
+        # Process names to detect (lowercase for comparison)
+        checks = {
+            "steam": ("steam.exe", "steam_connected"),
+            "moza": ("mozapit.exe", "moza_connected"),
+            "simcube": ("simucube", "simcube_connected"),
+        }
+        try:
+            import psutil
+            running = set()
+            for proc in psutil.process_iter(["name"]):
+                try:
+                    pinfo = proc.info
+                    name = (pinfo["name"] if isinstance(pinfo, dict) else getattr(pinfo, "name", "")).lower()
+                    for svc_key, (proc_name, _) in checks.items():
+                        if proc_name in name:
+                            running.add(svc_key)
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+
+            for svc_key, (proc_name, attr) in checks.items():
+                was = getattr(self, attr)
+                now = svc_key in running
+                if now != was:
+                    logger.info("%s %s", svc_key.capitalize(), "detected" if now else "no longer running")
+                setattr(self, attr, now)
+        except ImportError:
+            pass  # psutil not available
 
     # ------------------------------------------------------------------
     # Cleanup
