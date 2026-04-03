@@ -48,6 +48,7 @@ class MumbleService:
         self._stop_event = threading.Event()
         self._channels_ready: bool = False
         self._lock = threading.Lock()
+        self._superuser_pw: str = "RidgeLinkAdmin2024"
 
         # Check if pymumble is available
         # We mock opuslib first since we don't use audio — only channel mgmt
@@ -259,6 +260,8 @@ class MumbleService:
         if self._is_server_running():
             self._server_running = True
             logger.info("Mumble server already running")
+            # Still set SuperUser password in case it's a fresh DB
+            self._set_superuser_password()
             return
 
         murmur_exe = self._find_murmur()
@@ -281,8 +284,27 @@ class MumbleService:
             self._server_running = True
             time.sleep(2)  # Give the server time to start
             logger.info("Mumble server started (PID %d)", self._server_proc.pid)
+
+            # Set SuperUser password
+            self._set_superuser_password()
         except Exception as e:
             logger.error("Failed to start Mumble server: %s", e)
+
+    def _set_superuser_password(self) -> None:
+        """Set the SuperUser password on the Mumble server."""
+        murmur_exe = self._find_murmur()
+        if not murmur_exe:
+            return
+        ini_path = os.path.join(self.state._data_dir, "murmur.ini")
+        try:
+            result = subprocess.run(
+                [murmur_exe, "-ini", ini_path, "-supw", self._superuser_pw],
+                capture_output=True, text=True, timeout=10,
+            )
+            logger.info("SuperUser password set (exit=%d): %s",
+                        result.returncode, result.stdout.strip() or result.stderr.strip())
+        except Exception as e:
+            logger.warning("Could not set SuperUser password: %s", e)
 
     # ------------------------------------------------------------------
     # Bot connection
@@ -299,11 +321,12 @@ class MumbleService:
             import pymumble_py3 as pymumble
 
             logger.info(
-                "Connecting Mumble bot '%s' to 127.0.0.1:%d",
-                MUMBLE_BOT_USER, MUMBLE_PORT,
+                "Connecting Mumble bot as SuperUser to 127.0.0.1:%d",
+                MUMBLE_PORT,
             )
             self._mumble = pymumble.Mumble(
-                "127.0.0.1", MUMBLE_BOT_USER, port=MUMBLE_PORT,
+                "127.0.0.1", "SuperUser", port=MUMBLE_PORT,
+                password=self._superuser_pw,
                 reconnect=True,
             )
             self._mumble.set_application_string("Ridge-Link Orchestrator")
@@ -321,7 +344,7 @@ class MumbleService:
             self._mumble.start()
             self._mumble.is_ready()
             self._connected = True
-            logger.info("Mumble bot connected successfully")
+            logger.info("Mumble bot connected as SuperUser successfully")
             return True
         except Exception as e:
             logger.error("Mumble bot connection failed: %s", e)
@@ -557,13 +580,13 @@ class MumbleService:
             try:
                 users_by_channel: dict[str, list[str]] = {}
                 for session_id, user in self._mumble.users.items():
-                    user_name = user["name"]
-                    if user_name == MUMBLE_BOT_USER:
+                    user_name = self._get_name(user)
+                    if user_name in (MUMBLE_BOT_USER, "SuperUser"):
                         continue
-                    ch_id = user.get("channel_id", 0)
+                    ch_id = user.get("channel_id", 0) if isinstance(user, dict) else getattr(user, "channel_id", 0)
                     ch_name = "Unknown"
                     if ch_id in self._mumble.channels:
-                        ch_name = self._mumble.channels[ch_id]["name"]
+                        ch_name = self._get_name(self._mumble.channels[ch_id])
                     users_by_channel.setdefault(ch_name, []).append(user_name)
                 result["users"] = users_by_channel
             except Exception as e:
