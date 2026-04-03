@@ -716,14 +716,18 @@ class DesktopBlocker:
     def _report_unlock(self) -> None:
         """Tell the orchestrator this rig is now in freeuse mode."""
         def _send():
-            try:
-                url = f"http://{self.orchestrator_ip}:8000/rigs/{self.rig_id}/mode"
-                data = json.dumps({"mode": "freeuse"}).encode()
-                req = urlrequest.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
-                urlrequest.urlopen(req, timeout=3)
-                logger.info("Reported unlock to orchestrator")
-            except Exception as e:
-                logger.warning("Failed to report unlock: %s", e)
+            for attempt in range(2):
+                try:
+                    url = f"http://{self.orchestrator_ip}:8000/rigs/{self.rig_id}/mode"
+                    data = json.dumps({"mode": "freeuse"}).encode()
+                    req = urlrequest.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+                    urlrequest.urlopen(req, timeout=5)
+                    logger.info("Reported unlock to orchestrator")
+                    return
+                except Exception as e:
+                    logger.warning("Failed to report unlock (attempt %d): %s", attempt + 1, e)
+                    if attempt == 0:
+                        time.sleep(1)
         threading.Thread(target=_send, daemon=True).start()
 
     def destroy(self) -> None:

@@ -22,7 +22,7 @@ class SledConfig(BaseModel):
     """Typed configuration for a sled rig agent."""
 
     rig_id: str = Field(default_factory=lambda: socket.gethostname())
-    orchestrator_ip: str = "192.168.9.35"
+    orchestrator_ip: str = "192.168.9.119"
     heartbeat_port: int = HEARTBEAT_PORT
     command_port: int = COMMAND_PORT
     mod_version: str = "2.0.0"
