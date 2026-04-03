@@ -163,6 +163,10 @@ class RigAgent:
             return
 
         from shared.constants import MUMBLE_PORT
+
+        # Pre-trust the server certificate so no dialog appears
+        self._trust_mumble_server_cert(self.config.orchestrator_ip, MUMBLE_PORT)
+
         mumble_url = f"mumble://{self.config.rig_id}@{self.config.orchestrator_ip}:{MUMBLE_PORT}"
         logger.info("Launching Mumble client: %s", mumble_url)
 
@@ -227,6 +231,88 @@ class RigAgent:
             if found:
                 return found
         return None
+
+    @staticmethod
+    def _trust_mumble_server_cert(host: str, port: int) -> None:
+        """Pre-trust the Mumble server's SSL certificate in the client's database.
+
+        Mumble stores trusted server certs in its SQLite database at
+        %APPDATA%/Mumble/Mumble/mumble.sqlite. We connect via SSL to get
+        the server's cert fingerprint and write it there, bypassing the
+        'accept certificate?' dialog on first connection.
+        """
+        import hashlib
+        import sqlite3
+        import ssl
+
+        # Find the Mumble client database
+        appdata = os.environ.get("APPDATA", "")
+        if not appdata:
+            logger.debug("No APPDATA — skipping cert pre-trust")
+            return
+
+        db_path = os.path.join(appdata, "Mumble", "Mumble", "mumble.sqlite")
+
+        # Get the server's certificate fingerprint
+        try:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+            import socket
+            with socket.create_connection((host, port), timeout=5) as raw_sock:
+                with ctx.wrap_socket(raw_sock, server_hostname=host) as ssl_sock:
+                    der_cert = ssl_sock.getpeercert(binary_form=True)
+                    if not der_cert:
+                        logger.warning("No certificate received from Mumble server")
+                        return
+                    digest = hashlib.sha1(der_cert).hexdigest()
+                    logger.info("Mumble server cert fingerprint: %s", digest)
+        except Exception as e:
+            logger.warning("Could not get Mumble server cert: %s", e)
+            return
+
+        # Write to the Mumble client's database
+        try:
+            os.makedirs(os.path.dirname(db_path), exist_ok=True)
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+
+            # Create the cert table if it doesn't exist
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS cert (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    hostname TEXT NOT NULL,
+                    port INTEGER NOT NULL DEFAULT 64738,
+                    digest TEXT NOT NULL
+                )
+            """)
+
+            # Check if already trusted
+            cursor.execute(
+                "SELECT id FROM cert WHERE hostname = ? AND port = ?",
+                (host, port),
+            )
+            existing = cursor.fetchone()
+
+            if existing:
+                # Update the digest in case the server cert changed
+                cursor.execute(
+                    "UPDATE cert SET digest = ? WHERE hostname = ? AND port = ?",
+                    (digest, host, port),
+                )
+                logger.info("Updated Mumble cert trust for %s:%d", host, port)
+            else:
+                cursor.execute(
+                    "INSERT INTO cert (hostname, port, digest) VALUES (?, ?, ?)",
+                    (host, port, digest),
+                )
+                logger.info("Added Mumble cert trust for %s:%d", host, port)
+
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.warning("Could not write Mumble cert trust: %s", e)
 
     def _process_watchdog(self) -> None:
         """Monitor AC process — promote to racing when AC is detected, demote when gone.
