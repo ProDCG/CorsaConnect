@@ -51,6 +51,7 @@ class ACServerManager:
     def __init__(self, state: AppState, ac_server_path: str = "") -> None:
         self.state = state
         self._servers: dict[str, ACServerInstance] = {}
+        self._last_errors: dict[str, dict[str, object]] = {}
 
         # Try common locations for acServer.exe
         if ac_server_path and os.path.exists(ac_server_path):
@@ -61,9 +62,10 @@ class ACServerManager:
         else:
             self.ac_server_exe = ""
 
-        # Working directory for server configs
-        self._work_dir = os.path.join(os.getcwd(), "data", "servers")
+        # Working directory for server configs — use state's data dir (not cwd)
+        self._work_dir = os.path.join(state._data_dir, "servers")
         os.makedirs(self._work_dir, exist_ok=True)
+        logger.info("AC Server work dir: %s", self._work_dir)
 
     def get_servers(self) -> list[dict[str, object]]:
         """Return status info for all running servers."""
@@ -84,6 +86,37 @@ class ACServerManager:
                 "pid": pid,
                 "status": "running" if alive else "stopped",
             })
+        return result
+
+    def _log_error(self, group_id: str, result: dict[str, object]) -> dict[str, object]:
+        """Persist an error result to disk so it can be inspected even if server never started."""
+        try:
+            error_dir = os.path.join(self._work_dir, group_id)
+            os.makedirs(error_dir, exist_ok=True)
+            error_path = os.path.join(error_dir, "startup_error.log")
+            import json
+            with open(error_path, "w") as f:
+                f.write(f"=== Server Startup Error ===\n")
+                f.write(f"Message: {result.get('message', 'unknown')}\n\n")
+                if result.get("rejected_cars"):
+                    f.write("Rejected cars:\n")
+                    for c in result["rejected_cars"]:
+                        if isinstance(c, dict):
+                            f.write(f"  - {c.get('id', '?')}: {c.get('reason', '?')}\n")
+                        else:
+                            f.write(f"  - {c}\n")
+                    f.write("\n")
+                if result.get("problem_cars"):
+                    f.write(f"Problem cars from crash log: {result['problem_cars']}\n\n")
+                if result.get("validated_cars"):
+                    f.write(f"Validated cars: {result['validated_cars']}\n\n")
+                if result.get("server_log"):
+                    f.write(f"Server log:\n{result['server_log']}\n")
+            logger.info("Error details written to %s", error_path)
+        except Exception as e:
+            logger.warning("Could not write error log: %s", e)
+        # Store in memory for the /logs endpoint
+        self._last_errors[group_id] = result
         return result
 
     def start_server(
@@ -108,7 +141,7 @@ class ACServerManager:
             self.stop_server(group_id)
 
         if not os.path.exists(self.ac_server_exe):
-            return {"status": "error", "message": f"acServer.exe not found at {self.ac_server_exe}"}
+            return self._log_error(group_id, {"status": "error", "message": f"acServer.exe not found at {self.ac_server_exe}"})
 
         # Assign unique ports — find lowest available offset not already in use.
         # Note: stop_server (line above) already removed the old entry for this
@@ -153,7 +186,7 @@ class ACServerManager:
                 logger.info("Auto-discovered %d cars from disk", len(cars))
             except OSError as e:
                 logger.error("Failed to scan cars directory: %s", e)
-                return {"status": "error", "message": f"No cars specified and could not scan {ac_content_cars}: {e}"}
+                return self._log_error(group_id, {"status": "error", "message": f"No cars specified and could not scan {ac_content_cars}: {e}"})
 
         validated_cars: list[str] = []
         rejected_cars: list[dict[str, str]] = []
@@ -174,11 +207,11 @@ class ACServerManager:
             logger.warning("Rejected %d cars: %s", len(rejected_cars), names)
 
         if not validated_cars:
-            return {
+            return self._log_error(group_id, {
                 "status": "error",
                 "message": f"No valid cars found! All {len(rejected_cars)} cars were rejected.",
                 "rejected_cars": rejected_cars,
-            }
+            })
 
         # Collect all unique validated cars (pool + rig selections)
         all_cars_set = set(validated_cars)
@@ -225,7 +258,7 @@ class ACServerManager:
             shutil.copy2(self.ac_server_exe, local_exe)
         except Exception as e:
             logger.error("Failed to copy acServer exe to %s: %s", config_dir, e)
-            return {"status": "error", "message": f"Could not copy server exe: {e}"}
+            return self._log_error(group_id, {"status": "error", "message": f"Could not copy server exe: {e}"})
 
         # Sync car/track content from main AC install to this server's content dir
         self._sync_server_content(config_dir, all_cars_list, track)
@@ -310,14 +343,14 @@ class ACServerManager:
                         "AC server CRASHED on startup (exit code %d) for '%s':\n%s",
                         exit_code, group_name, crash_log,
                     )
-                    return {
+                    return self._log_error(group_id, {
                         "status": "error",
                         "message": f"AC server crashed on startup (exit code {exit_code})",
                         "server_log": crash_log,
                         "problem_cars": problem_cars,
                         "rejected_cars": [c for c in rejected_cars] if rejected_cars else [],
                         "validated_cars": all_cars_list,
-                    }
+                    })
 
             server = ACServerInstance(
                 group_id=group_id,
