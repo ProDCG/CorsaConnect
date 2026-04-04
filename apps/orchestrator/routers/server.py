@@ -116,16 +116,7 @@ def create_router(state: AppState) -> APIRouter:
 
         server = _manager._servers.get(group_id)
         if not server:
-            # Check for stored errors from a failed startup
-            last_error = _manager._last_errors.get(group_id)
-            if last_error:
-                return {"status": "error", "source": "last_startup_error", **last_error}
-            # Try reading error log from disk
-            error_path = os.path.join(_manager._work_dir, group_id, "startup_error.log")
-            if os.path.isfile(error_path):
-                with open(error_path) as f:
-                    return {"status": "error", "source": "startup_error.log", "error_log": f.read()}
-            return {"status": "error", "message": "No server found for this group (no error logs available)"}
+            return {"status": "error", "message": "No server found for this group"}
 
         config_dir = server.config_dir
         result: dict[str, object] = {
