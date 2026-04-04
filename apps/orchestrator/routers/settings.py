@@ -183,23 +183,27 @@ def create_router(state: AppState) -> APIRouter:
 
         background_tasks.add_task(_send_updates_sync)
 
-        # 4. Run UPDATE_ADMIN.bat on admin (delayed to allow rig updates to dispatch)
+        # 4. Run RESTART.bat on admin (delayed to allow rig updates to dispatch)
         def _run_admin_update():
             time.sleep(5)
             if os.name == "nt":
-                update_bat = str(repo_root / "UPDATE_ADMIN.bat")
-                if os.path.exists(update_bat):
-                    logger.info("Launching UPDATE_ADMIN.bat: %s", update_bat)
+                # Prefer RESTART.bat (comprehensive: kills all, pulls, restarts)
+                restart_bat = str(repo_root / "RESTART.bat")
+                legacy_bat = str(repo_root / "UPDATE_ADMIN.bat")
+
+                script = restart_bat if os.path.exists(restart_bat) else legacy_bat
+                if os.path.exists(script):
+                    logger.info("Launching admin recovery script: %s", script)
                     _sp.Popen(
-                        ["cmd", "/c", update_bat],
+                        ["cmd", "/c", script],
                         cwd=str(repo_root),
                         creationflags=_sp.CREATE_NEW_CONSOLE,
                     )
-                    # The bat kills python.exe — this process will die
+                    # The script kills python.exe — this process will die
                     time.sleep(3)
                     os._exit(0)
                 else:
-                    logger.error("UPDATE_ADMIN.bat not found: %s", update_bat)
+                    logger.error("No restart/update script found: %s", restart_bat)
             else:
                 # Linux/dev: git pull + exit
                 try:

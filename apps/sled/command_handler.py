@@ -121,26 +121,45 @@ class CommandHandler:
             import time
             time.sleep(1)
 
-            # 2. Run the update script
+            # 2. Run the recovery/restart script
             import os
             import subprocess as _sp
             repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             if os.name == "nt":
-                update_bat = os.path.join(repo_root, "UPDATE_RIG.bat")
-                if os.path.exists(update_bat):
-                    logger.info("Executing UPDATE_RIG.bat: %s", update_bat)
+                # Prefer RESTART.bat (comprehensive: kills all, pulls, restarts)
+                # Fall back to UPDATE_RIG.bat if RESTART.bat is missing
+                restart_bat = os.path.join(repo_root, "RESTART.bat")
+                # Also check the Desktop shortcut target in case repo copy is stale
+                desktop = os.path.join(os.environ.get("USERPROFILE", ""), "Desktop")
+                desktop_bat = os.path.join(desktop, "Ridge Link.bat") if desktop else ""
+
+                script = None
+                if os.path.exists(restart_bat):
+                    script = restart_bat
+                elif desktop_bat and os.path.exists(desktop_bat):
+                    script = desktop_bat
+                    logger.info("Using Desktop fallback: %s", desktop_bat)
+                else:
+                    # Last resort: legacy UPDATE_RIG.bat
+                    legacy = os.path.join(repo_root, "UPDATE_RIG.bat")
+                    if os.path.exists(legacy):
+                        script = legacy
+                        logger.info("Using legacy UPDATE_RIG.bat")
+
+                if script:
+                    logger.info("Executing recovery script: %s", script)
                     # Start in a new console window — it will kill us and restart
                     _sp.Popen(
-                        ["cmd", "/c", update_bat],
+                        ["cmd", "/c", script],
                         cwd=repo_root,
                         creationflags=_sp.CREATE_NEW_CONSOLE,
                     )
-                    # The bat kills python.exe, so this process will die.
+                    # The script kills python.exe, so this process will die.
                     # Give it a moment, then force-exit just in case.
                     time.sleep(3)
                     os._exit(0)
                 else:
-                    logger.error("UPDATE_RIG.bat not found at %s", update_bat)
+                    logger.error("No restart/update script found in %s", repo_root)
             else:
                 # Linux/dev mode: git pull + restart
                 try:

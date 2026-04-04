@@ -107,6 +107,7 @@ class DesktopBlocker:
         self._current_status = "idle"
         self._car_pool: list[str] = []
         self._hide_scheduled: bool = False
+        self._locally_unlocked: bool = False  # True when rig-side unlock overrides orchestrator
 
         # Session countdown timer
         self._timer_end: float | None = None  # Unix timestamp when session ends
@@ -511,14 +512,23 @@ class DesktopBlocker:
             car_pool = data.get("car_pool", [])
             session_duration = int(data.get("session_duration_min", 0))
 
-            logger.debug("Poll result: mode=%s status=%s (current: mode=%s status=%s)",
-                         new_mode, new_status, self._current_mode, self._current_status)
+            logger.debug("Poll result: mode=%s status=%s (current: mode=%s status=%s locally_unlocked=%s)",
+                         new_mode, new_status, self._current_mode, self._current_status, self._locally_unlocked)
 
             # Mode change
             if new_mode != self._current_mode:
-                logger.info("MODE CHANGE: %s -> %s", self._current_mode, new_mode)
-                self._current_mode = new_mode
-                self.root.after(0, lambda m=new_mode: self._apply_mode(m))
+                # If rig was locally unlocked, only allow the orchestrator to
+                # override if it explicitly sends "lockout" (admin re-locking).
+                # Ignore if orchestrator just echoes back the old state.
+                if self._locally_unlocked and new_mode != "lockout":
+                    logger.debug("Ignoring mode poll — locally unlocked, waiting for admin lockout")
+                else:
+                    if self._locally_unlocked and new_mode == "lockout":
+                        logger.info("Admin re-locked rig — clearing local unlock flag")
+                        self._locally_unlocked = False
+                    logger.info("MODE CHANGE: %s -> %s", self._current_mode, new_mode)
+                    self._current_mode = new_mode
+                    self.root.after(0, lambda m=new_mode: self._apply_mode(m))
 
             # Status change
             if new_status != self._current_status:
@@ -644,7 +654,11 @@ class DesktopBlocker:
 
     def _reassert_topmost(self) -> None:
         """Periodically re-assert topmost so splash survives other windows opening."""
-        if not self._dev_mode and self._current_mode == "lockout":
+        # Do NOT re-assert topmost while racing — the splash is hidden so AC
+        # can render.  Re-asserting pulls the splash back over the game.
+        if (not self._dev_mode
+                and self._current_mode == "lockout"
+                and self._current_status not in ("racing",)):
             try:
                 self.root.attributes("-topmost", True)
             except Exception:
@@ -697,6 +711,7 @@ class DesktopBlocker:
         """
         logger.info("UNLOCK triggered — hiding splash, agent stays alive")
         self._current_mode = "freeuse"
+        self._locally_unlocked = True  # Prevent poll from overriding until admin re-locks
 
         # Hide splash
         try:

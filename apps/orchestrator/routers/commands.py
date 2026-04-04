@@ -65,6 +65,10 @@ def create_router(state: AppState) -> APIRouter:
             state.update_rig_field(command.rig_id, "status", new_status)
         if command.action == "KILL_RACE":
             state.update_rig_field(command.rig_id, "kill_requested_at", time.time())
+        elif command.action == "LAUNCH_RACE":
+            # Clear any previous kill guard so the sled's "racing" heartbeat
+            # isn't blocked — we're intentionally starting a new race.
+            state.update_rig_field(command.rig_id, "kill_requested_at", None)
 
         if command.action == "SETUP_MODE":
             state.update_rig_field(command.rig_id, "selected_car", None)
@@ -95,11 +99,15 @@ def create_router(state: AppState) -> APIRouter:
                 state.update_rig_field(rig_id, "status", new_status)
                 if command.action == "KILL_RACE":
                     state.update_rig_field(rig_id, "kill_requested_at", time.time())
+                elif command.action == "LAUNCH_RACE":
+                    state.update_rig_field(rig_id, "kill_requested_at", None)
                 responses.append(f"Web {rig_id}")
             else:
                 state.update_rig_field(rig_id, "status", new_status)
                 if command.action == "KILL_RACE":
                     state.update_rig_field(rig_id, "kill_requested_at", time.time())
+                elif command.action == "LAUNCH_RACE":
+                    state.update_rig_field(rig_id, "kill_requested_at", None)
                 payload = _prepare_payload(command, rig)
                 background_tasks.add_task(dispatch_command, str(rig["ip"]), COMMAND_PORT, payload)
                 responses.append(f"Sled {rig_id}")
@@ -148,6 +156,10 @@ def create_router(state: AppState) -> APIRouter:
                 state.update_rig_field(rid, "status", "idle")
                 state.update_rig_field(rid, "kill_requested_at", time.time())
             logger.info("KILL_RACE: set %d rigs to idle for group '%s'", len(group.rig_ids), group.name)
+        elif command.action == "LAUNCH_RACE":
+            for rid in group.rig_ids:
+                state.update_rig_field(rid, "kill_requested_at", None)
+            logger.info("LAUNCH_RACE: cleared kill guard for %d rigs in group '%s'", len(group.rig_ids), group.name)
 
         for rig in state.get_group_rigs(group_id):
             rig_id = str(rig["rig_id"])
