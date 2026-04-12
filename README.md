@@ -1,80 +1,73 @@
-# Ridge-Link: Facility Orchestration System v2.0
+# CorsaConnect - Facility Reinstallation Guide
 
-Ridge-Link is a distributed management system for controlling 10+ Assetto Corsa racing rigs from a single admin console.
+This document covers the **exact process** to compile the CorsaConnect v2 tools and redeploy them across your facility without losing any historical data (like leaderboards or rig configurations). 
 
-## Architecture
+## Prerequisites (Build PC only)
 
+To compile the actual executables, the PC performing the compile (usually your Admin PC) needs:
+1. **Python 3.11+** installed (`pip install nuitka zstandard`)
+2. **Node.js 18+** installed.
+3. **Inno Setup 6** installed (must be added to your Windows PATH if you want to use the `iscc` compiler from the command line).
+4. **Visual Studio C++ Build Tools** installed (required by Nuitka to compile python code into `.exe` binaries).
+
+---
+
+## Step 1: Compile the Installers
+
+Open your terminal or Powershell in the `CorsaConnect` repository folder and run the following exactly in order:
+
+```powershell
+# 1. Pull down the latest v2.1 code containing the AppData migrations & fixes
+git pull
+
+# 2. Build the React Frontend dashboard
+cd apps/orchestrator/frontend
+npm install
+npm run build
+cd ../../../
+
+# 3. Build the Nuitka Executables for the Sled and Orchestrator
+python deploy/build_orchestrator.py
+python deploy/build_sled.py
+
+# 4. Generate the distributable Windows Installers
+iscc deploy/setup_orchestrator.iss
+iscc deploy/setup_sled.iss
 ```
+
+> **Result:** You will find `CorsaConnect-Orchestrator-Setup.exe` and `CorsaConnect-Sled-Setup.exe` sitting in your `build\installer\` folder!
+
+---
+
+## Step 2: Deploying the Admin PC (Orchestrator)
+
+1. Run **`CorsaConnect-Orchestrator-Setup.exe`** on the Admin PC.
+2. The installation will cleanly establish the software in your Program Files and place a launch shortcut on your desktop.
+3. **ZERO-TOUCH DATA MIGRATION:** The very first time you boot the Orchestrator via the shortcut, the underlying engine will automatically hunt down your legacy `projects/CorsaConnect/data` folder. It safely copies `leaderboard.db` and your group settings over into the new, permanent Windows `%APPDATA%\CorsaConnect` folder. 
+4. *Do not move your database manually. It is entirely handled by the system.*
+
+---
+
+## Step 3: Deploying the Rigs (Sled PCs)
+
+1. Put the **`CorsaConnect-Sled-Setup.exe`** installer on a USB thumb drive or your `\\ADMIN-PC\RidgeContent` network share.
+2. Run the installer on every racing rig in the facility. 
+3. **ZERO-TOUCH DATA MIGRATION:** The Sled's configuration script automatically locates the old `config.json` that used to sit adjacent to your executable, and ports it permanently into the rig's `%APPDATA%\CorsaConnect\config.json`.
+4. **Setup Wizard:** If the installer does *not* detect an old config (for instance, on a brand new chassis), the installer wizard will elegantly prompt you to enter the Admin IP and the Rig's explicit name (e.g., `RIG-04`) during the setup phase! It automatically stores those answers to the AppData folder securely.
+
+### That's it! 
+You can now start CorsaConnect on the Admin PC via your desktop shortcut and navigate to your dashboard as normal. Your leaderboards, rig identities, and Sled configurations are all strictly preserved. 
+
+---
+
+## Quick Reference / Developer Architecture
+
+```text
 /corsa (monorepo root)
 ├── /apps
 │   ├── /orchestrator     ← FastAPI backend + React dashboard
-│   │   ├── main.py       ← Entry point
-│   │   ├── state.py      ← Thread-safe state manager
-│   │   ├── /routers      ← API endpoints (rigs, commands, groups, settings, server, leaderboard)
-│   │   ├── /services     ← Heartbeat listener, command dispatcher
-│   │   └── /frontend     ← React/Tailwind dashboard (Vite)
-│   └── /sled             ← Rig agent
-│       ├── main.py       ← Entry point
-│       ├── agent.py      ← Core rig lifecycle manager
-│       ├── heartbeat.py  ← HTTP heartbeat with standalone fallback
-│       ├── command_handler.py ← TCP command listener
-│       ├── launcher.py   ← Race INI generation + AC process launcher
-│       └── telemetry.py  ← SimHub/UDP/SharedMemory telemetry
-├── /shared               ← Shared Pydantic models & constants
-├── /deploy               ← PyInstaller & packaging (future)
-├── bootstrap.py          ← One-click setup (firewall + venv + deps)
-├── Makefile              ← lint / typecheck / test commands
-└── pyproject.toml        ← ruff + mypy + pytest config
+│   └── /sled             ← Rig agent / AC Game Launcher
+├── /deploy               ← Installer generators & Build pipelines
+├── Makefile              ← Dev commands
+└── README.md             ← (You are here)
 ```
-
-## Quick Start
-
-### Admin PC (The Hub)
-```powershell
-python bootstrap.py          # Select 'admin'
-python apps/orchestrator/main.py
-cd apps/orchestrator/frontend && npm install && npm run dev
-```
-
-### Racing Rig (The Sled)
-```powershell
-python bootstrap.py          # Select 'rig'
-python apps/sled/main.py
-```
-
-## Key URLs
-| URL | Description |
-|-----|-------------|
-| `http://<admin-ip>:5173` | Admin Dashboard |
-| `http://<admin-ip>:5173/kiosk?rig_id=RIG-01` | Rig Kiosk Screen |
-| `http://<admin-ip>:5173/lobby` | TV Leaderboard Display |
-| `http://<admin-ip>:8000/docs` | API Documentation |
-
-## Rig Grouping
-
-Create groups from the **Groups** tab in the dashboard to pair rigs together:
-- **Multiplayer groups**: All rigs in the group connect to the same AC server
-- **Solo groups**: Each rig runs independently with the same settings
-- Commands can be sent per-group (Start Race, Kill Race, Setup)
-
-## Development
-
-### Code Quality (Syntax & Type Checking)
-```bash
-make check        # Run all checks (lint + typecheck + test)
-make lint         # ruff check (auto-fix)
-make typecheck    # mypy strict mode
-make test         # pytest
-make frontend-lint # TypeScript type-check
-```
-
-### Prerequisites
-- **Python 3.11+** with `ruff` and `mypy` installed (`pip install ruff mypy`)
-- **Node.js 18+** for the frontend
-- **Assetto Corsa** installed at the configured path
-- All machines on the same LAN subnet
-
-## Troubleshooting
-- **Rigs not appearing?** Check firewall — UDP 5001 must be open. Verify IPs can ping.
-- **Robocopy failing?** Access `\\ADMIN-PC\RidgeContent` manually in Explorer first.
-- **Standalone mode?** If the admin PC is down, sleds auto-enter local standalone mode.
