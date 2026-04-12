@@ -12,30 +12,17 @@ To compile the actual executables, the PC performing the compile (usually your A
 
 ---
 
-## Step 1: Compile the Installers
+## Step 1: Get the Installers
 
-Open your terminal or Powershell in the `CorsaConnect` repository folder and run the following exactly in order:
+The absolute easiest way to deploy is to let **GitHub Actions** compile everything for you automatically!
 
-```powershell
-# 1. Pull down the latest v2.1 code containing the AppData migrations & fixes
-git pull
+1. Because the `.github/workflows/build-release.yml` pipeline is installed, whenever you push a tag (e.g. `v2.2`), GitHub cloud servers will automatically compile the Nuitka `.exe` binaries and Inno Setup installers.
+2. Wait a few minutes for the GitHub Action to finish.
+3. Go to your repository's **Releases** page on GitHub.
+4. Download the freshly built `CorsaConnect-Orchestrator-Setup.exe` and `CorsaConnect-Sled-Setup.exe`!
 
-# 2. Build the React Frontend dashboard
-cd apps/orchestrator/frontend
-npm install
-npm run build
-cd ../../../
-
-# 3. Build the Nuitka Executables for the Sled and Orchestrator
-python deploy/build_orchestrator.py
-python deploy/build_sled.py
-
-# 4. Generate the distributable Windows Installers
-iscc deploy/setup_orchestrator.iss
-iscc deploy/setup_sled.iss
-```
-
-> **Result:** You will find `CorsaConnect-Orchestrator-Setup.exe` and `CorsaConnect-Sled-Setup.exe` sitting in your `build\installer\` folder!
+*(Advanced / Local Build)*
+If you ever want to compile them manually on your Admin PC instead, you must install Python 3.11+, Node 18+, Inno Setup 6 (in PATH), and Visual Studio Build Tools. Then simply run `make build-all` and `iscc deploy/setup_sled.iss` from the project root. Your installers will be in the `build/installer/` directory.
 
 ---
 
