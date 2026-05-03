@@ -73,7 +73,8 @@ function App() {
         selected_track: 'monza',
         selected_weather: '3_clear',
         useMultiplayer: false,
-        content_folder: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\assettocorsa'
+        content_folder: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\assettocorsa',
+        enable_csp: false
     })
     const [serverStatus, setServerStatus] = useState<'online' | 'offline'>('offline')
     const [selectedCar, setSelectedCar] = useState('ks_ferrari_488_gt3')
@@ -1212,7 +1213,6 @@ function App() {
                                             <th className="text-left px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white/50">Driver</th>
                                             <th className="text-left px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white/50">Car</th>
                                             <th className="text-left px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white/50">Track</th>
-                                            <th className="text-right px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white/50">Laps</th>
                                             <th className="text-right px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white/50">Time</th>
                                             <th className="text-right px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white/50">Date</th>
                                             <th className="text-right px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white/50"></th>
@@ -1237,9 +1237,6 @@ function App() {
                                                 </td>
                                                 <td className="px-5 py-3.5">
                                                     <span className="text-[11px] font-bold uppercase text-white/60">{formatTrack(entry.track || '')}</span>
-                                                </td>
-                                                <td className="px-5 py-3.5 text-right">
-                                                    <span className="text-sm font-black italic tabular-nums">{entry.lap}</span>
                                                 </td>
                                                 <td className="px-5 py-3.5 text-right">
                                                     <span className="text-[11px] font-bold text-white/50 tabular-nums">
@@ -1336,6 +1333,18 @@ function App() {
                                             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 font-mono text-xs focus:ring-1 focus:ring-ridge-brand outline-none transition-all"
                                             placeholder="C:\Program Files (x86)\Steam\steamapps\common\assettocorsa"
                                         />
+                                    </div>
+                                    <div className="flex items-center gap-3 bg-white/5 border border-white/10 p-4 rounded-xl">
+                                        <div 
+                                            className={`w-10 h-6 rounded-full cursor-pointer transition-colors relative ${raceSettings.enable_csp ? 'bg-ridge-brand' : 'bg-black/40'}`}
+                                            onClick={() => setRaceSettings({ ...raceSettings, enable_csp: !raceSettings.enable_csp })}
+                                        >
+                                            <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${raceSettings.enable_csp ? 'left-5' : 'left-1'}`} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[11px] font-black uppercase text-white/80">Enable CM Weather & Shaders (CSP)</p>
+                                            <p className="text-[9px] text-white/40 uppercase font-black mt-1">Forces CSP on clients and enables dynamic real-world weather sync</p>
+                                        </div>
                                     </div>
                                     <button
                                         onClick={async () => {

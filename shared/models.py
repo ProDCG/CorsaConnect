@@ -139,6 +139,7 @@ class GlobalSettings(BaseModel):
     selected_track: str = "monza"
     selected_weather: str = "3_clear"
     content_folder: str = r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa"
+    enable_csp: bool = False
 
 
 class Branding(BaseModel):

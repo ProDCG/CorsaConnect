@@ -203,10 +203,12 @@ class ACServerManager:
             len(rig_ids), ai_count, total_slots,
         )
 
+        enable_csp = getattr(self.state.settings, "enable_csp", False)
+
         self._write_server_cfg(
             config_dir, group_name, track, all_cars_list, udp_port, tcp_port, http_port,
             race_laps, practice_time, qualy_time, total_slots, weather,
-            sun_angle, time_mult,
+            sun_angle, time_mult, enable_csp=enable_csp
         )
 
         self._write_entry_list(config_dir, rig_ids, all_cars_list, ai_count, ai_difficulty)
@@ -227,7 +229,7 @@ class ACServerManager:
             return {"status": "error", "message": f"Could not copy server exe: {e}"}
 
         # Sync car/track content from main AC install to this server's content dir
-        self._sync_server_content(config_dir, all_cars_list, track)
+        self._sync_server_content(config_dir, all_cars_list, track, enable_csp=enable_csp)
 
         # Also link/copy any additional DLLs the server needs from the
         # original server directory (e.g. steam_api.dll, etc.)
@@ -401,15 +403,9 @@ class ACServerManager:
     # ------------------------------------------------------------------
 
     def _sync_server_content(
-        self, ac_server_dir: str, cars: list[str], track: str,
+        self, ac_server_dir: str, cars: list[str], track: str, enable_csp: bool = False
     ) -> None:
-        """Copy car/track data from main AC install into the server's content dir.
-
-        acServer.exe looks for content in its own `content/` folder, which is
-        separate from the main game's `content/`. If a car or track is missing
-        there, clients get 'missing content' errors. This method syncs only
-        the minimal data/ subfolders the server needs (no textures/models).
-        """
+        """Copy car/track data from main AC install into the server's content dir."""
         # Main AC install is one level up from the server/ dir
         ac_root = os.path.dirname(ac_server_dir)
         main_content = os.path.join(ac_root, "content")
@@ -440,12 +436,32 @@ class ACServerManager:
         track_parts = track.split("/", 1)
         track_base = track_parts[0]
         src = os.path.join(main_content, "tracks", track_base)
-        dst = os.path.join(server_content, "tracks", track_base)
+        
+        # If CSP is enabled, the acServer will be told to look in csp/<track_base>
+        # because of the TRACK=csp/2000/../D/../<track_base> traversal hack.
+        if enable_csp:
+            dst = os.path.join(server_content, "tracks", "csp", track_base)
+        else:
+            dst = os.path.join(server_content, "tracks", track_base)
+            
         if os.path.isdir(src):
             if not os.path.isdir(dst):
                 try:
                     shutil.copytree(src, dst, dirs_exist_ok=True)
-                    logger.info("Synced track to server content: %s", track_base)
+                    logger.info("Synced track to server content: %s (CSP: %s)", track_base, enable_csp)
+                    
+                    # CSP requires renaming the first SURFACE_0 to CSPFACE_0 in surfaces.ini
+                    if enable_csp:
+                        surfaces_ini = os.path.join(dst, "data", "surfaces.ini")
+                        if os.path.isfile(surfaces_ini):
+                            with open(surfaces_ini, "r", encoding="utf-8", errors="ignore") as f:
+                                content = f.read()
+                            # Only replace the very first occurrence
+                            new_content = content.replace("[SURFACE_0]", "[CSPFACE_0]", 1)
+                            if new_content != content:
+                                with open(surfaces_ini, "w", encoding="utf-8") as f:
+                                    f.write(new_content)
+                                logger.info("Patched surfaces.ini for CSP track %s", track_base)
                 except Exception as e:
                     logger.warning("Failed to sync track '%s': %s", track_base, e)
         else:
@@ -471,18 +487,26 @@ class ACServerManager:
         weather: str,
         sun_angle: int = 48,
         time_mult: int = 1,
+        enable_csp: bool = False,
     ) -> None:
         """Write server_cfg.ini for an AC dedicated server."""
         if not cars:
             return  # Cannot write server config without any cars
         car_str = ";".join(cars)
+        
+        # Format track path for CSP if enabled
+        if enable_csp:
+            # Use the directory traversal hack
+            track_path = f"csp/2000/../D/../{track}"
+        else:
+            track_path = track
 
         cfg = (
             f"[SERVER]\n"
             f"NAME=Ridge - {name}\n"
             f"CARS={car_str}\n"
             f"CONFIG_TRACK=\n"
-            f"TRACK={track}\n"
+            f"TRACK={track_path}\n"
             f"SUN_ANGLE={sun_angle}\n"
             f"PASSWORD=\n"
             f"ADMIN_PASSWORD=ridgeadmin\n"
@@ -600,8 +624,10 @@ class ACServerManager:
                 "\n"
             )
 
+        dyn_track_header = "[__CM_DYNAMIC_TRACK_OFF]" if enable_csp else "[DYNAMIC_TRACK]"
+        
         cfg += (
-            f"[DYNAMIC_TRACK]\n"
+            f"{dyn_track_header}\n"
             f"SESSION_START=95\n"
             f"RANDOMNESS=2\n"
             f"SESSION_TRANSFER=90\n"
@@ -636,9 +662,13 @@ class ACServerManager:
             f"REGISTER_TO_CM_LOBBY=1\n"
             f"\n"
             f"[__CM_PLUGIN]\n"
-            f"ACTIVE=0\n"
-            f"REAL_CONDITIONS=0\n"
+            f"ACTIVE={1 if enable_csp else 0}\n"
+            f"REAL_CONDITIONS={1 if enable_csp else 0}\n"
         )
+        if enable_csp:
+            # Default payload for real conditions sync (timeMultiplier=1.0, rainChance=5%, grip=99->100)
+            real_conditions_params = "eyJ1c2VSZWFsQ29uZGl0aW9ucyI6dHJ1ZSwidGltZU9mZnNldCI6IjAwOjAwOjAwIiwidXNlRml4ZWRTdGFydGluZ1RpbWUiOmZhbHNlLCJmaXhlZFN0YXJ0aW5nVGltZSI6NDMyMDAsImZpeGVkU3RhcnRpbmdEYXRlIjoiMjAyNi0wMy0yOFQxNjo1NTo1My4zNjE1NTg0LTA3OjAwIiwidGltZU11bHRpcGxpZXIiOjEuMCwidGVtcGVyYXR1cmVPZmZzZXQiOjAuMCwidXNlRml4ZWRBaXJUZW1wZXJhdHVyZSI6ZmFsc2UsImZpeGVkQWlyVGVtcGVyYXR1cmUiOjI1LjAsIndlYXRoZXJUeXBlQ2hhbmdlUGVyaW9kIjoiMDA6MDU6MDAiLCJ3ZWF0aGVyVHlwZUNoYW5nZVRvTmVpZ2hib3Vyc09ubHkiOnRydWUsIndlYXRoZXJSYWluQ2hhbmNlIjowLjA1LCJ3ZWF0aGVyVGh1bmRlckNoYW5jZSI6MC4wMDUsInN0YXJ0aW5nVHJhY2tHcmlwIjo5OS4wLCJ0cmFja0dyaXBJbmNyZWFzZVBlckxhcCI6MC4wNSwidHJhY2tHcmlwVHJhbnNmZXIiOjgwLjAsInJhaW5UaW1lTXVsdGlwbGllciI6MS4wLCJyYWluV2V0bmVzc0luY3JlYXNlVGltZSI6IjAwOjAzOjAwIiwicmFpbldldG5lc3NEZWNyZWFzZVRpbWUiOiIwMDoxNTowMCIsInJhaW5XYXRlckluY3JlYXNlVGltZSI6IjAwOjMwOjAwIiwicmFpbldhdGVyRGVjcmVhc2VUaW1lIjoiMDI6MDA6MDAifQ"
+            cfg += f"REAL_CONDITIONS_PARAMS={real_conditions_params}\n"
 
         cfg_path = os.path.join(config_dir, "cfg", "server_cfg.ini")
         with open(cfg_path, "w") as f:

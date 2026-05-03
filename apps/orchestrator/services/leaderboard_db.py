@@ -160,19 +160,28 @@ class LeaderboardDB:
         conn.close()
 
     def get_all(self, limit: int = 200) -> list[LeaderboardEntry]:
-        """Get all entries, most recent first."""
+        """Get all entries, returning only the fastest lap per driver per track."""
         conn = self._connect()
         rows = conn.execute(
-            "SELECT * FROM laps ORDER BY timestamp DESC LIMIT ?", (limit,)
+            """SELECT * FROM laps 
+               WHERE lap_time_ms IS NOT NULL AND lap_time_ms > 0
+               GROUP BY track, COALESCE(driver_name, rig_id) 
+               HAVING lap_time_ms = MIN(lap_time_ms) 
+               ORDER BY timestamp DESC LIMIT ?""", 
+            (limit,)
         ).fetchall()
         conn.close()
         return self._rows_to_entries(rows)
 
     def get_by_track(self, track: str, limit: int = 100) -> list[LeaderboardEntry]:
-        """Get entries filtered by track."""
+        """Get entries filtered by track, returning only the fastest lap per driver."""
         conn = self._connect()
         rows = conn.execute(
-            "SELECT * FROM laps WHERE track = ? ORDER BY lap DESC, timestamp DESC LIMIT ?",
+            """SELECT * FROM laps 
+               WHERE track = ? AND lap_time_ms IS NOT NULL AND lap_time_ms > 0
+               GROUP BY COALESCE(driver_name, rig_id) 
+               HAVING lap_time_ms = MIN(lap_time_ms) 
+               ORDER BY lap_time_ms ASC LIMIT ?""",
             (track, limit),
         ).fetchall()
         conn.close()
