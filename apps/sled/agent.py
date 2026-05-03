@@ -76,7 +76,7 @@ class RigAgent:
                 if data:
                     self.telemetry_data = data
                     now = time.time()
-                    if now - last_print > 5:
+                    if data.get("status") == 2 and now - last_print > 30:
                         logger.info("Telemetry: status=%s speed=%.0f gear=%s laps=%s",
                                      data.get("status"), data.get("velocity", [0])[0] if isinstance(data.get("velocity"), list) else 0,
                                      data.get("gear", "?"), data.get("completed_laps", "?"))

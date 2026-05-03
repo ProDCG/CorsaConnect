@@ -59,7 +59,7 @@ class ACTelemetry:
             new_data = raw.get("NewData", {})
 
             if not self.simhub_connected:
-                logger.info("SimHub API connected (getgamedata)")
+                logger.debug("SimHub API connected (getgamedata)")
                 self.simhub_connected = True
 
             # Core driving data
@@ -149,7 +149,7 @@ class ACTelemetry:
             return result
         except Exception as e:
             if self.simhub_connected:
-                logger.warning("SimHub connection lost: %s", e)
+                logger.debug("SimHub connection lost: %s", e)
                 self.simhub_connected = False
             return None
 

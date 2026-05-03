@@ -66,7 +66,7 @@ def _pil_to_tk(pil_img: Image.Image) -> tk.PhotoImage:
 _LOG_HANDLERS: list[logging.Handler] = [logging.StreamHandler()]
 try:
     _log_file = os.path.join(Path(__file__).resolve().parent.parent.parent, "ridge_rig.log")
-    _LOG_HANDLERS.append(logging.FileHandler(_log_file, mode="a"))
+    _LOG_HANDLERS.append(logging.FileHandler(_log_file, mode="w"))
 except Exception:
     pass  # Log file creation failed — continue without it
 

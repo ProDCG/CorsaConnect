@@ -16,7 +16,7 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(os.path.join(_repo_root, "ridge_rig.log"), mode="a"),
+        logging.FileHandler(os.path.join(_repo_root, "ridge_rig.log"), mode="w"),
     ],
 )
 logger = logging.getLogger("ridge.sled")
