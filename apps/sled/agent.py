@@ -459,7 +459,12 @@ class RigAgent:
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
             except ImportError:
-                pass
+                import subprocess as _sp
+                for exe in ("AssettoCorsa.exe", "assettocorsa.exe", "acs.exe", "acs_x86.exe"):
+                    try:
+                        _sp.run(["pkill", "-f", exe], capture_output=True)
+                    except Exception:
+                        pass
 
         logger.info("Race killed — rig idle")
 
