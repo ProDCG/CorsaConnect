@@ -80,20 +80,6 @@ def create_router(state: AppState) -> APIRouter:
 
         payload = _prepare_payload(command, rig)
 
-        # Inject server connection info if launching a rig into a multiplayer group
-        if command.action == "LAUNCH_RACE" and payload.get("use_server"):
-            group_id = rig.get("group_id")
-            if group_id:
-                group = state.get_group(group_id)
-                if group and group.mode == "multiplayer":
-                    from apps.orchestrator.routers.server import _manager as srv_mgr
-                    if srv_mgr:
-                        srv_info = srv_mgr.get_server_ip_port(group_id)
-                        if srv_info:
-                            payload["server_ip"] = _get_orchestrator_ip()
-                            payload["server_port"] = srv_info[1]
-                            payload["server_http_port"] = srv_info[2]
-                            logger.info("Injected server info for rig %s (group %s): %s:%d", command.rig_id, group_id, payload["server_ip"], payload["server_port"])
         background_tasks.add_task(dispatch_command, str(rig["ip"]), COMMAND_PORT, payload)
         return {"status": "success", "message": f"Command dispatched to {command.rig_id}"}
 
