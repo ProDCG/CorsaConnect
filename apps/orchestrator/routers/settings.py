@@ -155,17 +155,31 @@ def create_router(state: AppState) -> APIRouter:
         if not track_dir:
             return Response(status_code=404, content="Track not found")
             
-        # If layout is specified, try layout dir first, then fallback to base dir
+        # 1. User specifically requested layout
         if layout_id:
-            layout_map = os.path.join(track_dir, "ui", layout_id, "map.png")
-            if os.path.isfile(layout_map):
-                return FileResponse(layout_map)
-                
-        # Base dir fallback
-        base_map = os.path.join(track_dir, "ui", "map.png")
-        if os.path.isfile(base_map):
-            return FileResponse(base_map)
+            # Try ui/layout/map.png
+            p1 = os.path.join(track_dir, "ui", layout_id, "map.png")
+            if os.path.isfile(p1): return FileResponse(p1)
+            # Try layout/map.png
+            p2 = os.path.join(track_dir, layout_id, "map.png")
+            if os.path.isfile(p2): return FileResponse(p2)
             
+        # 2. Try the base map.png in track's directory
+        p3 = os.path.join(track_dir, "map.png")
+        if os.path.isfile(p3): return FileResponse(p3)
+        
+        # 3. Try the base map.png in ui/ directory
+        p4 = os.path.join(track_dir, "ui", "map.png")
+        if os.path.isfile(p4): return FileResponse(p4)
+        
+        # 4. Fallback: find ANY map.png in the track directory (search up to 2 levels deep)
+        for root, dirs, files in os.walk(track_dir):
+            if "map.png" in files:
+                return FileResponse(os.path.join(root, "map.png"))
+            # Stop searching too deep to prevent lag
+            if root.count(os.sep) - track_dir.count(os.sep) >= 2:
+                del dirs[:]
+                
         return Response(status_code=404, content="Map not found")
 
     @router.post("/update")

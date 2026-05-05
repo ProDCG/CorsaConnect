@@ -81,6 +81,7 @@ class RigGroupUpdate(BaseModel):
     name: str | None = None
     mode: str | None = None
     track: str | None = None
+    track_layout: str | None = None
     weather: str | None = None
     car_pool: list[str] | None = None
     ai_count: int | None = None
