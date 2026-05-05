@@ -691,7 +691,7 @@ class ACServerManager:
             f"EXSERVERBAT=\n"
             f"EXSERVERHIDEWIN=0\n"
             f"WEBLINK=\n"
-            f"WELCOME_PATH=\n"
+            f"WELCOME_PATH=cfg/welcome.txt\n"
             f"\n"
             f"[__CM_BOOK_OFF]\n"
             f"NAME=Booking\n"
@@ -736,10 +736,17 @@ class ACServerManager:
 
         if write_to_disk:
             cfg_path = os.path.join(config_dir, "cfg", "server_cfg.ini")
+            welcome_path = os.path.join(config_dir, "cfg", "welcome.txt")
             os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
+            
             with open(cfg_path, "w") as f:
                 f.write(cfg)
-            logger.info("Wrote server_cfg.ini: track=%s cars=%s max_clients=%d port=%d",
+                
+            # Write welcome message required for rain
+            with open(welcome_path, "w", encoding="utf-8") as f:
+                f.write("For testing, rain is active with intensity 100%.")
+                
+            logger.info("Wrote server_cfg.ini and welcome.txt: track=%s cars=%s max_clients=%d port=%d",
                           track, car_str, max_clients, udp_port)
         return cfg
 
