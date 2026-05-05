@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap, Filter } from 'lucide-react'
+import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap, Filter, X, Download } from 'lucide-react'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -232,6 +232,9 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
     // Car filters (category + brand)
     const [filterCategory, setFilterCategory] = useState('All')
     const [filterBrand, setFilterBrand] = useState('All')
+
+    // Preview Config modal state
+    const [previewConfig, setPreviewConfig] = useState<string | null>(null)
 
     /* ---- Data fetching ---- */
 
@@ -603,6 +606,22 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                     className="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-xl transition-all flex items-center gap-2 text-xs font-black uppercase">
                                     <Power size={14} /> Stop
                                 </button>
+                                {selectedGroup.mode === 'multiplayer' && (
+                                    <button onClick={async () => {
+                                        try {
+                                            const res = await fetch(`/api/server/preview-config/${selectedGroup.id}`)
+                                            const data = await res.json()
+                                            if (data.status === 'success') {
+                                                setPreviewConfig(data.config)
+                                            } else {
+                                                alert(data.message)
+                                            }
+                                        } catch (e) { console.error(e) }
+                                    }}
+                                        className="bg-white/5 hover:bg-white/10 text-white/20 hover:text-white/60 px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-black uppercase" title="Preview Server Config">
+                                        <Server size={14} /> <span className="hidden sm:inline">Config</span>
+                                    </button>
+                                )}
                                 <button onClick={() => deleteGroup(selectedGroup.id)}
                                     className="bg-white/5 hover:bg-red-500/20 text-white/20 hover:text-red-400 p-2 rounded-xl transition-all">
                                     <Trash2 size={14} />
@@ -882,6 +901,41 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                     </div>
                 )}
             </div>
+
+            {/* Preview Config Modal */}
+            {previewConfig && (
+                <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-8 backdrop-blur-sm">
+                    <div className="bg-[#111] border border-white/10 rounded-2xl p-6 w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-black italic uppercase text-ridge-brand flex items-center gap-2">
+                                <Server size={18} /> Server Config Preview
+                            </h3>
+                            <button onClick={() => setPreviewConfig(null)} className="text-white/40 hover:text-white transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-auto bg-black border border-white/5 rounded-xl p-4 mb-4">
+                            <pre className="text-[10px] font-mono text-white/70 whitespace-pre-wrap">{previewConfig}</pre>
+                        </div>
+                        <div className="flex justify-end gap-3">
+                            <button onClick={() => setPreviewConfig(null)} className="px-4 py-2 rounded-xl text-xs font-bold text-white/50 hover:text-white transition-colors bg-white/5 hover:bg-white/10">
+                                Close
+                            </button>
+                            <button onClick={() => {
+                                const blob = new Blob([previewConfig], { type: 'text/plain' })
+                                const url = URL.createObjectURL(blob)
+                                const a = document.createElement('a')
+                                a.href = url
+                                a.download = `server_cfg.ini`
+                                a.click()
+                                URL.revokeObjectURL(url)
+                            }} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest text-white bg-ridge-brand/80 hover:bg-ridge-brand transition-colors flex items-center gap-2">
+                                <Download size={14} /> Download Config
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

@@ -488,7 +488,8 @@ class ACServerManager:
         sun_angle: int = 48,
         time_mult: int = 1,
         enable_csp: bool = False,
-    ) -> None:
+        write_to_disk: bool = True,
+    ) -> str | None:
         """Write server_cfg.ini for an AC dedicated server."""
         if not cars:
             return  # Cannot write server config without any cars
@@ -626,6 +627,24 @@ class ACServerManager:
 
         dyn_track_header = "[__CM_DYNAMIC_TRACK_OFF]" if enable_csp else "[DYNAMIC_TRACK]"
         
+        # Map sun_angle to CM_FX_TIME (seconds since midnight) for Pure/WeatherFX
+        time_map = {
+            -16: 25200,  # Dawn (07:00)
+            8: 28800,    # Sunrise (08:00)
+            24: 32400,   # Morning (09:00)
+            40: 37800,   # Late Morning (10:30)
+            56: 43200,   # Midday (12:00)
+            72: 48600,   # Early Afternoon (13:30)
+            88: 54000,   # Afternoon (15:00)
+            104: 59400,  # Late Afternoon (16:30)
+            120: 64800,  # Sunset (18:00)
+            136: 70200,  # Dusk (19:30)
+            163: 79200   # Night (22:00)
+        }
+        fx_time = time_map.get(sun_angle, int(46800 + (sun_angle / 16.0) * 3600))
+        # Ensure it is bounded 0 to 86399
+        fx_time = max(0, min(86399, fx_time))
+
         cfg += (
             f"{dyn_track_header}\n"
             f"SESSION_START=95\n"
@@ -635,6 +654,9 @@ class ACServerManager:
             f"\n"
             f"[WEATHER_0]\n"
             f"GRAPHICS={weather}\n"
+            f"__CM_FX_TIME={fx_time}\n"
+            f"__CM_WFX_USE_CUSTOM_WEATHER=1\n"
+            f"__CM_WFX_TYPE=2\n"
             f"BASE_TEMPERATURE_AMBIENT=18\n"
             f"BASE_TEMPERATURE_ROAD=6\n"
             f"VARIATION_AMBIENT=1\n"
@@ -666,15 +688,41 @@ class ACServerManager:
             f"REAL_CONDITIONS={1 if enable_csp else 0}\n"
         )
         if enable_csp:
-            # Default payload for real conditions sync (timeMultiplier=1.0, rainChance=5%, grip=99->100)
-            real_conditions_params = "eyJ1c2VSZWFsQ29uZGl0aW9ucyI6dHJ1ZSwidGltZU9mZnNldCI6IjAwOjAwOjAwIiwidXNlRml4ZWRTdGFydGluZ1RpbWUiOmZhbHNlLCJmaXhlZFN0YXJ0aW5nVGltZSI6NDMyMDAsImZpeGVkU3RhcnRpbmdEYXRlIjoiMjAyNi0wMy0yOFQxNjo1NTo1My4zNjE1NTg0LTA3OjAwIiwidGltZU11bHRpcGxpZXIiOjEuMCwidGVtcGVyYXR1cmVPZmZzZXQiOjAuMCwidXNlRml4ZWRBaXJUZW1wZXJhdHVyZSI6ZmFsc2UsImZpeGVkQWlyVGVtcGVyYXR1cmUiOjI1LjAsIndlYXRoZXJUeXBlQ2hhbmdlUGVyaW9kIjoiMDA6MDU6MDAiLCJ3ZWF0aGVyVHlwZUNoYW5nZVRvTmVpZ2hib3Vyc09ubHkiOnRydWUsIndlYXRoZXJSYWluQ2hhbmNlIjowLjA1LCJ3ZWF0aGVyVGh1bmRlckNoYW5jZSI6MC4wMDUsInN0YXJ0aW5nVHJhY2tHcmlwIjo5OS4wLCJ0cmFja0dyaXBJbmNyZWFzZVBlckxhcCI6MC4wNSwidHJhY2tHcmlwVHJhbnNmZXIiOjgwLjAsInJhaW5UaW1lTXVsdGlwbGllciI6MS4wLCJyYWluV2V0bmVzc0luY3JlYXNlVGltZSI6IjAwOjAzOjAwIiwicmFpbldldG5lc3NEZWNyZWFzZVRpbWUiOiIwMDoxNTowMCIsInJhaW5XYXRlckluY3JlYXNlVGltZSI6IjAwOjMwOjAwIiwicmFpbldhdGVyRGVjcmVhc2VUaW1lIjoiMDI6MDA6MDAifQ"
+            import json, base64
+            # Generate the real conditions JSON and encode it dynamically to ensure time is forced
+            rc_dict = {
+                "useRealConditions": True,
+                "timeOffset": "00:00:00",
+                "useFixedStartingTime": True,
+                "fixedStartingTime": fx_time,
+                "timeMultiplier": float(time_mult),
+                "temperatureOffset": 0.0,
+                "useFixedAirTemperature": False,
+                "fixedAirTemperature": 25.0,
+                "weatherTypeChangePeriod": "00:05:00",
+                "weatherTypeChangeToNeighboursOnly": True,
+                "weatherRainChance": 0.05,
+                "weatherThunderChance": 0.005,
+                "startingTrackGrip": 99.0,
+                "trackGripIncreasePerLap": 0.05,
+                "trackGripTransfer": 80.0,
+                "rainTimeMultiplier": 1.0,
+                "rainWetnessIncreaseTime": "00:03:00",
+                "rainWetnessDecreaseTime": "00:15:00",
+                "rainWaterIncreaseTime": "00:30:00",
+                "rainWaterDecreaseTime": "02:00:00"
+            }
+            real_conditions_params = base64.b64encode(json.dumps(rc_dict).encode('utf-8')).decode('ascii')
             cfg += f"REAL_CONDITIONS_PARAMS={real_conditions_params}\n"
 
-        cfg_path = os.path.join(config_dir, "cfg", "server_cfg.ini")
-        with open(cfg_path, "w") as f:
-            f.write(cfg)
-        logger.info("Wrote server_cfg.ini: track=%s cars=%s max_clients=%d port=%d",
-                      track, car_str, max_clients, udp_port)
+        if write_to_disk:
+            cfg_path = os.path.join(config_dir, "cfg", "server_cfg.ini")
+            os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
+            with open(cfg_path, "w") as f:
+                f.write(cfg)
+            logger.info("Wrote server_cfg.ini: track=%s cars=%s max_clients=%d port=%d",
+                          track, car_str, max_clients, udp_port)
+        return cfg
 
     def _write_entry_list(
         self, config_dir: str, rig_ids: list[str], cars: list[str],
