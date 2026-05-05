@@ -71,7 +71,7 @@ function App() {
         race_time: 0,
         allow_drs: true,
         selected_track: 'monza',
-        selected_weather: '3_clear',
+        selected_weather: 'sol_01_clear',
         useMultiplayer: false,
         content_folder: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\assettocorsa',
         enable_csp: false

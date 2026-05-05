@@ -731,7 +731,7 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                             <h4 className="text-[9px] uppercase font-black text-white/50 tracking-[0.3em] mb-1">Environment</h4>
 
                             {/* Track + Weather + Time dropdowns row */}
-                            <div className={`grid gap-3 ${selectedGroup.mode === 'solo' ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                            <div className="grid grid-cols-3 gap-3">
                                 <div>
                                     <label className="flex items-center gap-1 text-[9px] uppercase font-black text-white/50 tracking-widest mb-1"><Map size={9} /> Circuit</label>
                                     <Select value={selectedGroup.track} onChange={e => updateGroup(selectedGroup.id, { track: e.target.value })}>
@@ -741,34 +741,31 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                         ).map(t => <option key={t.id} value={t.id}>{displayName(t.id)}</option>)}
                                     </Select>
                                 </div>
-                                {selectedGroup.mode === 'solo' && (
-                                    <div>
-                                        <label className="flex items-center gap-1 text-[9px] uppercase font-black text-white/50 tracking-widest mb-1"><Cloud size={9} /> Weather</label>
-                                        <Select value={selectedGroup.weather} onChange={e => updateGroup(selectedGroup.id, { weather: e.target.value })}>
-                                            {weather.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                                        </Select>
-                                    </div>
-                                )}
+                                <div>
+                                    <label className="flex items-center gap-1 text-[9px] uppercase font-black text-white/50 tracking-widest mb-1"><Cloud size={9} /> Weather</label>
+                                    <Select value={selectedGroup.weather} onChange={e => updateGroup(selectedGroup.id, { weather: e.target.value })}>
+                                        {weather.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                    </Select>
+                                </div>
                                 <div>
                                     <label className="flex items-center gap-1 text-[9px] uppercase font-black text-white/50 tracking-widest mb-1"><Sun size={9} /> Time of Day</label>
                                     {(() => {
-                                        // Multiplayer AC server clamps sun_angle to -80..80
-                                        const availableSteps = selectedGroup.mode === 'multiplayer'
-                                            ? TIME_STEPS.filter(s => s.angle >= -80 && s.angle <= 80)
-                                            : TIME_STEPS
+                                        const availableSteps = TIME_STEPS
                                         const currentIdx = (() => {
                                             let best = 0
-                                            let bestDist = Math.abs((selectedGroup.sun_angle ?? 48) - availableSteps[0].angle)
-                                            for (let i = 1; i < availableSteps.length; i++) {
-                                                const d = Math.abs((selectedGroup.sun_angle ?? 48) - availableSteps[i].angle)
-                                                if (d < bestDist) { best = i; bestDist = d }
-                                            }
+                                            let minDiff = 999
+                                            availableSteps.forEach((s, idx) => {
+                                                const diff = Math.abs(s.angle - selectedGroup.sun_angle)
+                                                if (diff < minDiff) { minDiff = diff; best = idx }
+                                            })
                                             return best
                                         })()
                                         return (
-                                            <Select value={String(currentIdx)}
+                                            <Select value={currentIdx}
                                                 onChange={e => updateGroup(selectedGroup.id, { sun_angle: availableSteps[parseInt(e.target.value)].angle })}>
-                                                {availableSteps.map((step, i) => <option key={i} value={String(i)}>{step.label}</option>)}
+                                                {availableSteps.map((s, idx) => (
+                                                    <option key={idx} value={idx}>{s.label}</option>
+                                                ))}
                                             </Select>
                                         )
                                     })()}

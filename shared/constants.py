@@ -107,13 +107,6 @@ class WeatherDef:
 
 
 WEATHER_OPTIONS: list[WeatherDef] = [
-    WeatherDef("0_sun", "Clear Sun"),
-    WeatherDef("1_nosun", "No Sun"),
-    WeatherDef("2_clouds", "Overcast"),
-    WeatherDef("3_clear", "Optimum (Clear)"),
-    WeatherDef("4_mid_clouds", "Mid Clouds"),
-    WeatherDef("5_light_clouds", "Light Clouds"),
-    WeatherDef("6_heavy_clouds", "Heavy Clouds"),
     WeatherDef("sol_00_no_clouds", "Sol 00 No Clouds"),
     WeatherDef("sol_01_clear", "Sol 01 Clear"),
     WeatherDef("sol_02_few_clouds", "Sol 02 Few Clouds"),
