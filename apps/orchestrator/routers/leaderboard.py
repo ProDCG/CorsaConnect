@@ -54,6 +54,28 @@ def create_router(state: AppState) -> APIRouter:
             return {"status": "success"}
         return {"status": "error", "message": "Record not found"}
 
+    @router.post("/leaderboard/test_lap")
+    async def add_test_lap() -> dict[str, str]:
+        """Inject a fake lap for UI testing."""
+        import random
+        import time
+        import uuid
+        
+        entry = LeaderboardEntry(
+            rig_id=f"RIG-{random.randint(1, 8):02d}",
+            driver_name=random.choice(["Mason", "Alex", "Jordan", "Taylor", "Riley", "Casey", "Morgan", "Drew"]),
+            car="ks_ferrari_488_gt3",
+            track="spa",
+            group_name="Test Group",
+            lap=random.randint(1, 10),
+            lap_time_ms=random.randint(120_000, 160_000),
+            session_id=str(uuid.uuid4())[:8],
+            timestamp=time.time(),
+        )
+        state.add_leaderboard_entry(entry)
+        state.upsert_session_best(entry)
+        return {"status": "success"}
+
     @router.get("/lobby")
     async def get_lobby() -> dict[str, object]:
         """Public feed for TV displays — session-best per driver, sorted by fastest lap time."""

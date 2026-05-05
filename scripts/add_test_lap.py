@@ -14,7 +14,13 @@ import random
 import sqlite3
 import time
 import uuid
+import sys
 from pathlib import Path
+# Add project root to sys.path so we can import apps
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from apps.orchestrator.services.leaderboard_db import LeaderboardDB
+from shared.models import LeaderboardEntry
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "leaderboard.db"
 
@@ -30,7 +36,6 @@ SAMPLE_CARS = [
     "ks_mclaren_650s_gt3",
 ]
 
-
 def add_lap(
     driver: str,
     rig_id: str,
@@ -42,28 +47,23 @@ def add_lap(
     session_id: str,
 ) -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.execute(
-        """CREATE TABLE IF NOT EXISTS laps (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            rig_id        TEXT NOT NULL,
-            driver_name   TEXT,
-            car           TEXT,
-            track         TEXT,
-            group_name    TEXT,
-            lap           INTEGER NOT NULL DEFAULT 0,
-            lap_time_ms   INTEGER,
-            session_id    TEXT,
-            timestamp     REAL NOT NULL
-        )"""
+    db = LeaderboardDB(DB_PATH)
+    
+    entry = LeaderboardEntry(
+        rig_id=rig_id,
+        driver_name=driver,
+        car=car,
+        track=track,
+        group_name=group_name,
+        lap=lap_num,
+        lap_time_ms=lap_time_ms,
+        session_id=session_id,
+        timestamp=time.time(),
     )
-    conn.execute(
-        """INSERT INTO laps (rig_id, driver_name, car, track, group_name, lap, lap_time_ms, session_id, timestamp)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (rig_id, driver, car, track, group_name, lap_num, lap_time_ms, session_id, time.time()),
-    )
-    conn.commit()
-    conn.close()
+    
+    db.insert(entry)
+    db.upsert_session_best(entry)
+    
     print(f"  ✓ Lap {lap_num} — {driver} on {track} in {car} ({lap_time_ms}ms)")
 
 
