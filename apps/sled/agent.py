@@ -413,27 +413,26 @@ class RigAgent:
         if proc:
             self.current_process = proc
             
-            # Start auto-drive clicker thread if enabled
+            # Start auto-drive keypress thread if enabled
             if self.config.auto_drive_enabled:
                 import threading
-                def auto_clicker():
+                def auto_press():
                     import time
                     import ctypes
-                    logger.info("Auto-drive armed. Waiting %d seconds...", self.config.auto_drive_delay_sec)
+                    logger.info("Auto-drive armed. Waiting %d seconds before pressing key...", self.config.auto_drive_delay_sec)
                     time.sleep(self.config.auto_drive_delay_sec)
-                    # Make sure we didn't cancel the race in the meantime
                     if self.status != "idle":
-                        logger.info("Executing auto-drive click at %d,%d", self.config.auto_drive_click_x, self.config.auto_drive_click_y)
+                        vk_code = self.config.auto_drive_vk_code
+                        logger.info("Simulating key press for VK_CODE: 0x%02X", vk_code)
                         try:
-                            # SetCursorPos
-                            ctypes.windll.user32.SetCursorPos(self.config.auto_drive_click_x, self.config.auto_drive_click_y)
-                            # mouse_event (MOUSEEVENTF_LEFTDOWN = 0x0002, MOUSEEVENTF_LEFTUP = 0x0004)
-                            ctypes.windll.user32.mouse_event(0x0002, 0, 0, 0, 0)
-                            ctypes.windll.user32.mouse_event(0x0004, 0, 0, 0, 0)
+                            # KEYEVENTF_KEYUP = 0x0002
+                            ctypes.windll.user32.keybd_event(vk_code, 0, 0, 0)      # Key down
+                            time.sleep(0.1)
+                            ctypes.windll.user32.keybd_event(vk_code, 0, 0x0002, 0) # Key up
                         except Exception as e:
-                            logger.error("Auto-drive click failed: %s", e)
+                            logger.error("Auto-drive keypress failed: %s", e)
                 
-                threading.Thread(target=auto_clicker, daemon=True).start()
+                threading.Thread(target=auto_press, daemon=True).start()
                 
         else:
             logger.error("Could not launch AC — check config.json paths")
