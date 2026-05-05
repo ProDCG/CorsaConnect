@@ -157,12 +157,12 @@ def create_router(state: AppState) -> APIRouter:
             
         # If layout is specified, try layout dir first, then fallback to base dir
         if layout_id:
-            layout_map = os.path.join(track_dir, layout_id, "map.png")
+            layout_map = os.path.join(track_dir, "ui", layout_id, "map.png")
             if os.path.isfile(layout_map):
                 return FileResponse(layout_map)
                 
         # Base dir fallback
-        base_map = os.path.join(track_dir, "map.png")
+        base_map = os.path.join(track_dir, "ui", "map.png")
         if os.path.isfile(base_map):
             return FileResponse(base_map)
             

@@ -134,23 +134,25 @@ def scan_tracks(content_folder: str) -> list[ScannedTrack]:
                 except (json.JSONDecodeError, KeyError):
                     pass
             
-            # Unconditionally scan for track config variants (subdirectories with ui/)
-            for sub in sorted(os.listdir(track_path)):
-                sub_path = os.path.join(track_path, sub)
-                if not os.path.isdir(sub_path) or sub == "ui":
-                    continue
-                    
-                sub_ui = os.path.join(sub_path, "ui", "ui_track.json")
-                if os.path.isfile(sub_ui):
-                    layout_name = sub
-                    try:
-                        with open(sub_ui, encoding="utf-8", errors="replace") as f:
-                            raw = f.read().lstrip("\ufeff")
-                        data = json.loads(raw)
-                        layout_name = data.get("name", layout_name)
-                    except (json.JSONDecodeError, KeyError):
-                        pass
-                    layouts.append({"id": sub, "name": layout_name})
+            # Scan for track config variants inside the ui/ directory
+            ui_dir = os.path.join(track_path, "ui")
+            if os.path.isdir(ui_dir):
+                for sub in sorted(os.listdir(ui_dir)):
+                    sub_ui_dir = os.path.join(ui_dir, sub)
+                    if not os.path.isdir(sub_ui_dir):
+                        continue
+                        
+                    sub_ui = os.path.join(sub_ui_dir, "ui_track.json")
+                    if os.path.isfile(sub_ui):
+                        layout_name = sub
+                        try:
+                            with open(sub_ui, encoding="utf-8", errors="replace") as f:
+                                raw = f.read().lstrip("\ufeff")
+                            data = json.loads(raw)
+                            layout_name = data.get("name", layout_name)
+                        except (json.JSONDecodeError, KeyError):
+                            pass
+                        layouts.append({"id": sub, "name": layout_name})
 
             tracks.append(ScannedTrack(id=entry, name=name, layouts=layouts))
     except OSError as e:
