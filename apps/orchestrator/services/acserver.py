@@ -505,6 +505,18 @@ class ACServerManager:
         # Handle multi-layout tracks (e.g. nordschleife/touristenfahrten)
         base_track = track_path
         config_track = ""
+        
+        # We auto-assign their most common/expected layout if the user just picked the base track
+        default_layouts = {
+            "ks_nordschleife": "nordschleife",
+            "ks_silverstone": "gp",
+            "ks_brands_hatch": "gp",
+            "ks_red_bull_ring": "layout_gp",
+            "ks_vallelunga": "extended",
+            "highlands": "highlands",
+            "ks_barcelona": "layout_gp"
+        }
+        
         if "/" in track:
             parts = track.split("/", 1)
             
@@ -514,6 +526,9 @@ class ACServerManager:
                 base_track = parts[0]
                 
             config_track = parts[1]
+        else:
+            if track in default_layouts:
+                config_track = default_layouts[track]
 
         cfg = (
             f"[SERVER]\n"

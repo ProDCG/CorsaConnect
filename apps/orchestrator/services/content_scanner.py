@@ -123,7 +123,6 @@ def scan_tracks(content_folder: str) -> list[ScannedTrack]:
             ui_json = os.path.join(track_path, "ui", "ui_track.json")
             name = entry
 
-            # Check if base track has a UI
             if os.path.isfile(ui_json):
                 try:
                     with open(ui_json, encoding="utf-8", errors="replace") as f:
@@ -132,34 +131,21 @@ def scan_tracks(content_folder: str) -> list[ScannedTrack]:
                     name = data.get("name", entry)
                 except (json.JSONDecodeError, KeyError):
                     pass
-                # We will add the base track only if it doesn't have sub-layouts, 
-                # OR we can just always add it. Assetto Corsa allows base track to be playable.
-                tracks.append(ScannedTrack(id=entry, name=name))
-                
-            # Always check for track config variants (subdirectories with ui/)
-            # Many tracks have BOTH a base ui/ui_track.json AND sub-layouts!
-            found_layouts = False
-            for sub in sorted(os.listdir(track_path)):
-                sub_path = os.path.join(track_path, sub)
-                if not os.path.isdir(sub_path) or sub == "ui":
-                    continue
-                    
-                sub_ui = os.path.join(sub_path, "ui", "ui_track.json")
-                if os.path.isfile(sub_ui):
-                    found_layouts = True
-                    layout_name = f"{name} ({sub})"
-                    try:
-                        with open(sub_ui, encoding="utf-8", errors="replace") as f:
-                            raw = f.read().lstrip("\ufeff")
-                        data = json.loads(raw)
-                        layout_name = data.get("name", layout_name)
-                    except (json.JSONDecodeError, KeyError):
-                        pass
-                    tracks.append(ScannedTrack(id=f"{entry}/{sub}", name=layout_name))
-            
-            # If no sub-layouts found and ui folder was missing, just add the base entry
-            if not found_layouts and not os.path.isfile(ui_json):
-                tracks.append(ScannedTrack(id=entry, name=entry))
+            else:
+                # Check for track config variants (subdirectories with ui/)
+                for sub in sorted(os.listdir(track_path)):
+                    sub_ui = os.path.join(track_path, sub, "ui", "ui_track.json")
+                    if os.path.isfile(sub_ui):
+                        try:
+                            with open(sub_ui, encoding="utf-8", errors="replace") as f:
+                                raw = f.read().lstrip("\ufeff")
+                            data = json.loads(raw)
+                            name = data.get("name", entry)
+                        except (json.JSONDecodeError, KeyError):
+                            pass
+                        break
+
+            tracks.append(ScannedTrack(id=entry, name=name))
     except OSError as e:
         logger.error("Failed to scan tracks directory %s: %s", tracks_dir, e)
 
