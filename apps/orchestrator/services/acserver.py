@@ -627,6 +627,12 @@ class ACServerManager:
 
         dyn_track_header = "[__CM_DYNAMIC_TRACK_OFF]" if enable_csp else "[DYNAMIC_TRACK]"
         
+        # Fallback if sun_angle is None
+        if sun_angle is None:
+            sun_angle = 48
+        if time_mult is None:
+            time_mult = 1
+
         # Map sun_angle to CM_FX_TIME (seconds since midnight) for Pure/WeatherFX
         time_map = {
             -16: 25200,  # Dawn (07:00)
