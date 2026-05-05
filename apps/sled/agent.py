@@ -422,13 +422,23 @@ class RigAgent:
                     logger.info("Auto-drive armed. Waiting %d seconds before pressing key...", self.config.auto_drive_delay_sec)
                     time.sleep(self.config.auto_drive_delay_sec)
                     if self.status != "idle":
-                        vk_code = self.config.auto_drive_vk_code
-                        logger.info("Simulating key press for VK_CODE: 0x%02X", vk_code)
+                        logger.info("Simulating Ctrl + Space to start driving")
                         try:
-                            # KEYEVENTF_KEYUP = 0x0002
-                            ctypes.windll.user32.keybd_event(vk_code, 0, 0, 0)      # Key down
+                            VK_CONTROL = 0x11
+                            VK_SPACE = 0x20
+                            KEYEVENTF_KEYUP = 0x0002
+                            
+                            # Press Ctrl
+                            ctypes.windll.user32.keybd_event(VK_CONTROL, 0, 0, 0)
+                            time.sleep(0.05)
+                            # Press Space
+                            ctypes.windll.user32.keybd_event(VK_SPACE, 0, 0, 0)
                             time.sleep(0.1)
-                            ctypes.windll.user32.keybd_event(vk_code, 0, 0x0002, 0) # Key up
+                            # Release Space
+                            ctypes.windll.user32.keybd_event(VK_SPACE, 0, KEYEVENTF_KEYUP, 0)
+                            time.sleep(0.05)
+                            # Release Ctrl
+                            ctypes.windll.user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
                         except Exception as e:
                             logger.error("Auto-drive keypress failed: %s", e)
                 
