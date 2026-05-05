@@ -412,6 +412,29 @@ class RigAgent:
         proc = launch_ac(self.config, params)
         if proc:
             self.current_process = proc
+            
+            # Start auto-drive clicker thread if enabled
+            if self.config.auto_drive_enabled:
+                import threading
+                def auto_clicker():
+                    import time
+                    import ctypes
+                    logger.info("Auto-drive armed. Waiting %d seconds...", self.config.auto_drive_delay_sec)
+                    time.sleep(self.config.auto_drive_delay_sec)
+                    # Make sure we didn't cancel the race in the meantime
+                    if self.status != "idle":
+                        logger.info("Executing auto-drive click at %d,%d", self.config.auto_drive_click_x, self.config.auto_drive_click_y)
+                        try:
+                            # SetCursorPos
+                            ctypes.windll.user32.SetCursorPos(self.config.auto_drive_click_x, self.config.auto_drive_click_y)
+                            # mouse_event (MOUSEEVENTF_LEFTDOWN = 0x0002, MOUSEEVENTF_LEFTUP = 0x0004)
+                            ctypes.windll.user32.mouse_event(0x0002, 0, 0, 0, 0)
+                            ctypes.windll.user32.mouse_event(0x0004, 0, 0, 0, 0)
+                        except Exception as e:
+                            logger.error("Auto-drive click failed: %s", e)
+                
+                threading.Thread(target=auto_clicker, daemon=True).start()
+                
         else:
             logger.error("Could not launch AC — check config.json paths")
 
