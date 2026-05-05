@@ -793,7 +793,7 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                     {/* Track Map Image */}
                                     <div className="mt-3 aspect-video bg-black/40 rounded-lg border border-white/5 overflow-hidden relative flex items-center justify-center">
                                         <img 
-                                            src={`/api/settings/tracks/${selectedGroup.track}${selectedGroup.track_layout ? '/' + selectedGroup.track_layout : ''}/map`} 
+                                            src={`/api/tracks/${selectedGroup.track}${selectedGroup.track_layout ? '/' + selectedGroup.track_layout : ''}/map`} 
                                             alt="Track Map"
                                             className="w-full h-full object-contain p-2"
                                             onError={(e) => {
