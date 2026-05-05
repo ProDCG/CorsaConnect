@@ -610,6 +610,11 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                     <button onClick={async () => {
                                         try {
                                             const res = await fetch(`/api/server/preview-config/${selectedGroup.id}`)
+                                            if (!res.ok) {
+                                                const text = await res.text()
+                                                alert(`Error fetching config: ${res.status}\n${text}`)
+                                                return
+                                            }
                                             const data = await res.json()
                                             if (data.status === 'success') {
                                                 setPreviewConfig(data.config)

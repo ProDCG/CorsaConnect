@@ -162,52 +162,20 @@ def create_router(state: AppState) -> APIRouter:
         if not group:
             return {"status": "error", "message": "Group not found"}
 
-        # Simulate what ACServerManager does for start_server, but without writing
-        rig_ids = state.get_group_rigs(group_id)
-        cars = group.car_pool
         import os
-        from shared.constants import DEFAULT_AC_FOLDER
+        
+        # Read the direct config from disk if it exists
+        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        safe_name = "".join(c if c.isalnum() else "_" for c in group.name)
+        server_dir = os.path.join(repo_root, "data", f"server_{safe_name}")
+        cfg_path = os.path.join(server_dir, "cfg", "server_cfg.ini")
+        
+        if os.path.exists(cfg_path):
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                cfg_str = f.read()
+        else:
+            cfg_str = f"Config file not found at {cfg_path}. Please start the server at least once to generate it."
 
-        ac_content_cars = os.path.join(state.settings.content_folder or DEFAULT_AC_FOLDER, "content", "cars")
-        validated_cars: list[str] = []
-        for car_id in cars:
-            if os.path.isdir(os.path.join(ac_content_cars, car_id)):
-                validated_cars.append(car_id)
-                
-        all_cars_set = set(validated_cars)
-        for rid in rig_ids:
-            r = state.get_rig(rid)
-            if r:
-                rc = str(r.get("selected_car", ""))
-                if rc and rc != "None" and os.path.isdir(os.path.join(ac_content_cars, rc)):
-                    all_cars_set.add(rc)
-                    
-        all_cars_list = sorted(set(all_cars_set))
-        if not all_cars_list:
-            all_cars_list = ["ks_ferrari_488_gt3"] # fallback
-
-        total_slots = max(len(rig_ids) + group.ai_count, 10)
-        enable_csp = getattr(state.settings, "enable_csp", False)
-
-        cfg_str = _manager._write_server_cfg(
-            config_dir="",
-            name=group.name,
-            track=group.track,
-            cars=all_cars_list,
-            udp_port=9600,
-            tcp_port=9600,
-            http_port=8081,
-            race_laps=group.race_laps,
-            practice_time=group.practice_time,
-            qualy_time=group.qualy_time,
-            max_clients=total_slots,
-            weather=group.weather,
-            sun_angle=group.sun_angle,
-            time_mult=group.time_mult,
-            enable_csp=enable_csp,
-            write_to_disk=False
-        )
-
-        return {"status": "success", "config": cfg_str or ""}
+        return {"status": "success", "config": cfg_str}
 
     return router
