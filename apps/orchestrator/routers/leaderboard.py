@@ -18,19 +18,23 @@ def create_router(state: AppState) -> APIRouter:
         track: str | None = Query(None),
         session_id: str | None = Query(None),
         group: str | None = Query(None),
-        view: str | None = Query(None),  # "recent", "session_best", "all_best"
+        view: str | None = Query(None),  # "recent", "session_best", "all_best", "today"
+        sort_desc: bool = Query(False),
     ) -> list[LeaderboardEntry]:
         """Full leaderboard data for the admin dashboard.
 
         Supports filtering by track, session_id, group, or view modes:
+          - "today"        → best laps from today
           - "recent"       → most recent session's raw laps
           - "session_best" → peak performance per driver (current session)
           - "all_best"     → peak performance per driver (all sessions)
         """
+        if view == "today":
+            return state.leaderboard_db.get_today_best(track=track, sort_desc=sort_desc)
         if view == "session_best":
             return state.leaderboard_db.get_session_best(session_id=session_id)
         if view == "all_best":
-            return state.leaderboard_db.get_session_best_all()
+            return state.leaderboard_db.get_session_best_all(track=track, sort_desc=sort_desc)
         if view == "recent":
             return state.leaderboard_db.get_recent_session()
         if session_id:
@@ -92,12 +96,10 @@ def create_router(state: AppState) -> APIRouter:
     @router.get("/lobby")
     async def get_lobby() -> dict[str, object]:
         """Public feed for TV displays — session-best per driver, sorted by fastest lap time."""
-        # Use session_best for clean competitive display
-        best_entries = state.leaderboard_db.get_session_best(limit=10)
+        top_10_all_time = state.leaderboard_db.get_session_best_all(limit=10)
+        top_10_today = state.leaderboard_db.get_today_best(limit=10)
+        hall_of_fame = state.leaderboard_db.get_hall_of_fame(limit=10)
 
-        # Fallback to raw laps if no session_best data
-        if not best_entries:
-            best_entries = sorted(state.leaderboard, key=lambda e: e.lap, reverse=True)[:10]
         active_rigs = [
             {
                 "rig_id": r["rig_id"],
@@ -110,8 +112,8 @@ def create_router(state: AppState) -> APIRouter:
             if r.get("status") == "racing"
         ]
 
-        return {
-            "top_10": [
+        def format_entries(entries: list[LeaderboardEntry]) -> list[dict[str, object]]:
+            return [
                 {
                     "rig_id": e.rig_id,
                     "driver_name": e.driver_name,
@@ -121,8 +123,13 @@ def create_router(state: AppState) -> APIRouter:
                     "lap_time_ms": e.lap_time_ms,
                     "timestamp": e.timestamp,
                 }
-                for e in best_entries
-            ],
+                for e in entries
+            ]
+
+        return {
+            "top_10_all_time": format_entries(top_10_all_time),
+            "top_10_today": format_entries(top_10_today),
+            "hall_of_fame": hall_of_fame,
             "active_rigs": active_rigs,
             "total_rigs": len(state.get_rigs()),
             "server_status": state.server_status,

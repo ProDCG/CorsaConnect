@@ -85,7 +85,8 @@ function App() {
         video_url: '/assets/idle_race.mp4'
     })
     const [leaderboard, setLeaderboard] = useState<any[]>([])
-    const [leaderboardFilter, setLeaderboardFilter] = useState<'all' | 'recent'>('all')
+    const [leaderboardFilter, setLeaderboardFilter] = useState<'all' | 'today'>('all')
+    const [leaderboardSortDesc, setLeaderboardSortDesc] = useState<boolean>(false)
     const [leaderboardTrack, setLeaderboardTrack] = useState<string>('')
     const [presets, setPresets] = useState<any[]>([])
     const [activeTelemFields, setActiveTelemFields] = useState<string[]>(['velocity', 'rpms', 'gforce', 'normalized_pos', 'gear', 'completed_laps', 'gas', 'brake', 'position'])
@@ -1113,19 +1114,25 @@ function App() {
                         const fetchFilteredLeaderboard = async () => {
                             try {
                                 const params = new URLSearchParams()
-                                if (leaderboardFilter === 'recent') params.set('view', 'recent')
+                                params.set('view', leaderboardFilter === 'today' ? 'today' : 'all_best')
                                 if (leaderboardTrack) params.set('track', leaderboardTrack)
+                                if (leaderboardSortDesc) params.set('sort_desc', 'true')
+                                
                                 const res = await fetch(`/api/leaderboard?${params.toString()}`)
                                 const data = await res.json()
                                 if (Array.isArray(data)) setLeaderboard(data)
                             } catch { /* offline */ }
                         }
 
+                        // Trigger fetch when filters change
+                        useEffect(() => {
+                            fetchFilteredLeaderboard()
+                        }, [leaderboardFilter, leaderboardTrack, leaderboardSortDesc])
+
                         // Available tracks from leaderboard data
                         const tracks = [...new Set(leaderboard.map((e: any) => e.track).filter(Boolean))]
-                        const filtered = leaderboard
-                            .sort((a: any, b: any) => b.lap - a.lap)
-                            .slice(0, 50)
+                        // Data is already sorted by the backend API based on our parameters
+                        const filtered = leaderboard.slice(0, 50)
 
                         const formatCarName = (id: string) => id ? id.split('_').slice(1).join(' ').toUpperCase() : '—'
                         const formatTrack = (id: string) => id ? id.charAt(0).toUpperCase() + id.slice(1).replace(/_/g, ' ') : '—'
@@ -1165,46 +1172,37 @@ function App() {
                             </div>
 
                             {/* Filters */}
-                            <div className="flex items-center gap-3 mb-6">
+                            <div className="flex items-center gap-3 mb-6 flex-wrap">
                                 <button
-                                    onClick={() => { setLeaderboardFilter('all'); setLeaderboardTrack('') }}
+                                    onClick={() => setLeaderboardFilter('all')}
                                     className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
-                                        leaderboardFilter === 'all' && !leaderboardTrack
+                                        leaderboardFilter === 'all'
                                             ? 'bg-ridge-brand/20 border-ridge-brand/50 text-ridge-brand'
                                             : 'bg-white/5 border-white/10 text-white/30 hover:border-white/20'
                                     }`}
                                 >All Time</button>
                                 <button
-                                    onClick={async () => {
-                                        setLeaderboardFilter('recent')
-                                        setLeaderboardTrack('')
-                                        try {
-                                            const res = await fetch('/api/leaderboard?view=recent')
-                                            const data = await res.json()
-                                            if (Array.isArray(data)) setLeaderboard(data)
-                                        } catch {}
-                                    }}
+                                    onClick={() => setLeaderboardFilter('today')}
                                     className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
-                                        leaderboardFilter === 'recent'
+                                        leaderboardFilter === 'today'
                                             ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
                                             : 'bg-white/5 border-white/10 text-white/40 hover:border-white/20'
                                     }`}
-                                >Recent Session</button>
+                                >Today</button>
+
+                                {/* Sort Toggle */}
+                                <button
+                                    onClick={() => setLeaderboardSortDesc(!leaderboardSortDesc)}
+                                    className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border bg-white/5 border-white/10 text-white/40 hover:border-white/20 flex items-center gap-2 ml-2"
+                                >
+                                    Sort: {leaderboardSortDesc ? "Longest Time" : "Shortest Time"}
+                                </button>
 
                                 {tracks.length > 0 && (
-                                    <div className="relative">
+                                    <div className="relative ml-2">
                                         <select
                                             value={leaderboardTrack}
-                                            onChange={async (e) => {
-                                                setLeaderboardTrack(e.target.value)
-                                                setLeaderboardFilter('all')
-                                                try {
-                                                    const params = e.target.value ? `?track=${e.target.value}` : ''
-                                                    const res = await fetch(`/api/leaderboard${params}`)
-                                                    const data = await res.json()
-                                                    if (Array.isArray(data)) setLeaderboard(data)
-                                                } catch {}
-                                            }}
+                                            onChange={(e) => setLeaderboardTrack(e.target.value)}
                                             className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 pr-7 text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer appearance-none"
                                         >
                                             <option value="">All Tracks</option>
