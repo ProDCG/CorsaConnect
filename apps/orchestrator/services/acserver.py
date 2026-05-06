@@ -564,6 +564,7 @@ class ACServerManager:
             f"TYRE_BLANKETS_ALLOWED=0\n"
             f"FORCE_VIRTUAL_MIRROR=1\n"
             f"REGISTER_TO_LOBBY=0\n"
+            f"CAN_JOIN={1 if (practice_enabled or qualy_enabled) else 0}\n"
             f"MAX_CLIENTS={max_clients}\n"
             f"NUM_THREADS=2\n"
             f"UDP_PLUGIN_LOCAL_PORT=\n"
