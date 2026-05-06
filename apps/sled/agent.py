@@ -422,25 +422,21 @@ class RigAgent:
                     logger.info("Auto-drive armed. Waiting %d seconds before pressing key...", self.config.auto_drive_delay_sec)
                     time.sleep(self.config.auto_drive_delay_sec)
                     if self.status != "idle":
-                        logger.info("Simulating Ctrl + Space to start driving")
+                        logger.info("Simulating mouse click to start driving")
                         try:
-                            VK_CONTROL = 0x11
-                            VK_SPACE = 0x20
-                            KEYEVENTF_KEYUP = 0x0002
+                            # 50, 50 is typically the top left corner where the steering wheel icon is
+                            click_x = getattr(self.config, "auto_drive_click_x", 50)
+                            click_y = getattr(self.config, "auto_drive_click_y", 50)
                             
-                            # Press Ctrl
-                            ctypes.windll.user32.keybd_event(VK_CONTROL, 0, 0, 0)
-                            time.sleep(0.05)
-                            # Press Space
-                            ctypes.windll.user32.keybd_event(VK_SPACE, 0, 0, 0)
+                            logger.info("Executing auto-drive click at %d,%d", click_x, click_y)
+                            # SetCursorPos
+                            ctypes.windll.user32.SetCursorPos(click_x, click_y)
+                            # mouse_event (MOUSEEVENTF_LEFTDOWN = 0x0002, MOUSEEVENTF_LEFTUP = 0x0004)
+                            ctypes.windll.user32.mouse_event(0x0002, 0, 0, 0, 0)
                             time.sleep(0.1)
-                            # Release Space
-                            ctypes.windll.user32.keybd_event(VK_SPACE, 0, KEYEVENTF_KEYUP, 0)
-                            time.sleep(0.05)
-                            # Release Ctrl
-                            ctypes.windll.user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+                            ctypes.windll.user32.mouse_event(0x0004, 0, 0, 0, 0)
                         except Exception as e:
-                            logger.error("Auto-drive keypress failed: %s", e)
+                            logger.error("Auto-drive mouse click failed: %s", e)
                 
                 threading.Thread(target=auto_press, daemon=True).start()
                 
