@@ -284,7 +284,7 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             f"CLOUD_SPEED=0.200\n"
             f"SUN_ANGLE={sun_angle:.2f}\n"
             f"TIME_MULT={time_mult:.1f}\n"
-            f"__CM_WEATHER_CONTROLLER=base\n"
+            f"__CM_WEATHER_CONTROLLER=pure\n"
             f"__CM_WEATHER_TYPE={cm_weather_type}\n"
             f"__TRACK_TIMEZONE_OFFSET=3600\n"
             f"__TRACK_GEOTAG_LONG={_DEFAULT_GEOTAG[1]}\n"
@@ -298,7 +298,7 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             f"\n[WEATHER]\n"
             f"NAME={weather}\n"
             f"GRAPHICS={weather}\n"
-            f"CONTROLLER=base\n"
+            f"CONTROLLER=pure\n"
             f"TYPE=1"
         )
 
@@ -349,7 +349,7 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
                 "ENABLED=1\n\n"
                 "[CONTROLLER]\n"
                 "ACTIVE=1\n"
-                "IMPLEMENTATION=base\n"
+                "IMPLEMENTATION=pure\n"
             )
         logger.info("Wrote weather_fx.ini: %s", weather_fx_path)
 
