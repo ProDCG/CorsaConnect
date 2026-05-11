@@ -132,6 +132,8 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         # ── Build INI matching Content Manager format ──
         lines: list[str] = []
 
+        penalties_val = 1 if params.get("penalties_enabled", False) else 0
+
         # [RACE] — main section
         lines.append(
             f"[RACE]\n"
@@ -142,8 +144,8 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             f"CARS={total_cars}\n"
             f"AI_LEVEL={ai_difficulty if client_ai_count > 0 else 100}\n"
             f"FIXED_SETUP=0\n"
-            f"PENALTIES=1\n"
-            f"JUMP_START_PENALTY=1\n"
+            f"PENALTIES={penalties_val}\n"
+            f"JUMP_START_PENALTY={penalties_val}\n"
             f"AUTO_START=0\n"
             f"OPEN_CONTROL_CONFIG=0\n"
             f"PIT_MODE=0\n"
