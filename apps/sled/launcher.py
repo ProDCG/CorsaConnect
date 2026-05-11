@@ -355,6 +355,15 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             )
         logger.info("Wrote weather_fx.ini: %s", weather_fx_path)
 
+        # --- Write CSP Extra Options (Wrong Way) ---
+        extra_options_path = os.path.join(ext_dir, "csp_extra_options.ini")
+        if params.get("allow_wrong_way", False):
+            with open(extra_options_path, "w") as f:
+                f.write("[EXTRA_RULES]\nALLOW_WRONG_WAY=1\n")
+            logger.info("Wrote csp_extra_options.ini for Wrong Way allowed")
+        elif os.path.exists(extra_options_path):
+            os.remove(extra_options_path)
+
         # --- Pre-pin in-game apps (track map, speedometer, etc.) ---
         # apps_visible.ini controls which apps are enabled in the sidebar
         apps_visible_path = os.path.join(documents, "Assetto Corsa", "cfg", "apps_visible.ini")

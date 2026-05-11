@@ -191,6 +191,7 @@ def create_router(state: AppState) -> APIRouter:
                     payload["ambient_temp"] = group.ambient_temp
                     payload["track_grip"] = group.track_grip
                     payload["penalties_enabled"] = group.penalties_enabled
+                    payload["allow_wrong_way"] = group.allow_wrong_way
                     # Solo groups always run offline; multiplayer uses AC server
                     payload["use_server"] = group.mode == "multiplayer"
                     if server_ip and group.mode == "multiplayer":
