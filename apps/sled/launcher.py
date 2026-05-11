@@ -69,6 +69,7 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             logger.info("Player car fallback to config default: %s", car)
 
         track = str(params.get("track", "monza"))
+        track_layout = params.get("track_layout") or ""
         weather = str(params.get("weather", "3_clear"))
 
         user_profile = os.environ.get("USERPROFILE") or os.path.expanduser("~")
@@ -140,7 +141,7 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             f"VERSION=1.1\n"
             f"MODEL={car}\n"
             f"TRACK={track}\n"
-            f"CONFIG_TRACK=\n"
+            f"CONFIG_TRACK={track_layout}\n"
             f"CARS={total_cars}\n"
             f"AI_LEVEL={ai_difficulty if client_ai_count > 0 else 100}\n"
             f"FIXED_SETUP=0\n"

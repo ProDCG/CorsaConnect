@@ -178,6 +178,7 @@ def create_router(state: AppState) -> APIRouter:
                 # Inject group settings for LAUNCH_RACE
                 if command.action == "LAUNCH_RACE":
                     payload["track"] = payload.get("track") or group.track
+                    payload["track_layout"] = payload.get("track_layout") if "track_layout" in payload else group.track_layout
                     payload["weather"] = payload.get("weather") or group.weather
                     payload["race_laps"] = payload.get("race_laps") or group.race_laps
                     payload["practice_time"] = payload.get("practice_time") or group.practice_time
