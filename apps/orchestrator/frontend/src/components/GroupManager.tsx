@@ -771,7 +771,7 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                                 const t = tracks.find(x => x.id === trackId)
                                                 updateGroup(selectedGroup.id, { 
                                                     track: trackId, 
-                                                    track_layout: t?.layouts && t.layouts.length > 0 ? t.layouts[0].id : null 
+                                                    track_layout: t?.layouts && t.layouts.length > 0 ? t.layouts[0].id : "" 
                                                 })
                                             }}>
                                                 {(activeMapPool.length > 0
