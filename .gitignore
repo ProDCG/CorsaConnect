@@ -34,3 +34,8 @@ public/assets/idle_race_temp.jpg
 
 # Server generated configs
 server_config/
+
+# Local state and databases
+data/
+storage/
+kiosk_data.json

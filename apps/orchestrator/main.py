@@ -100,14 +100,11 @@ async def health_check() -> dict[str, str]:
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
+from shared.utils import get_local_ip
+
 def _get_local_ip() -> str:
     """Best-effort local IP discovery."""
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("8.8.8.8", 80))
-            return str(s.getsockname()[0])
-    except Exception:
-        return "127.0.0.1"
+    return get_local_ip()
 
 
 if __name__ == "__main__":

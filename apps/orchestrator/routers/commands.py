@@ -24,12 +24,8 @@ def create_router(state: AppState) -> APIRouter:
 
     def _get_orchestrator_ip() -> str:
         """Best-effort LAN IP discovery for the orchestrator machine."""
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                s.connect(("8.8.8.8", 80))
-                return str(s.getsockname()[0])
-        except Exception:
-            return "127.0.0.1"
+        from shared.utils import get_local_ip
+        return get_local_ip()
 
     action_status_map: dict[str, str] = {
         "SETUP_MODE": "setup",

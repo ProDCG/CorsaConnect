@@ -16,20 +16,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger("ridge.heartbeat")
 
 
+from shared.utils import get_local_ip
+
 def _get_local_ip() -> str:
     """Best-effort local IP discovery."""
-    import socket
-
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.settimeout(2)
-            s.connect(("8.8.8.8", 80))
-            return str(s.getsockname()[0])
-    except Exception:
-        try:
-            return socket.gethostbyname_ex(socket.gethostname())[2][0]
-        except Exception:
-            return "127.0.0.1"
+    return get_local_ip()
 
 
 class HeartbeatService:

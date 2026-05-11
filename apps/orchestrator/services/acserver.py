@@ -217,7 +217,7 @@ class ACServerManager:
             penalties_enabled=group.penalties_enabled if group else False,
         )
 
-        self._write_entry_list(config_dir, rig_ids, all_cars_list, ai_count, ai_difficulty)
+        self._write_entry_list(config_dir, rig_ids, all_cars_list, ai_count, ai_difficulty, total_slots)
 
         csp_ext_path = os.path.join(config_dir, "cfg", "csp_extra_options.ini")
         try:
@@ -404,13 +404,8 @@ class ACServerManager:
         server = self._servers.get(group_id)
         if server and server.process and server.process.poll() is None:
             # Return the actual LAN IP so rigs on other machines can connect
-            try:
-                import socket
-                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                    s.connect(("8.8.8.8", 80))
-                    lan_ip = str(s.getsockname()[0])
-            except Exception:
-                lan_ip = "127.0.0.1"
+            from shared.utils import get_local_ip
+            lan_ip = get_local_ip()
             return (lan_ip, server.port, server.http_port)
         return None
 
@@ -775,18 +770,18 @@ class ACServerManager:
 
     def _write_entry_list(
         self, config_dir: str, rig_ids: list[str], cars: list[str],
-        ai_count: int = 0, ai_difficulty: int = 80,
+        ai_count: int = 0, ai_difficulty: int = 80, total_slots: int = 10
     ) -> None:
         """Write entry_list.ini — one slot per rig + AI bots + placeholder hot-join slots.
 
         Layout:
           CAR_0 .. CAR_{n-1}  →  one per rig (named, with their selected car)
           CAR_n .. CAR_{n+m-1} →  AI drivers (cars picked from pool)
-          CAR_{n+m} .. CAR_9   →  placeholder slots for hot-join (10 total minimum)
+          CAR_{n+m} .. CAR_9   →  placeholder slots for hot-join (total_slots minimum)
 
-        Total entries = max(len(rig_ids) + ai_count, 10) to support hot-join.
+        Total entries = max(len(rig_ids) + ai_count, total_slots) to support hot-join.
         """
-        PLACEHOLDER_SLOTS = max(len(rig_ids) + ai_count, 10)
+        PLACEHOLDER_SLOTS = max(len(rig_ids) + ai_count, total_slots)
         entries = []
         idx = 0
         default_car = cars[0] if cars else "ks_ferrari_488_gt3"
