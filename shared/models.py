@@ -64,6 +64,7 @@ class RigGroup(BaseModel):
     race_enabled: bool = True
     race_laps: int = 10
     penalties_enabled: bool = False
+    allow_wrong_way: bool = False
     sun_angle: int = 48  # -80 to 80 degrees (time of day)
     time_mult: int = 1  # Time speed multiplier (1 = real-time)
     session_duration_min: int = 30  # Session countdown timer (minutes)
@@ -97,6 +98,7 @@ class RigGroupUpdate(BaseModel):
     race_enabled: bool | None = None
     race_laps: int | None = None
     penalties_enabled: bool | None = None
+    allow_wrong_way: bool | None = None
     sun_angle: int | None = None
     time_mult: int | None = None
     session_duration_min: int | None = None

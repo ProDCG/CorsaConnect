@@ -219,6 +219,16 @@ class ACServerManager:
 
         self._write_entry_list(config_dir, rig_ids, all_cars_list, ai_count, ai_difficulty)
 
+        csp_ext_path = os.path.join(config_dir, "cfg", "csp_extra_options.ini")
+        try:
+            if group and getattr(group, "allow_wrong_way", False):
+                with open(csp_ext_path, "w") as f:
+                    f.write("[EXTRA_RULES]\nALLOW_WRONG_WAY=1\n")
+            elif os.path.exists(csp_ext_path):
+                os.remove(csp_ext_path)
+        except Exception as e:
+            logger.warning("Could not manage csp_extra_options.ini: %s", e)
+
         # Each server instance needs its own isolated directory to avoid
         # config collisions when running parallel servers.  We copy the
         # acServer executable into the per-group config_dir and launch from

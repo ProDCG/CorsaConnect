@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap, Filter, X, Download } from 'lucide-react'
+import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap, Filter, X, Download, RefreshCw } from 'lucide-react'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -23,6 +23,7 @@ interface RigGroup {
     race_enabled: boolean
     race_laps: number
     penalties_enabled: boolean
+    allow_wrong_way: boolean
     sun_angle: number
     time_mult: number
     session_duration_min: number
@@ -854,15 +855,26 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                         <div className="glass rounded-2xl p-5 border border-white/10 space-y-3">
                             <div className="flex items-center justify-between mb-1">
                                 <h4 className="text-[9px] uppercase font-black text-white/50 tracking-[0.3em]">Race Settings</h4>
-                                <button
-                                    onClick={() => updateGroup(selectedGroup.id, { penalties_enabled: !selectedGroup.penalties_enabled })}
-                                    className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${selectedGroup.penalties_enabled
-                                            ? 'bg-red-500/20 text-red-400 border-2 border-red-500/50 shadow-lg shadow-red-500/10'
-                                            : 'bg-white/5 text-white/40 border border-white/10 hover:border-white/20'
-                                        }`}
-                                >
-                                    <Settings size={10} /> {selectedGroup.penalties_enabled ? 'Penalties ON' : 'Penalties OFF'}
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => updateGroup(selectedGroup.id, { allow_wrong_way: !selectedGroup.allow_wrong_way })}
+                                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${selectedGroup.allow_wrong_way
+                                                ? 'bg-amber-500/20 text-amber-400 border-2 border-amber-500/50 shadow-lg shadow-amber-500/10'
+                                                : 'bg-white/5 text-white/40 border border-white/10 hover:border-white/20'
+                                            }`}
+                                    >
+                                        <RefreshCw size={10} /> {selectedGroup.allow_wrong_way ? 'Wrong Way OK' : 'Wrong Way OFF'}
+                                    </button>
+                                    <button
+                                        onClick={() => updateGroup(selectedGroup.id, { penalties_enabled: !selectedGroup.penalties_enabled })}
+                                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${selectedGroup.penalties_enabled
+                                                ? 'bg-red-500/20 text-red-400 border-2 border-red-500/50 shadow-lg shadow-red-500/10'
+                                                : 'bg-white/5 text-white/40 border border-white/10 hover:border-white/20'
+                                            }`}
+                                    >
+                                        <Settings size={10} /> {selectedGroup.penalties_enabled ? 'Penalties ON' : 'Penalties OFF'}
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-3 gap-3">
