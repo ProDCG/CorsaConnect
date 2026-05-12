@@ -198,14 +198,9 @@ class ACServerManager:
 
         # Total slots = one per rig + AI count + placeholders for hot-join
         total_slots = max(len(rig_ids) + ai_count, 10)
-        # MAX_CLIENTS must cover ALL entries (placeholder slots + 1 dedicated spectator).
-        # The frontend sends rig_count + ai + 2 which is far smaller than the
-        # entry list; using it causes the spectator slot to fall outside the
-        # active range and the server returns "no slots available".
-        actual_max_clients = total_slots + 1  # +1 for the dedicated spectator slot
         logger.info(
-            "Slot calculation: %d rigs + %d AI = %d total slots, max_clients=%d (includes spectator)",
-            len(rig_ids), ai_count, total_slots, actual_max_clients,
+            "Slot calculation: %d rigs + %d AI = %d total slots (padded for hot-join)",
+            len(rig_ids), ai_count, total_slots,
         )
 
         enable_csp = getattr(self.state.settings, "enable_csp", False)
@@ -214,7 +209,7 @@ class ACServerManager:
 
         self._write_server_cfg(
             config_dir, group_name, track, all_cars_list, udp_port, tcp_port, http_port,
-            race_laps, practice_time, qualy_time, actual_max_clients, weather,
+            race_laps, practice_time, qualy_time, total_slots, weather,
             sun_angle, time_mult, enable_csp=enable_csp, track_layout=track_layout,
             practice_enabled=group.practice_enabled if group else False,
             qualy_enabled=group.qualy_enabled if group else False,
@@ -871,24 +866,10 @@ class ACServerManager:
             )
             idx += 1
 
-        # ── Dedicated Spectator slot ──
-        entries.append(
-            f"[CAR_{idx}]\n"
-            f"MODEL={default_car}\n"
-            f"SKIN=\n"
-            f"SPECTATOR_MODE=1\n"
-            f"DRIVERNAME=Spectator\n"
-            f"TEAM=\n"
-            f"GUID=\n"
-            f"BALLAST=0\n"
-            f"RESTRICTOR=0\n"
-        )
-        idx += 1
-
         entry_path = os.path.join(config_dir, "cfg", "entry_list.ini")
         with open(entry_path, "w") as f:
             f.write("\n".join(entries))
         logger.info(
-            "Wrote entry_list.ini: %d rig slots + %d AI + %d placeholder + 1 spectator = %d total entries",
-            len(rig_ids), ai_count, max(0, idx - len(rig_ids) - ai_count - 1), idx,
+            "Wrote entry_list.ini: %d rig slots + %d AI + %d placeholder = %d total entries",
+            len(rig_ids), ai_count, max(0, idx - len(rig_ids) - ai_count), idx,
         )
