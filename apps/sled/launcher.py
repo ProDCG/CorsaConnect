@@ -31,19 +31,34 @@ _CM_WEATHER_TYPES: dict[str, int] = {
 
 
 def _sun_angle_to_seconds(angle: float) -> int:
-    """Convert a sun angle to seconds from midnight for CSP's [TIME] section.
+    """Convert a sun angle to seconds from 08:00 AM for CSP's [TIME] section.
 
-    Approximate mapping based on AC/CSP behavior:
-      -16 (dawn)  ~ 06:00 = 21600s
-        0         ~ 07:30 = 27000s
-       56 (noon)  ~ 12:00 = 43200s
-      120 (sunset)~ 18:00 = 64800s
-      163 (night) ~ 22:00 = 79200s
+    Assetto Corsa's internal clock maps SUN_ANGLE=0 to 08:00 AM.
+    Time parameters passed to CSP/WFX expect the number of seconds past 08:00 AM.
     """
-    # Linear interpolation: angle -16 -> 21600s (6am), angle 163 -> 79200s (10pm)
-    t = (angle - (-16)) / (163 - (-16))  # 0..1 across our range
-    seconds = int(21600 + t * (79200 - 21600))
-    return max(0, min(86400, seconds))
+    time_map = {
+        -16: 82800,  # Dawn (07:00) -> 23 hours past 8am
+        8: 0,        # Sunrise (08:00) -> 0 hours
+        24: 3600,    # Morning (09:00) -> 1 hour
+        40: 9000,    # Late Morning (10:30) -> 2.5 hours
+        56: 14400,   # Midday (12:00) -> 4 hours
+        72: 19800,   # Early Afternoon (13:30) -> 5.5 hours
+        88: 25200,   # Afternoon (15:00) -> 7 hours
+        104: 30600,  # Late Afternoon (16:30) -> 8.5 hours
+        120: 36000,  # Sunset (18:00) -> 10 hours
+        136: 41400,  # Dusk (19:30) -> 11.5 hours
+        163: 50400   # Night (22:00) -> 14 hours
+    }
+    
+    # Use exact map if possible
+    if angle in time_map:
+        return time_map[angle]
+        
+    # Linear interpolation: 16 degrees = 1 hour (from 08:00 AM base)
+    seconds = int(((angle - 8) / 16.0) * 3600)
+    if seconds < 0:
+        seconds += 86400
+    return max(0, min(86399, seconds))
 
 
 def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | None:

@@ -664,21 +664,24 @@ class ACServerManager:
         if time_mult is None:
             time_mult = 1
 
-        # Map sun_angle to CM_FX_TIME (seconds since midnight) for Pure/WeatherFX
+        # Map sun_angle to CM_FX_TIME (seconds past 08:00 AM)
         time_map = {
-            -16: 25200,  # Dawn (07:00)
-            8: 28800,    # Sunrise (08:00)
-            24: 32400,   # Morning (09:00)
-            40: 37800,   # Late Morning (10:30)
-            56: 43200,   # Midday (12:00)
-            72: 48600,   # Early Afternoon (13:30)
-            88: 54000,   # Afternoon (15:00)
-            104: 59400,  # Late Afternoon (16:30)
-            120: 64800,  # Sunset (18:00)
-            136: 70200,  # Dusk (19:30)
-            163: 79200   # Night (22:00)
+            -16: 82800,  # Dawn (07:00) -> 23 hours past 8am
+            8: 0,        # Sunrise (08:00) -> 0 hours
+            24: 3600,    # Morning (09:00) -> 1 hour
+            40: 9000,    # Late Morning (10:30) -> 2.5 hours
+            56: 14400,   # Midday (12:00) -> 4 hours
+            72: 19800,   # Early Afternoon (13:30) -> 5.5 hours
+            88: 25200,   # Afternoon (15:00) -> 7 hours
+            104: 30600,  # Late Afternoon (16:30) -> 8.5 hours
+            120: 36000,  # Sunset (18:00) -> 10 hours
+            136: 41400,  # Dusk (19:30) -> 11.5 hours
+            163: 50400   # Night (22:00) -> 14 hours
         }
-        fx_time = time_map.get(sun_angle, int(46800 + (sun_angle / 16.0) * 3600))
+        # Fallback linear interpolation based on 16 degrees = 1 hour (from 08:00 AM base)
+        fx_time = time_map.get(sun_angle, int(((sun_angle - 8) / 16.0) * 3600))
+        if fx_time < 0:
+            fx_time += 86400
         # Ensure it is bounded 0 to 86399
         fx_time = max(0, min(86399, fx_time))
         
