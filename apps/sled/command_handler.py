@@ -179,6 +179,10 @@ class CommandHandler:
         elif action == "START_MUMBLE":
             logger.info("Mumble launch requested from orchestrator")
             self.agent.start_mumble()
+        
+        elif action == "SPECTATE_ACTION":
+            sub_action = str(payload.get("spectate_action", ""))
+            self.agent.spectate_action(sub_action)
 
         else:
             logger.warning("Unknown command action: %s", action)

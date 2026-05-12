@@ -491,6 +491,43 @@ class RigAgent:
 
         logger.info("Race killed — rig idle")
 
+    def spectate_action(self, action: str) -> None:
+        """Simulate keypresses for spectator mode (camera cycling, etc)."""
+        logger.info("Spectate action received: %s", action)
+        try:
+            import pydirectinput
+            # pydirectinput works globally if AC is the foreground window
+            
+            if action == "NEXT_CAR":
+                pydirectinput.press('pgdn')
+            elif action == "PREV_CAR":
+                pydirectinput.press('pgup')
+            elif action == "CHANGE_CAM":
+                pydirectinput.press('f1')
+            elif action.startswith("GOTO_CAR_"):
+                # GOTO_CAR_1, GOTO_CAR_2, etc. -> Ctrl+1, Ctrl+2
+                try:
+                    num = int(action.split("_")[-1])
+                    if 0 <= num <= 9:
+                        pydirectinput.keyDown('ctrl')
+                        pydirectinput.press(str(num))
+                        pydirectinput.keyUp('ctrl')
+                        logger.info("Jumped to car slot %d", num)
+                except ValueError:
+                    pass
+            elif action == "CAM_INTERNAL":
+                pydirectinput.press('f1')
+            elif action == "CAM_EXTERNAL":
+                pydirectinput.press('f2')
+            elif action == "CAM_TRACK":
+                pydirectinput.press('f3')
+            else:
+                logger.warning("Unknown spectate action: %s", action)
+        except ImportError:
+            logger.error("pydirectinput not installed! Run: pip install pydirectinput")
+        except Exception as e:
+            logger.error("Spectate action failed: %s", e)
+
     # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------

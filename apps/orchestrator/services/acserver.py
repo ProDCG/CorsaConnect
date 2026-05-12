@@ -866,10 +866,24 @@ class ACServerManager:
             )
             idx += 1
 
+        # ── Dedicated Spectator slot ──
+        entries.append(
+            f"[CAR_{idx}]\n"
+            f"MODEL={default_car}\n"
+            f"SKIN=\n"
+            f"SPECTATOR_MODE=1\n"
+            f"DRIVERNAME=Spectator\n"
+            f"TEAM=\n"
+            f"GUID=\n"
+            f"BALLAST=0\n"
+            f"RESTRICTOR=0\n"
+        )
+        idx += 1
+
         entry_path = os.path.join(config_dir, "cfg", "entry_list.ini")
         with open(entry_path, "w") as f:
             f.write("\n".join(entries))
         logger.info(
-            "Wrote entry_list.ini: %d rig slots + %d AI + %d placeholder = %d total entries",
-            len(rig_ids), ai_count, max(0, idx - len(rig_ids) - ai_count), idx,
+            "Wrote entry_list.ini: %d rig slots + %d AI + %d placeholder + 1 spectator = %d total entries",
+            len(rig_ids), ai_count, max(0, idx - len(rig_ids) - ai_count - 1), idx,
         )

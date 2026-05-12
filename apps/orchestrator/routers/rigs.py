@@ -241,5 +241,26 @@ def create_router(state: AppState) -> APIRouter:
         logger.info("Rig %s driver_name -> %s", rig_id, update.driver_name)
         return {"status": "success", "driver_name": update.driver_name}
 
+    @router.post("/rigs/{rig_id}/spectate")
+    async def spectate_rig(rig_id: str, action: str) -> dict[str, str]:
+        """Send a spectate command to a rig (camera cycling, etc)."""
+        rig = state.get_rig(rig_id)
+        if not rig or not rig.get("ip"):
+            return {"status": "error", "message": "Rig not found or no IP"}
+        
+        import socket
+        import json
+        from shared.constants import COMMAND_PORT
+        
+        try:
+            # Connect to the sled agent's command port
+            with socket.create_connection((str(rig.get("ip")), COMMAND_PORT), timeout=2) as s:
+                payload = {"action": "SPECTATE_ACTION", "spectate_action": action}
+                s.sendall(json.dumps(payload).encode("utf-8") + b"\n")
+            return {"status": "success", "message": f"Sent {action} to {rig_id}"}
+        except Exception as e:
+            logger.error("Failed to send spectate command to %s: %s", rig_id, e)
+            return {"status": "error", "message": str(e)}
+
     return router
 
