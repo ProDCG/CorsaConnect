@@ -66,7 +66,9 @@ def _generate_spectator_race_ini(
 
     cfg_dir = os.path.join(documents, "Assetto Corsa", "cfg")
     os.makedirs(cfg_dir, exist_ok=True)
-    ini_path = os.path.join(cfg_dir, "spectator_race.ini")
+    # acs.exe always loads race.ini regardless of the -race= argument filename,
+    # so write directly there. Admin PC has no sled agent so there is no conflict.
+    ini_path = os.path.join(cfg_dir, "race.ini")
 
     # Map sun_angle to seconds-from-midnight for the [TIME] section
     time_map = {
