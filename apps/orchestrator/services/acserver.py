@@ -690,10 +690,12 @@ class ACServerManager:
             f"LAP_GAIN=10\n"
             f"\n"
             f"[WEATHER_0]\n"
-            f"GRAPHICS=Pure\n"
-            f"__CM_FX_TIME={fx_time}\n"
+            f"GRAPHICS=Pure_type={w_id}_time={fx_time}\n"
+            f"__CM_GRAPHICS=Pure\n"
+            f"__CM_WFX_USE_CUSTOM_TIME=1\n"
+            f"__CM_WFX_TIME={fx_time}\n"
+            f"__CM_WFX_TYPE={w_id}\n"
             f"__CM_WFX_USE_CUSTOM_WEATHER=1\n"
-            f"__CM_WFX_TYPE=2\n"
             f"BASE_TEMPERATURE_AMBIENT=18\n"
             f"BASE_TEMPERATURE_ROAD=6\n"
             f"VARIATION_AMBIENT=1\n"
@@ -736,7 +738,6 @@ class ACServerManager:
             # Generate the real conditions JSON and encode it dynamically to ensure time is forced
             rc_dict = {
                 "useRealConditions": True,
-                "weatherType": w_id,
                 "timeOffset": "00:00:00",
                 "useFixedStartingTime": True,
                 "fixedStartingTime": fx_time,
