@@ -31,31 +31,31 @@ _CM_WEATHER_TYPES: dict[str, int] = {
 
 
 def _sun_angle_to_seconds(angle: float) -> int:
-    """Convert a sun angle to seconds from 08:00 AM for CSP's [TIME] section.
+    """Convert a sun angle to seconds from 10:00 AM for CSP's [TIME] section.
 
-    Assetto Corsa's internal clock maps SUN_ANGLE=0 to 08:00 AM.
-    Time parameters passed to CSP/WFX expect the number of seconds past 08:00 AM.
+    Assetto Corsa's internal clock maps SUN_ANGLE=0 to 10:00 AM (after timezone offsets).
+    Time parameters passed to CSP/WFX expect the number of seconds past 10:00 AM.
     """
     time_map = {
-        -16: 82800,  # Dawn (07:00) -> 23 hours past 8am
-        8: 0,        # Sunrise (08:00) -> 0 hours
-        24: 3600,    # Morning (09:00) -> 1 hour
-        40: 9000,    # Late Morning (10:30) -> 2.5 hours
-        56: 14400,   # Midday (12:00) -> 4 hours
-        72: 19800,   # Early Afternoon (13:30) -> 5.5 hours
-        88: 25200,   # Afternoon (15:00) -> 7 hours
-        104: 30600,  # Late Afternoon (16:30) -> 8.5 hours
-        120: 36000,  # Sunset (18:00) -> 10 hours
-        136: 41400,  # Dusk (19:30) -> 11.5 hours
-        163: 50400   # Night (22:00) -> 14 hours
+        -16: 75600,  # Dawn (07:00) -> 21 hours past 10am
+        8: 79200,    # Sunrise (08:00) -> 22 hours
+        24: 82800,   # Morning (09:00) -> 23 hours
+        40: 1800,    # Late Morning (10:30) -> 0.5 hours
+        56: 7200,    # Midday (12:00) -> 2 hours
+        72: 12600,   # Early Afternoon (13:30) -> 3.5 hours
+        88: 18000,   # Afternoon (15:00) -> 5 hours
+        104: 23400,  # Late Afternoon (16:30) -> 6.5 hours
+        120: 28800,  # Sunset (18:00) -> 8 hours
+        136: 34200,  # Dusk (19:30) -> 9.5 hours
+        163: 43200   # Night (22:00) -> 12 hours
     }
     
     # Use exact map if possible
     if angle in time_map:
         return time_map[angle]
         
-    # Linear interpolation: 16 degrees = 1 hour (from 08:00 AM base)
-    seconds = int(((angle - 8) / 16.0) * 3600)
+    # Linear interpolation: 16 degrees = 1 hour (from 10:00 AM base)
+    seconds = int(((angle - 40) / 16.0) * 3600 + 1800)
     if seconds < 0:
         seconds += 86400
     return max(0, min(86399, seconds))
