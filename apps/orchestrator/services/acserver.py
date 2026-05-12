@@ -681,6 +681,12 @@ class ACServerManager:
         fx_time = time_map.get(sun_angle, int(46800 + (sun_angle / 16.0) * 3600))
         # Ensure it is bounded 0 to 86399
         fx_time = max(0, min(86399, fx_time))
+        
+        # Map weather ID string to integer
+        try:
+            w_id = int(weather) if weather != "None" else -1
+        except (ValueError, TypeError):
+            w_id = 15 # Default to Clear
 
         cfg += (
             f"{dyn_track_header}\n"
@@ -728,12 +734,6 @@ class ACServerManager:
         )
         if enable_csp:
             import json, base64
-            
-            # Map weather ID string to integer
-            try:
-                w_id = int(weather) if weather != "None" else -1
-            except (ValueError, TypeError):
-                w_id = 15 # Default to Clear
                 
             # Generate the real conditions JSON and encode it dynamically to ensure time is forced
             rc_dict = {
