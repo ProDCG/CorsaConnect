@@ -32,6 +32,8 @@ class StartServerRequest(BaseModel):
     weather: str = "3_clear"
     ai_count: int = 0
     ai_difficulty: int = 80
+    sun_angle: int = 48
+    time_mult: int = 1
 
 
 # Singleton server manager — created when router is bound to state
@@ -82,6 +84,8 @@ def create_router(state: AppState) -> APIRouter:
             weather=req.weather,
             ai_count=req.ai_count,
             ai_difficulty=req.ai_difficulty,
+            sun_angle=req.sun_angle,
+            time_mult=req.time_mult,
         )
 
         if result.get("status") == "success":
