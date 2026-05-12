@@ -280,7 +280,11 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         )
 
         # [LIGHTING] — sun angle, time multiplier, and CM-specific weather fields
-        cm_weather_type = _CM_WEATHER_TYPES.get(weather, 16)
+        try:
+            w_id = int(weather) if weather != "None" else -1
+        except (ValueError, TypeError):
+            w_id = 15
+            
         lines.append(
             f"\n[LIGHTING]\n"
             f"SPECULAR_MULT=1.0\n"
@@ -288,25 +292,27 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             f"SUN_ANGLE={sun_angle:.2f}\n"
             f"TIME_MULT={time_mult:.1f}\n"
             f"__CM_WEATHER_CONTROLLER=pure\n"
-            f"__CM_WEATHER_TYPE={cm_weather_type}\n"
+            f"__CM_WEATHER_TYPE={w_id}\n"
             f"__TRACK_TIMEZONE_OFFSET=3600\n"
             f"__TRACK_GEOTAG_LONG={_DEFAULT_GEOTAG[1]}\n"
             f"__TRACK_TIMEZONE_BASE_OFFSET=3600\n"
             f"__TRACK_GEOTAG_LAT={_DEFAULT_GEOTAG[0]}\n"
             f"__TRACK_TIMEZONE_DTS=0"
         )
+        
+        # Calculate time_seconds for GRAPHICS string
+        time_seconds = _sun_angle_to_seconds(sun_angle)
 
         # [WEATHER] — expanded for CSP Weather FX
         lines.append(
             f"\n[WEATHER]\n"
-            f"NAME={weather}\n"
-            f"GRAPHICS={weather}\n"
+            f"NAME=sol_42_thunderstorm\n"
+            f"GRAPHICS=sol_42_thunderstorm_type={w_id}_time={time_seconds}\n"
             f"CONTROLLER=pure\n"
             f"TYPE=1"
         )
 
         # [TIME] — seconds from midnight for CSP
-        time_seconds = _sun_angle_to_seconds(sun_angle)
         lines.append(
             f"\n[TIME]\n"
             f"TIME={time_seconds}\n"
