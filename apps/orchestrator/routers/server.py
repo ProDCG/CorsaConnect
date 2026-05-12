@@ -197,8 +197,11 @@ def create_router(state: AppState) -> APIRouter:
         if not group:
             return {"status": "error", "message": "Group not found"}
 
-        from shared.utils import get_local_ip
-        server_ip = get_local_ip()
+        from shared.utils import get_local_ip  # noqa: F401 (kept for reference)
+        # Use localhost — spectator runs on the same machine as the server.
+        # Connecting via LAN IP to yourself is often blocked by Windows firewall
+        # even when the same port accepts external connections just fine.
+        server_ip = "127.0.0.1"
 
         # Resolve car — use first car in pool
         car = group.car_pool[0] if group.car_pool else "ks_ferrari_488_gt3"
