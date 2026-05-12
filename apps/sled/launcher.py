@@ -31,31 +31,28 @@ _CM_WEATHER_TYPES: dict[str, int] = {
 
 
 def _sun_angle_to_seconds(angle: float) -> int:
-    """Convert a sun angle to seconds from 10:00 AM for CSP's [TIME] section.
-
-    Assetto Corsa's internal clock maps SUN_ANGLE=0 to 10:00 AM (after timezone offsets).
-    Time parameters passed to CSP/WFX expect the number of seconds past 10:00 AM.
+    """Convert a sun angle to exact seconds from midnight 00:00 for CSP's [TIME] section.
     """
     time_map = {
-        -16: 75600,  # Dawn (07:00) -> 21 hours past 10am
-        8: 79200,    # Sunrise (08:00) -> 22 hours
-        24: 82800,   # Morning (09:00) -> 23 hours
-        40: 1800,    # Late Morning (10:30) -> 0.5 hours
-        56: 7200,    # Midday (12:00) -> 2 hours
-        72: 12600,   # Early Afternoon (13:30) -> 3.5 hours
-        88: 18000,   # Afternoon (15:00) -> 5 hours
-        104: 23400,  # Late Afternoon (16:30) -> 6.5 hours
-        120: 28800,  # Sunset (18:00) -> 8 hours
-        136: 34200,  # Dusk (19:30) -> 9.5 hours
-        163: 43200   # Night (22:00) -> 12 hours
+        -16: 25200,  # Dawn (07:00)
+        8: 28800,    # Sunrise (08:00)
+        24: 32400,   # Morning (09:00)
+        40: 37800,   # Late Morning (10:30)
+        56: 43200,   # Midday (12:00)
+        72: 48600,   # Early Afternoon (13:30)
+        88: 54000,   # Afternoon (15:00)
+        104: 59400,  # Late Afternoon (16:30)
+        120: 64800,  # Sunset (18:00)
+        136: 70200,  # Dusk (19:30)
+        163: 79200   # Night (22:00)
     }
     
     # Use exact map if possible
     if angle in time_map:
         return time_map[angle]
         
-    # Linear interpolation: 16 degrees = 1 hour (from 10:00 AM base)
-    seconds = int(((angle - 40) / 16.0) * 3600 + 1800)
+    # Linear interpolation (0 = 07:30, 16 degrees = 1 hour)
+    seconds = int(27000 + (angle / 16.0) * 3600)
     if seconds < 0:
         seconds += 86400
     return max(0, min(86399, seconds))

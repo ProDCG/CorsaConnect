@@ -664,22 +664,22 @@ class ACServerManager:
         if time_mult is None:
             time_mult = 1
 
-        # Map sun_angle to CM_FX_TIME (seconds past 10:00 AM base)
+        # Map sun_angle to CM_FX_TIME (exact seconds from midnight 00:00)
         time_map = {
-            -16: 75600,  # Dawn (07:00) -> 21 hours past 10am
-            8: 79200,    # Sunrise (08:00) -> 22 hours
-            24: 82800,   # Morning (09:00) -> 23 hours
-            40: 1800,    # Late Morning (10:30) -> 0.5 hours
-            56: 7200,    # Midday (12:00) -> 2 hours
-            72: 12600,   # Early Afternoon (13:30) -> 3.5 hours
-            88: 18000,   # Afternoon (15:00) -> 5 hours
-            104: 23400,  # Late Afternoon (16:30) -> 6.5 hours
-            120: 28800,  # Sunset (18:00) -> 8 hours
-            136: 34200,  # Dusk (19:30) -> 9.5 hours
-            163: 43200   # Night (22:00) -> 12 hours
+            -16: 25200,  # Dawn (07:00)
+            8: 28800,    # Sunrise (08:00)
+            24: 32400,   # Morning (09:00)
+            40: 37800,   # Late Morning (10:30)
+            56: 43200,   # Midday (12:00)
+            72: 48600,   # Early Afternoon (13:30)
+            88: 54000,   # Afternoon (15:00)
+            104: 59400,  # Late Afternoon (16:30)
+            120: 64800,  # Sunset (18:00)
+            136: 70200,  # Dusk (19:30)
+            163: 79200   # Night (22:00)
         }
-        # Fallback linear interpolation based on 10:00 AM base
-        fx_time = time_map.get(sun_angle, int(((sun_angle - 40) / 16.0) * 3600 + 1800))
+        # Fallback linear interpolation (0 = 07:30, 16 degrees = 1 hour)
+        fx_time = time_map.get(sun_angle, int(27000 + (sun_angle / 16.0) * 3600))
         if fx_time < 0:
             fx_time += 86400
         # Ensure it is bounded 0 to 86399
@@ -706,8 +706,7 @@ class ACServerManager:
             f"__CM_WFX_TIME_MULT={time_mult}\n"
             f"__CM_WFX_TYPE={w_id}\n"
             f"__CM_WFX_USE_CUSTOM_WEATHER=1\n"
-            f"__CM_WFX_USE_CUSTOM_DATE=1\n"
-            f"__CM_WFX_DATE=1718971200\n"
+            f"__CM_WFX_USE_CUSTOM_DATE=0\n"
             f"BASE_TEMPERATURE_AMBIENT=18\n"
             f"BASE_TEMPERATURE_ROAD=6\n"
             f"VARIATION_AMBIENT=1\n"
