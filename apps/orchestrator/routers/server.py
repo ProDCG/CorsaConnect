@@ -12,11 +12,16 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from apps.orchestrator.services.acserver import ACServerManager
+from apps.orchestrator.services.spectator import SpectatorService
 from apps.orchestrator.state import AppState
 
 logger = logging.getLogger("ridge.server")
 
 router = APIRouter(prefix="/server", tags=["server"])
+
+# Spectator service singleton (one AC spectator window per admin PC)
+_spectator: SpectatorService = SpectatorService()
+
 
 
 class StartServerRequest(BaseModel):
@@ -179,5 +184,54 @@ def create_router(state: AppState) -> APIRouter:
             cfg_str = f"Config file not found at {cfg_path}. Please start the server at least once to generate it."
 
         return {"status": "success", "config": cfg_str}
+
+    @router.post("/spectate/{group_id}")
+    async def spectate_group(group_id: str, monitor: int = 1) -> dict[str, object]:
+        """Launch a spectator AC window on Monitor {monitor} for the given group's server."""
+        assert _manager is not None
+        server = _manager._servers.get(group_id)
+        if not server or not server.process or server.process.poll() is not None:
+            return {"status": "error", "message": "Server is not running for this group"}
+
+        group = state.get_group(group_id)
+        if not group:
+            return {"status": "error", "message": "Group not found"}
+
+        from shared.utils import get_local_ip
+        server_ip = get_local_ip()
+
+        # Resolve car — use first car in pool
+        car = group.car_pool[0] if group.car_pool else "ks_ferrari_488_gt3"
+
+        # Resolve AC path from settings
+        ac_settings = state.settings
+        ac_path = getattr(ac_settings, "ac_path", None) or r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\acs.exe"
+
+        # Resolve track config
+        config_track = group.track_layout or ""
+
+        result = _spectator.launch(
+            group_id=group_id,
+            server_ip=server_ip,
+            server_port=server.port,
+            server_http_port=server.http_port,
+            track=group.track,
+            config_track=config_track,
+            car=car,
+            sun_angle=float(group.sun_angle),
+            ac_path=ac_path,
+            monitor_index=monitor,
+        )
+        return result
+
+    @router.post("/spectate/stop")
+    async def stop_spectate() -> dict[str, object]:
+        """Kill the spectator AC window and restore video settings."""
+        return _spectator.kill()
+
+    @router.get("/spectate/status")
+    async def spectate_status() -> dict[str, object]:
+        """Return whether a spectator window is currently active."""
+        return _spectator.status()
 
     return router

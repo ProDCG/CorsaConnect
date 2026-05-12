@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap, Filter, X, Download, RefreshCw } from 'lucide-react'
+import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap, Filter, X, Download, RefreshCw, Eye } from 'lucide-react'
+
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -242,6 +243,11 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
     // Preview Config modal state
     const [previewConfig, setPreviewConfig] = useState<string | null>(null)
 
+    // Spectator state
+    const [spectatorGroupId, setSpectatorGroupId] = useState<string | null>(null)
+    const [spectatorLoading, setSpectatorLoading] = useState(false)
+
+
     /* ---- Data fetching ---- */
 
     const fetchGroups = useCallback(async () => {
@@ -286,7 +292,50 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
         return () => clearInterval(interval)
     }, [fetchGroups, fetchServers, fetchCatalogs])
 
+    /* ---- Spectator ---- */
+
+    const fetchSpectatorStatus = useCallback(async () => {
+        try {
+            const res = await fetch('/api/server/spectate/status')
+            if (res.ok) {
+                const data = await res.json()
+                setSpectatorGroupId(data.active ? (data.group_id ?? null) : null)
+            }
+        } catch { /* offline */ }
+    }, [])
+
+    useEffect(() => {
+        fetchSpectatorStatus()
+        const t = setInterval(fetchSpectatorStatus, 5000)
+        return () => clearInterval(t)
+    }, [fetchSpectatorStatus])
+
+    const toggleSpectate = async (groupId: string) => {
+        setSpectatorLoading(true)
+        try {
+            if (spectatorGroupId === groupId) {
+                // Stop spectating
+                await fetch('/api/server/spectate/stop', { method: 'POST' })
+                setSpectatorGroupId(null)
+            } else {
+                // Start spectating this group
+                const res = await fetch(`/api/server/spectate/${groupId}?monitor=1`, { method: 'POST' })
+                const data = await res.json()
+                if (data.status === 'success') {
+                    setSpectatorGroupId(groupId)
+                } else {
+                    alert(`Spectate failed: ${data.message}`)
+                }
+            }
+        } catch (e) {
+            console.error(e)
+        } finally {
+            setSpectatorLoading(false)
+        }
+    }
+
     /* ---- Group CRUD ---- */
+
 
     const createGroup = async () => {
         if (!newGroupName.trim()) return
@@ -633,6 +682,32 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                         <Server size={14} /> <span className="hidden sm:inline">Config</span>
                                     </button>
                                 )}
+                                {/* Spectate button — only shown for running multiplayer servers */}
+                                {selectedGroup.mode === 'multiplayer' && isSelectedServerRunning && (() => {
+                                    const isSpectating = spectatorGroupId === selectedGroup.id
+                                    return (
+                                        <button
+                                            onClick={() => toggleSpectate(selectedGroup.id)}
+                                            disabled={spectatorLoading}
+                                            title={isSpectating ? 'Stop Spectating (Monitor 2)' : 'Watch on Monitor 2'}
+                                            className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-black uppercase disabled:opacity-50 ${
+                                                isSpectating
+                                                    ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30'
+                                                    : 'bg-white/5 hover:bg-purple-500/10 text-white/40 hover:text-purple-400 border border-transparent'
+                                            }`}
+                                        >
+                                            <Eye size={14} />
+                                            {isSpectating ? (
+                                                <span className="flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse inline-block" />
+                                                    Live
+                                                </span>
+                                            ) : (
+                                                <span>Spectate</span>
+                                            )}
+                                        </button>
+                                    )
+                                })()}
                                 <button onClick={() => deleteGroup(selectedGroup.id)}
                                     className="bg-white/5 hover:bg-red-500/20 text-white/20 hover:text-red-400 p-2 rounded-xl transition-all">
                                     <Trash2 size={14} />
