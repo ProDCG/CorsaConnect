@@ -198,9 +198,14 @@ class ACServerManager:
 
         # Total slots = one per rig + AI count + placeholders for hot-join
         total_slots = max(len(rig_ids) + ai_count, 10)
+        # MAX_CLIENTS must cover ALL entries (placeholder slots + 1 dedicated spectator).
+        # The frontend sends rig_count + ai + 2 which is far smaller than the
+        # entry list; using it causes the spectator slot to fall outside the
+        # active range and the server returns "no slots available".
+        actual_max_clients = total_slots + 1  # +1 for the dedicated spectator slot
         logger.info(
-            "Slot calculation: %d rigs + %d AI = %d total slots (padded for hot-join)",
-            len(rig_ids), ai_count, total_slots,
+            "Slot calculation: %d rigs + %d AI = %d total slots, max_clients=%d (includes spectator)",
+            len(rig_ids), ai_count, total_slots, actual_max_clients,
         )
 
         enable_csp = getattr(self.state.settings, "enable_csp", False)
@@ -209,7 +214,7 @@ class ACServerManager:
 
         self._write_server_cfg(
             config_dir, group_name, track, all_cars_list, udp_port, tcp_port, http_port,
-            race_laps, practice_time, qualy_time, total_slots, weather,
+            race_laps, practice_time, qualy_time, actual_max_clients, weather,
             sun_angle, time_mult, enable_csp=enable_csp, track_layout=track_layout,
             practice_enabled=group.practice_enabled if group else False,
             qualy_enabled=group.qualy_enabled if group else False,
