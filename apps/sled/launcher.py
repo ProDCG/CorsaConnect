@@ -307,7 +307,7 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         lines.append(
             f"\n[WEATHER]\n"
             f"NAME=sol_42_thunderstorm\n"
-            f"GRAPHICS=sol_42_thunderstorm_type={w_id}_time={time_seconds}\n"
+            f"GRAPHICS=sol_42_thunderstorm\n"
             f"CONTROLLER=pure\n"
             f"TYPE=1"
         )

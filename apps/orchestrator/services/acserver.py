@@ -730,7 +730,7 @@ class ACServerManager:
             f"\n"
             f"[__CM_PLUGIN]\n"
             f"ACTIVE={1 if enable_csp else 0}\n"
-            f"REAL_CONDITIONS={1 if enable_csp else 0}\n"
+            f"REAL_CONDITIONS=0\n"
         )
         if enable_csp:
             import json, base64
