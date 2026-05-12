@@ -53,7 +53,7 @@ class RigGroup(BaseModel):
     # Per-group race settings
     track: str = "monza"
     track_layout: str | None = None
-    weather: str = "3_clear"
+    weather: str = "15"
     car_pool: list[str] = Field(default_factory=list)
     ai_count: int = 0
     ai_difficulty: int = 80  # 0-100 (AC's AI strength)
@@ -149,7 +149,7 @@ class GlobalSettings(BaseModel):
     race_time: int = 0
     allow_drs: bool = True
     selected_track: str = "monza"
-    selected_weather: str = "3_clear"
+    selected_weather: str = "15"
     content_folder: str = r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa"
     enable_csp: bool = False
 

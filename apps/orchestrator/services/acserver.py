@@ -690,7 +690,7 @@ class ACServerManager:
             f"LAP_GAIN=10\n"
             f"\n"
             f"[WEATHER_0]\n"
-            f"GRAPHICS={weather}\n"
+            f"GRAPHICS=Pure\n"
             f"__CM_FX_TIME={fx_time}\n"
             f"__CM_WFX_USE_CUSTOM_WEATHER=1\n"
             f"__CM_WFX_TYPE=2\n"
@@ -726,9 +726,17 @@ class ACServerManager:
         )
         if enable_csp:
             import json, base64
+            
+            # Map weather ID string to integer
+            try:
+                w_id = int(weather) if weather != "None" else -1
+            except (ValueError, TypeError):
+                w_id = 15 # Default to Clear
+                
             # Generate the real conditions JSON and encode it dynamically to ensure time is forced
             rc_dict = {
                 "useRealConditions": True,
+                "weatherType": w_id,
                 "timeOffset": "00:00:00",
                 "useFixedStartingTime": True,
                 "fixedStartingTime": fx_time,
