@@ -316,8 +316,8 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         lines.append(
             f"\n[TIME]\n"
             f"TIME={time_seconds}\n"
-            f"DAYS=0\n"
-            f"MONTHS=0\n"
+            f"DAYS=21\n"
+            f"MONTHS=6\n"
             f"YEARS=2026"
         )
 

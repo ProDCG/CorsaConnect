@@ -702,6 +702,8 @@ class ACServerManager:
             f"__CM_WFX_TIME={fx_time}\n"
             f"__CM_WFX_TYPE={w_id}\n"
             f"__CM_WFX_USE_CUSTOM_WEATHER=1\n"
+            f"__CM_WFX_USE_CUSTOM_DATE=1\n"
+            f"__CM_WFX_DATE=1718971200\n"
             f"BASE_TEMPERATURE_AMBIENT=18\n"
             f"BASE_TEMPERATURE_ROAD=6\n"
             f"VARIATION_AMBIENT=1\n"
@@ -737,13 +739,13 @@ class ACServerManager:
                 
             # Generate the real conditions JSON and encode it dynamically to ensure time is forced
             rc_dict = {
-                "useRealConditions": True,
+                "useRealConditions": False,
                 "timeOffset": "00:00:00",
                 "useFixedStartingTime": True,
                 "fixedStartingTime": fx_time,
                 "timeMultiplier": float(time_mult),
                 "temperatureOffset": 0.0,
-                "useFixedAirTemperature": False,
+                "useFixedAirTemperature": True,
                 "fixedAirTemperature": 25.0,
                 "weatherTypeChangePeriod": "00:05:00",
                 "weatherTypeChangeToNeighboursOnly": True,
