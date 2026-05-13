@@ -193,20 +193,13 @@ class ACServerManager:
                     else:
                         logger.warning("Rig '%s' selected car '%s' not found on disk — using default", rid, rc)
 
-        _SPECTATOR_CAR = "abarth500"
         all_cars_list = sorted(set(all_cars_set))  # deduplicate and sort
-        # Add the spectator-only car so it is synced to the server content dir
-        # and included in the CARS line. abarth500 is always present in the
-        # base AC install so this is safe on every system.
-        if _SPECTATOR_CAR not in all_cars_list:
-            all_cars_list.append(_SPECTATOR_CAR)
-            all_cars_list = sorted(all_cars_list)
-        logger.info("Validated cars for server (incl. spectator car): %s", all_cars_list)
+        logger.info("Validated cars for server: %s", all_cars_list)
 
-        # 9 regular hot-join slots + 1 spectator slot (abarth500) = 10 = MAX_CLIENTS
+        # Total slots = one per rig + AI count + placeholders for hot-join
         total_slots = max(len(rig_ids) + ai_count, 10)
         logger.info(
-            "Slot calculation: %d rigs + %d AI = %d total slots (9 hot-join + 1 spectator)",
+            "Slot calculation: %d rigs + %d AI = %d total slots (padded for hot-join)",
             len(rig_ids), ai_count, total_slots,
         )
 
@@ -798,15 +791,11 @@ class ACServerManager:
         Layout:
           CAR_0 .. CAR_{n-1}  →  one per rig (named, with their selected car)
           CAR_n .. CAR_{n+m-1} →  AI drivers (cars picked from pool)
-          CAR_{n+m} .. CAR_8   →  placeholder slots for hot-join (9 slots max)
-          CAR_9                →  dedicated spectator (abarth500, SPECTATOR_MODE=1)
+          CAR_{n+m} .. CAR_9   →  placeholder slots for hot-join (total_slots minimum)
 
-        Total entries = max(len(rig_ids) + ai_count, 9) + 1 = 10 = MAX_CLIENTS.
-        abarth500 is used as a unique car so only the spectator client ever requests it.
+        Total entries = max(len(rig_ids) + ai_count, total_slots) to support hot-join.
         """
-        _SPECTATOR_CAR = "abarth500"
-        # Reserve 9 slots for regular play; slot 9 (the 10th) is always spectator
-        PLACEHOLDER_SLOTS = max(len(rig_ids) + ai_count, 9)
+        PLACEHOLDER_SLOTS = max(len(rig_ids) + ai_count, total_slots)
         entries = []
         idx = 0
         default_car = cars[0] if cars else "ks_ferrari_488_gt3"
@@ -861,7 +850,7 @@ class ACServerManager:
             )
             idx += 1
 
-        # ── Placeholder hot-join slots (fill up to 9 total, leaving slot 9 for spectator) ──
+        # ── Placeholder hot-join slots (fill up to PLACEHOLDER_SLOTS total) ──
         while idx < PLACEHOLDER_SLOTS:
             placeholder_car = cars[idx % len(cars)] if cars else default_car
             entries.append(
@@ -877,26 +866,10 @@ class ACServerManager:
             )
             idx += 1
 
-        # ── Dedicated Spectator slot (slot 9 / CAR_9) ──
-        # Uses abarth500 as an exclusive car so only the spectator client ever requests it.
-        # This slot stays within MAX_CLIENTS=10 so the server never exceeds its limit.
-        entries.append(
-            f"[CAR_{idx}]\n"
-            f"MODEL={_SPECTATOR_CAR}\n"
-            f"SKIN=\n"
-            f"SPECTATOR_MODE=1\n"
-            f"DRIVERNAME=Spectator\n"
-            f"TEAM=\n"
-            f"GUID=\n"
-            f"BALLAST=0\n"
-            f"RESTRICTOR=0\n"
-        )
-        idx += 1
-
         entry_path = os.path.join(config_dir, "cfg", "entry_list.ini")
         with open(entry_path, "w") as f:
             f.write("\n".join(entries))
         logger.info(
-            "Wrote entry_list.ini: %d rig slots + %d AI + %d hot-join + 1 spectator (abarth500) = %d total",
-            len(rig_ids), ai_count, max(0, idx - len(rig_ids) - ai_count - 1), idx,
+            "Wrote entry_list.ini: %d rig slots + %d AI + %d placeholder = %d total entries",
+            len(rig_ids), ai_count, max(0, idx - len(rig_ids) - ai_count), idx,
         )
