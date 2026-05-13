@@ -188,7 +188,11 @@ def _write_low_quality_video_ini(ac_folder: str) -> str | None:
                 f.writelines(lines)
             logger.info("Backed up video.ini -> %s", backup)
 
-        # Keys to override for spectator low-quality
+        # Keys to override for spectator low-quality.
+        # FILTER=pureHDR and ENABLED=1 are pinned so Pure's post-processing
+        # chain is always active — without these, Pure won't auto-enable and
+        # graphics look like vanilla AC.  DISABLE_LEGACY_HDR=1 is required for
+        # Pure's HDR pipeline to take over from AC's built-in tonemapper.
         overrides = {
             "SHADOW_MAP_SIZE": "512",
             "SHADOW_MAP_SIZE2": "512",
@@ -200,8 +204,12 @@ def _write_low_quality_video_ini(ac_folder: str) -> str | None:
             "ANISOTROPIC": "4",
             "WIDTH": "1920",
             "HEIGHT": "1080",
-            "FULLSCREEN": "0",       # Must be windowed to move to monitor 2
+            "FULLSCREEN": "0",          # Must be windowed to move to monitor 2
             "BORDERLESS": "1",
+            # Pure HDR — must be present or Pure won't initialise its pipeline
+            "FILTER": "pureHDR",        # [POST_PROCESS]
+            "ENABLED": "1",             # [POST_PROCESS] — enables PP chain
+            "DISABLE_LEGACY_HDR": "1",  # [VIDEO] — lets Pure own tonemapping
         }
 
         new_lines = []

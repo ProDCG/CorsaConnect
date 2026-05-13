@@ -466,6 +466,60 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         return None
 
 
+def _ensure_pure_video_ini() -> None:
+    """Patch video.ini to guarantee Pure HDR is active for both solo and MP launches.
+
+    Only touches three keys — the player's own quality/resolution settings are
+    left completely untouched:
+      FILTER=pureHDR      → [POST_PROCESS] loads Pure's HDR shader
+      ENABLED=1           → [POST_PROCESS] enables the post-processing chain
+      DISABLE_LEGACY_HDR=1→ [VIDEO] hands tonemapping to Pure
+    """
+    user_profile = os.environ.get("USERPROFILE") or os.path.expanduser("~")
+    documents = os.path.join(user_profile, "Documents")
+    onedrive_docs = os.path.join(user_profile, "OneDrive", "Documents")
+    if not os.path.exists(os.path.join(documents, "Assetto Corsa")) and os.path.exists(onedrive_docs):
+        documents = onedrive_docs
+
+    video_ini = os.path.join(documents, "Assetto Corsa", "cfg", "video.ini")
+    if not os.path.exists(video_ini):
+        logger.warning("video.ini not found — skipping Pure HDR patch")
+        return
+
+    # Keys that Pure requires.  We only override these three so the player's
+    # own resolution / quality preferences are completely preserved.
+    pure_keys = {
+        "FILTER": "pureHDR",        # [POST_PROCESS]
+        "ENABLED": "1",             # [POST_PROCESS]
+        "DISABLE_LEGACY_HDR": "1",  # [VIDEO]
+    }
+
+    try:
+        with open(video_ini, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+
+        new_lines = []
+        remaining = dict(pure_keys)
+        for line in lines:
+            stripped = line.strip()
+            key = stripped.split("=")[0].strip().upper() if "=" in stripped else ""
+            if key in remaining:
+                new_lines.append(f"{key}={remaining.pop(key)}\n")
+            else:
+                new_lines.append(line)
+
+        # Append any keys that weren't already in the file
+        for k, v in remaining.items():
+            new_lines.append(f"{k}={v}\n")
+
+        with open(video_ini, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+
+        logger.info("Patched video.ini with Pure HDR keys: %s", list(pure_keys))
+    except Exception as e:
+        logger.warning("Could not patch video.ini for Pure HDR: %s", e)
+
+
 def launch_ac(config: SledConfig, params: dict[str, object]) -> subprocess.Popen[bytes] | None:
     """Launch Assetto Corsa directly into a race.
 
@@ -487,6 +541,9 @@ def launch_ac(config: SledConfig, params: dict[str, object]) -> subprocess.Popen
         else:
             logger.error("acs.exe not found at %s", ac_path)
             return None
+
+    # Ensure Pure HDR is active in video.ini before launch (solo + MP)
+    _ensure_pure_video_ini()
 
     ini_path = generate_race_ini(config, params)
     if not ini_path:
