@@ -303,14 +303,15 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             f"CLOUD_SPEED=0.200\n"
             f"SUN_ANGLE={sun_angle:.2f}\n"
             f"TIME_MULT={time_mult:.1f}\n"
-            f"__CM_WEATHER_CONTROLLER=pureCtrl static\n"
-            f"__CM_WEATHER_TYPE={w_id}\n"
-            f"__TRACK_TIMEZONE_OFFSET=3600\n"
+            f"__TRACK_GEOTAG_LAT={_DEFAULT_GEOTAG[0]}\n"
             f"__TRACK_GEOTAG_LONG={_DEFAULT_GEOTAG[1]}\n"
             f"__TRACK_TIMEZONE_BASE_OFFSET=3600\n"
-            f"__TRACK_GEOTAG_LAT={_DEFAULT_GEOTAG[0]}\n"
+            f"__TRACK_TIMEZONE_OFFSET=3600\n"
             f"__TRACK_TIMEZONE_DTS=0"
         )
+        # NOTE: __CM_WEATHER_CONTROLLER and __CM_WEATHER_TYPE are intentionally
+        # omitted — the reference Pure race.ini does not include them.  Pure
+        # activates via CONTROLLER=pure in [WEATHER] + FILTER=pureHDR in video.ini.
         
         # Calculate time_seconds for GRAPHICS string
         time_seconds = _sun_angle_to_seconds(sun_angle)
@@ -466,14 +467,31 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         return None
 
 
-def _ensure_pure_video_ini() -> None:
-    """Patch video.ini to guarantee Pure HDR is active for both solo and MP launches.
+# Pure requires this exact [POST_PROCESS] configuration to activate its HDR
+# pipeline.  These values are merged section-by-section into the rig's own
+# video.ini so the player's [VIDEO] resolution/refresh/fullscreen is preserved.
+_PURE_POST_PROCESS_KEYS: dict[str, str] = {
+    "DOF":          "5",
+    "ENABLED":      "1",
+    "FILTER":       "pureHDR",
+    "FXAA":         "1",
+    "GLARE":        "5",
+    "HEAT_SHIMMER": "1",
+    "QUALITY":      "5",
+    "RAYS_OF_GOD":  "1",
+}
 
-    Only touches three keys — the player's own quality/resolution settings are
-    left completely untouched:
-      FILTER=pureHDR      → [POST_PROCESS] loads Pure's HDR shader
-      ENABLED=1           → [POST_PROCESS] enables the post-processing chain
-      DISABLE_LEGACY_HDR=1→ [VIDEO] hands tonemapping to Pure
+
+def _ensure_pure_video_ini() -> None:
+    """Section-aware video.ini merge that forces Pure HDR on for rig launches.
+
+    Strategy:
+      [POST_PROCESS] — every key is set to the Pure reference values.  This
+                       is the main switch that tells AC to load Pure's shader.
+      [VIDEO]        — only DISABLE_LEGACY_HDR=1 is forced; all other keys
+                       (WIDTH, HEIGHT, FULLSCREEN, REFRESH …) are left alone
+                       so the rig keeps its own display configuration.
+      All other sections are written through unchanged.
     """
     user_profile = os.environ.get("USERPROFILE") or os.path.expanduser("~")
     documents = os.path.join(user_profile, "Documents")
@@ -486,36 +504,69 @@ def _ensure_pure_video_ini() -> None:
         logger.warning("video.ini not found — skipping Pure HDR patch")
         return
 
-    # Keys that Pure requires.  We only override these three so the player's
-    # own resolution / quality preferences are completely preserved.
-    pure_keys = {
-        "FILTER": "pureHDR",        # [POST_PROCESS]
-        "ENABLED": "1",             # [POST_PROCESS]
-        "DISABLE_LEGACY_HDR": "1",  # [VIDEO]
-    }
-
     try:
         with open(video_ini, "r", encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
 
-        new_lines = []
-        remaining = dict(pure_keys)
+        new_lines: list[str] = []
+        current_section = ""
+        # Track which POST_PROCESS keys we've already written so we can append missing ones
+        pp_written: set[str] = set()
+        # DISABLE_LEGACY_HDR lives in [VIDEO]
+        dlhdr_written = False
+
         for line in lines:
             stripped = line.strip()
-            key = stripped.split("=")[0].strip().upper() if "=" in stripped else ""
-            if key in remaining:
-                new_lines.append(f"{key}={remaining.pop(key)}\n")
-            else:
-                new_lines.append(line)
 
-        # Append any keys that weren't already in the file
-        for k, v in remaining.items():
-            new_lines.append(f"{k}={v}\n")
+            # Detect section header
+            if stripped.startswith("[") and stripped.endswith("]"):
+                # Before leaving [POST_PROCESS], append any keys not already seen
+                if current_section == "POST_PROCESS":
+                    for k, v in _PURE_POST_PROCESS_KEYS.items():
+                        if k not in pp_written:
+                            new_lines.append(f"{k}={v}\n")
+                # Before leaving [VIDEO], append DISABLE_LEGACY_HDR if not seen
+                if current_section == "VIDEO" and not dlhdr_written:
+                    new_lines.append("DISABLE_LEGACY_HDR=1\n")
+                    dlhdr_written = True
+                current_section = stripped[1:-1].upper()
+                new_lines.append(line)
+                continue
+
+            if "=" in stripped:
+                key = stripped.split("=")[0].strip().upper()
+
+                if current_section == "POST_PROCESS":
+                    # Always use Pure's reference value for every POST_PROCESS key
+                    val = _PURE_POST_PROCESS_KEYS.get(key)
+                    if val is not None:
+                        new_lines.append(f"{key}={val}\n")
+                        pp_written.add(key)
+                        continue
+                    # Unknown POST_PROCESS key — keep as-is
+
+                if current_section == "VIDEO" and key == "DISABLE_LEGACY_HDR":
+                    new_lines.append("DISABLE_LEGACY_HDR=1\n")
+                    dlhdr_written = True
+                    continue
+
+            new_lines.append(line)
+
+        # Handle files that end without a trailing section change
+        if current_section == "POST_PROCESS":
+            for k, v in _PURE_POST_PROCESS_KEYS.items():
+                if k not in pp_written:
+                    new_lines.append(f"{k}={v}\n")
+        if current_section == "VIDEO" and not dlhdr_written:
+            new_lines.append("DISABLE_LEGACY_HDR=1\n")
 
         with open(video_ini, "w", encoding="utf-8") as f:
             f.writelines(new_lines)
 
-        logger.info("Patched video.ini with Pure HDR keys: %s", list(pure_keys))
+        logger.info(
+            "Patched video.ini for Pure HDR (POST_PROCESS=%s, DISABLE_LEGACY_HDR=1)",
+            _PURE_POST_PROCESS_KEYS,
+        )
     except Exception as e:
         logger.warning("Could not patch video.ini for Pure HDR: %s", e)
 

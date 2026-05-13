@@ -121,13 +121,13 @@ def _generate_spectator_race_ini(
         "CLOUD_SPEED=0.200\n"
         f"SUN_ANGLE={sun_angle:.2f}\n"
         "TIME_MULT=1.0\n"
-        "__CM_WEATHER_CONTROLLER=pureCtrl static\n"
-        "__CM_WEATHER_TYPE=15\n"
-        f"__TRACK_TIMEZONE_OFFSET=3600\n"
+        "__TRACK_GEOTAG_LAT=45.6156\n"
         "__TRACK_GEOTAG_LONG=9.2811\n"
         "__TRACK_TIMEZONE_BASE_OFFSET=3600\n"
-        "__TRACK_GEOTAG_LAT=45.6156\n"
+        "__TRACK_TIMEZONE_OFFSET=3600\n"
         "__TRACK_TIMEZONE_DTS=0\n"
+        # NOTE: __CM_WEATHER_CONTROLLER / __CM_WEATHER_TYPE intentionally omitted.
+        # Pure activates via CONTROLLER=pure in [WEATHER] + FILTER=pureHDR in video.ini.
         "\n[WEATHER]\n"
         "NAME=sol_42_thunderstorm\n"
         "GRAPHICS=sol_42_thunderstorm\n"
@@ -188,43 +188,86 @@ def _write_low_quality_video_ini(ac_folder: str) -> str | None:
                 f.writelines(lines)
             logger.info("Backed up video.ini -> %s", backup)
 
-        # Keys to override for spectator low-quality.
-        # FILTER=pureHDR and ENABLED=1 are pinned so Pure's post-processing
-        # chain is always active — without these, Pure won't auto-enable and
-        # graphics look like vanilla AC.  DISABLE_LEGACY_HDR=1 is required for
-        # Pure's HDR pipeline to take over from AC's built-in tonemapper.
-        overrides = {
-            "SHADOW_MAP_SIZE": "512",
-            "SHADOW_MAP_SIZE2": "512",
-            "SHADOW_MAP_SIZE3": "256",
+        # Pure's required [POST_PROCESS] values — all keys are enforced wholesale
+        # so the shader initialises correctly regardless of what was in the file.
+        _pure_pp: dict[str, str] = {
+            "DOF":          "5",
+            "ENABLED":      "1",
+            "FILTER":       "pureHDR",
+            "FXAA":         "1",
+            "GLARE":        "5",
+            "HEAT_SHIMMER": "1",
+            "QUALITY":      "5",
+            "RAYS_OF_GOD":  "1",
+        }
+        # Keys to reduce in [VIDEO] for spectator performance
+        _video_overrides: dict[str, str] = {
+            "SHADOW_MAP_SIZE":      "512",
+            "SHADOW_MAP_SIZE2":     "512",
+            "SHADOW_MAP_SIZE3":     "256",
             "REFLECTION_RESOLUTION": "0",
-            "REFLECTION_DISTANCE": "0",
-            "MOTION_BLUR": "0",
-            "DEPTH_OF_FIELD": "0",
-            "ANISOTROPIC": "4",
-            "WIDTH": "1920",
-            "HEIGHT": "1080",
-            "FULLSCREEN": "0",          # Must be windowed to move to monitor 2
-            "BORDERLESS": "1",
-            # Pure HDR — must be present or Pure won't initialise its pipeline
-            "FILTER": "pureHDR",        # [POST_PROCESS]
-            "ENABLED": "1",             # [POST_PROCESS] — enables PP chain
-            "DISABLE_LEGACY_HDR": "1",  # [VIDEO] — lets Pure own tonemapping
+            "REFLECTION_DISTANCE":  "0",
+            "MOTION_BLUR":          "0",
+            "DEPTH_OF_FIELD":       "0",
+            "ANISOTROPIC":          "4",
+            "WIDTH":                "1920",
+            "HEIGHT":               "1080",
+            "FULLSCREEN":           "0",   # Must be windowed for monitor 2 move
+            "BORDERLESS":           "1",
+            "DISABLE_LEGACY_HDR":   "1",   # Required for Pure's HDR pipeline
         }
 
-        new_lines = []
+        new_lines: list[str] = []
+        current_section = ""
+        pp_written: set[str] = set()
+        video_written: set[str] = set()
+
         for line in lines:
             stripped = line.strip()
-            key = stripped.split("=")[0].strip().upper() if "=" in stripped else ""
-            if key in overrides:
-                new_lines.append(f"{key}={overrides[key]}\n")
-                overrides.pop(key)
-            else:
-                new_lines.append(line)
 
-        # Append any keys not already in the file
-        for k, v in overrides.items():
-            new_lines.append(f"{k}={v}\n")
+            if stripped.startswith("[") and stripped.endswith("]"):
+                # Flush any unwritten POST_PROCESS keys before leaving that section
+                if current_section == "POST_PROCESS":
+                    for k, v in _pure_pp.items():
+                        if k not in pp_written:
+                            new_lines.append(f"{k}={v}\n")
+                # Flush any unwritten VIDEO overrides before leaving that section
+                if current_section == "VIDEO":
+                    for k, v in _video_overrides.items():
+                        if k not in video_written:
+                            new_lines.append(f"{k}={v}\n")
+                current_section = stripped[1:-1].upper()
+                new_lines.append(line)
+                continue
+
+            if "=" in stripped:
+                key = stripped.split("=")[0].strip().upper()
+
+                if current_section == "POST_PROCESS":
+                    val = _pure_pp.get(key)
+                    if val is not None:
+                        new_lines.append(f"{key}={val}\n")
+                        pp_written.add(key)
+                        continue
+
+                if current_section == "VIDEO":
+                    val = _video_overrides.get(key)
+                    if val is not None:
+                        new_lines.append(f"{key}={val}\n")
+                        video_written.add(key)
+                        continue
+
+            new_lines.append(line)
+
+        # Handle files that end without a trailing section transition
+        if current_section == "POST_PROCESS":
+            for k, v in _pure_pp.items():
+                if k not in pp_written:
+                    new_lines.append(f"{k}={v}\n")
+        if current_section == "VIDEO":
+            for k, v in _video_overrides.items():
+                if k not in video_written:
+                    new_lines.append(f"{k}={v}\n")
 
         with open(video_ini, "w", encoding="utf-8") as f:
             f.writelines(new_lines)
