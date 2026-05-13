@@ -303,7 +303,7 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             f"CLOUD_SPEED=0.200\n"
             f"SUN_ANGLE={sun_angle:.2f}\n"
             f"TIME_MULT={time_mult:.1f}\n"
-            f"__CM_WEATHER_CONTROLLER=pure\n"
+            f"__CM_WEATHER_CONTROLLER=pureCtrl static\n"
             f"__CM_WEATHER_TYPE={w_id}\n"
             f"__TRACK_TIMEZONE_OFFSET=3600\n"
             f"__TRACK_GEOTAG_LONG={_DEFAULT_GEOTAG[1]}\n"

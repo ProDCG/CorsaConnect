@@ -121,7 +121,7 @@ def _generate_spectator_race_ini(
         "CLOUD_SPEED=0.200\n"
         f"SUN_ANGLE={sun_angle:.2f}\n"
         "TIME_MULT=1.0\n"
-        "__CM_WEATHER_CONTROLLER=pure\n"
+        "__CM_WEATHER_CONTROLLER=pureCtrl static\n"
         "__CM_WEATHER_TYPE=15\n"
         f"__TRACK_TIMEZONE_OFFSET=3600\n"
         "__TRACK_GEOTAG_LONG=9.2811\n"
