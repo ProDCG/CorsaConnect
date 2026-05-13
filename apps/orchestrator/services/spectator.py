@@ -80,7 +80,7 @@ def _generate_spectator_race_ini(
     content = (
         "[RACE]\n"
         "VERSION=1.1\n"
-        f"MODEL={car}\n"
+        "MODEL=abarth500\n"
         f"TRACK={track}\n"
         f"CONFIG_TRACK={config_track}\n"
         "CARS=1\n"
@@ -111,7 +111,7 @@ def _generate_spectator_race_ini(
         f"SERVER_IP={server_ip}\n"
         f"SERVER_PORT={server_port}\n"
         f"SERVER_HTTP_PORT={server_http_port}\n"
-        f"REQUESTED_CAR={car}\n"
+        "REQUESTED_CAR=abarth500\n"
         "NAME=Spectator\n"
         "TEAM=Spectator\n"
         "GUID=\n"
