@@ -395,7 +395,7 @@ function App() {
                     race_laps: raceSettings.race_laps,
                     race_time: raceSettings.race_time,
                     allow_drs: raceSettings.allow_drs,
-                    server_ip: "192.168.1.10"
+                    server_ip: "192.168.10.119"
                 })
             })
         } catch (err) {
