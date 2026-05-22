@@ -670,8 +670,8 @@ class ACServerManager:
             time_mult = 1
 
         # Map sun_angle (-80 to 80) to CM_FX_TIME (exact seconds from midnight)
-        # In our system, 0 = 13:00 (46800 seconds), and 16 degrees = 1 hour (3600 seconds)
-        fx_time = int(46800 + (sun_angle / 16.0) * 3600)
+        # In our system, 0 = 01:00 (3600 seconds) to correct the 12-hour offset, and 16 degrees = 1 hour (3600 seconds)
+        fx_time = int(3600 + (sun_angle / 16.0) * 3600)
         
         if fx_time < 0:
             fx_time += 86400
