@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import socket
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -12,11 +11,12 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from apps.orchestrator.routers import commands, groups, leaderboard, mumble, rigs, server, settings
+from apps.orchestrator.routers import commands, groups, leaderboard, mumble, rigs, server, settings, telemetry
 from apps.orchestrator.services.heartbeat import stale_rig_reaper, start_heartbeat_listener
 from apps.orchestrator.services.mumble_service import MumbleService
 from apps.orchestrator.state import AppState
 from shared.constants import HEARTBEAT_PORT, UI_PORT
+from shared.utils import get_local_ip
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -87,6 +87,7 @@ app.include_router(settings.create_router(state))
 app.include_router(server.create_router(state))
 app.include_router(leaderboard.create_router(state))
 app.include_router(mumble.create_router(state, mumble_svc))
+app.include_router(telemetry.create_router(state))
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +101,7 @@ async def health_check() -> dict[str, str]:
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
-from shared.utils import get_local_ip
+
 
 def _get_local_ip() -> str:
     """Best-effort local IP discovery."""

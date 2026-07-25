@@ -57,12 +57,12 @@ class MumbleService:
 
         try:
             import pymumble_py3  # noqa: F401
+
             self._available = True
             logger.info("pymumble loaded successfully")
         except Exception as exc:
             logger.warning(
-                "pymumble not available — Mumble bot disabled (%s). "
-                "Install with: pip install pymumble",
+                "pymumble not available — Mumble bot disabled (%s). Install with: pip install pymumble",
                 exc,
             )
 
@@ -97,12 +97,14 @@ class MumbleService:
         class _DummyDecoder:
             def __init__(self, *a: object, **kw: object) -> None:
                 pass
+
             def decode(self, *a: object, **kw: object) -> bytes:
                 return b""
 
         class _DummyEncoder:
             def __init__(self, *a: object, **kw: object) -> None:
                 pass
+
             def encode(self, *a: object, **kw: object) -> bytes:
                 return b""
 
@@ -198,6 +200,7 @@ class MumbleService:
         # Last resort: glob search common install roots
         if IS_WINDOWS:
             import glob
+
             for pattern in [
                 r"C:\Program Files*\Mumble*\**\mumble-server.exe",
                 r"C:\Program Files*\Mumble*\**\murmur.exe",
@@ -217,6 +220,7 @@ class MumbleService:
         """Check if a Mumble server process is already running."""
         try:
             import psutil
+
             for proc in psutil.process_iter(["name"]):
                 try:
                     name = (proc.info.get("name") or "").lower()
@@ -229,7 +233,8 @@ class MumbleService:
                 try:
                     out = subprocess.check_output(
                         ["tasklist", "/FI", "IMAGENAME eq mumble-server.exe", "/NH"],
-                        text=True, timeout=3,
+                        text=True,
+                        timeout=3,
                     )
                     if "mumble-server.exe" in out.lower():
                         return True
@@ -267,7 +272,7 @@ class MumbleService:
                 f"port={MUMBLE_PORT}\n"
                 f"pidfile={pid_path}\n"
                 f"logfile={log_path}\n"
-                "welcometext=\"Ridge-Link Voice Chat\"\n"
+                'welcometext="Ridge-Link Voice Chat"\n'
                 "users=20\n"
                 "registerName=Ridge-Link\n"
                 "bonjour=false\n"
@@ -295,9 +300,7 @@ class MumbleService:
 
         murmur_exe = self._find_murmur()
         if not murmur_exe:
-            logger.info(
-                "Mumble server not installed — will try connecting to existing server"
-            )
+            logger.info("Mumble server not installed — will try connecting to existing server")
             return
 
         ini_path = self._ensure_mumble_ini()
@@ -308,8 +311,7 @@ class MumbleService:
             return
 
         logger.info("Data dir: %s", self.state._data_dir)
-        logger.info("INI path: %s (exists=%s, size=%d)",
-                     ini_path, os.path.exists(ini_path), os.path.getsize(ini_path))
+        logger.info("INI path: %s (exists=%s, size=%d)", ini_path, os.path.exists(ini_path), os.path.getsize(ini_path))
 
         try:
             logger.info("Starting Mumble server: %s -ini %s", murmur_exe, ini_path)
@@ -326,9 +328,9 @@ class MumbleService:
             if self._server_proc.poll() is not None:
                 rc = self._server_proc.returncode
                 logger.error(
-                    "Mumble server exited immediately (code=%d). "
-                    "Verify mumble.ini is valid and the port %d is free.",
-                    rc, MUMBLE_PORT,
+                    "Mumble server exited immediately (code=%d). Verify mumble.ini is valid and the port %d is free.",
+                    rc,
+                    MUMBLE_PORT,
                 )
                 self._server_running = False
                 return
@@ -350,10 +352,15 @@ class MumbleService:
         try:
             result = subprocess.run(
                 [murmur_exe, "-ini", ini_path, "-supw", self._superuser_pw],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
-            logger.info("SuperUser password set (exit=%d): %s",
-                        result.returncode, result.stdout.strip() or result.stderr.strip())
+            logger.info(
+                "SuperUser password set (exit=%d): %s",
+                result.returncode,
+                result.stdout.strip() or result.stderr.strip(),
+            )
         except Exception as e:
             logger.warning("Could not set SuperUser password: %s", e)
 
@@ -376,7 +383,9 @@ class MumbleService:
                 MUMBLE_PORT,
             )
             self._mumble = pymumble.Mumble(
-                "127.0.0.1", "SuperUser", port=MUMBLE_PORT,
+                "127.0.0.1",
+                "SuperUser",
+                port=MUMBLE_PORT,
                 password=self._superuser_pw,
                 reconnect=True,
             )
@@ -465,8 +474,9 @@ class MumbleService:
                 if ch_name in MUMBLE_CHANNELS:
                     created_rooms.append(ch_name)
 
-            logger.info("Verified channels: %s (expected %d, got %d)",
-                        created_rooms, len(MUMBLE_CHANNELS), len(created_rooms))
+            logger.info(
+                "Verified channels: %s (expected %d, got %d)", created_rooms, len(MUMBLE_CHANNELS), len(created_rooms)
+            )
 
             self._channels_ready = len(created_rooms) > 0
             if self._channels_ready:

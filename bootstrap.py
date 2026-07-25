@@ -7,7 +7,6 @@ import os
 import socket
 import subprocess
 import sys
-from pathlib import Path
 
 # Ports to open in Windows Firewall
 FIREWALL_RULES: list[dict[str, str]] = [
@@ -34,9 +33,16 @@ def setup_firewall() -> None:
     for rule in FIREWALL_RULES:
         subprocess.run(
             [
-                "netsh", "advfirewall", "firewall", "add", "rule",
-                f'name="{rule["name"]}"', "dir=in", "action=allow",
-                f'protocol={rule["protocol"]}', f'localport={rule["port"]}',
+                "netsh",
+                "advfirewall",
+                "firewall",
+                "add",
+                "rule",
+                f'name="{rule["name"]}"',
+                "dir=in",
+                "action=allow",
+                f"protocol={rule['protocol']}",
+                f"localport={rule['port']}",
             ],
             check=False,
             capture_output=True,
@@ -52,7 +58,11 @@ def remove_firewall() -> None:
     for rule in FIREWALL_RULES:
         subprocess.run(
             [
-                "netsh", "advfirewall", "firewall", "delete", "rule",
+                "netsh",
+                "advfirewall",
+                "firewall",
+                "delete",
+                "rule",
                 f'name="{rule["name"]}"',
             ],
             check=False,
@@ -73,12 +83,17 @@ def setup_autostart(role: str) -> None:
     shortcut_name = f"Ridge-Link {role.title()}.lnk"
     startup_dir = os.path.join(
         os.environ.get("APPDATA", ""),
-        "Microsoft", "Windows", "Start Menu", "Programs", "Startup",
+        "Microsoft",
+        "Windows",
+        "Start Menu",
+        "Programs",
+        "Startup",
     )
     shortcut_path = os.path.join(startup_dir, shortcut_name)
 
     try:
         import win32com.client  # type: ignore[import-untyped]
+
         shell = win32com.client.Dispatch("WScript.Shell")
         shortcut = shell.CreateShortCut(shortcut_path)
         shortcut.TargetPath = bat_file
@@ -136,7 +151,9 @@ $s.Save()
     try:
         result = subprocess.run(
             ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         if result.returncode == 0 and os.path.exists(shortcut_path):
             print(f"  Desktop shortcut created: {shortcut_path}")
@@ -168,7 +185,9 @@ if ($verb) {{ $verb.DoIt() }}
 '''
         result = subprocess.run(
             ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode == 0:
             print("  Pinned to taskbar!")
@@ -185,7 +204,11 @@ def remove_autostart(role: str) -> None:
     shortcut_name = f"Ridge-Link {role.title()}"
     startup_dir = os.path.join(
         os.environ.get("APPDATA", ""),
-        "Microsoft", "Windows", "Start Menu", "Programs", "Startup",
+        "Microsoft",
+        "Windows",
+        "Start Menu",
+        "Programs",
+        "Startup",
     )
     for ext in (".lnk", ".bat"):
         path = os.path.join(startup_dir, shortcut_name + ext)
@@ -298,18 +321,18 @@ def main() -> None:
             old_ini = os.path.join(data_dir, "murmur.ini")
             if os.path.exists(old_ini) and not os.path.exists(ini_path):
                 os.rename(old_ini, ini_path)
-                print(f"  Migrated murmur.ini -> mumble.ini")
+                print("  Migrated murmur.ini -> mumble.ini")
             if not os.path.exists(ini_path):
                 with open(ini_path, "w") as f:
                     f.write(
-                        f'database={db_path}\n'
-                        'port=64738\n'
-                        f'pidfile={os.path.join(data_dir, "mumble.pid")}\n'
-                        f'logfile={os.path.join(data_dir, "mumble.log")}\n'
+                        f"database={db_path}\n"
+                        "port=64738\n"
+                        f"pidfile={os.path.join(data_dir, 'mumble.pid')}\n"
+                        f"logfile={os.path.join(data_dir, 'mumble.log')}\n"
                         'welcometext="Ridge-Link Voice Chat"\n'
-                        'users=20\n'
-                        'registerName=Ridge-Link\n'
-                        'bonjour=false\n'
+                        "users=20\n"
+                        "registerName=Ridge-Link\n"
+                        "bonjour=false\n"
                     )
                 print(f"  Generated mumble.ini: {ini_path}")
             else:
@@ -458,4 +481,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

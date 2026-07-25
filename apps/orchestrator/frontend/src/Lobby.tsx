@@ -38,6 +38,7 @@ interface LobbyData {
     }>
     total_rigs: number
     server_status: string
+    lobby_override_title?: string | null
 }
 
 const formatCarName = (id: string) => id ? id.split('_').slice(1).join(' ').toUpperCase() : '—'
@@ -163,7 +164,7 @@ export default function Lobby() {
             <div className="flex h-[calc(100vh-96px)]">
                 {/* Leaderboards */}
                 <div className="flex-1 p-8 flex gap-8">
-                    {renderLeaderboardList(data.top_10_today || [], "Today's Fastest", <Activity className="text-amber-400" size={24}/>, "No Laps Today")}
+                    {renderLeaderboardList(data.top_10_today || [], data.lobby_override_title || "Today's Fastest", <Activity className="text-amber-400" size={24}/>, "No Laps Today")}
                     <div className="w-px bg-white/5 h-full"></div>
                     {renderLeaderboardList(data.top_10_all_time || [], "All-Time Records", <Trophy className="text-ridge-brand" size={24}/>, "No Records Yet")}
                 </div>

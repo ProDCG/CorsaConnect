@@ -4,6 +4,12 @@ import Lobby from './Lobby'
 import GroupManager from './components/GroupManager'
 import SessionTimerBar from './components/SessionTimerBar'
 
+interface CarPreset {
+    id: string
+    name: string
+    cars: string[]
+}
+
 interface Rig {
     rig_id: string
     ip: string
@@ -86,9 +92,14 @@ function App() {
     })
     const [leaderboard, setLeaderboard] = useState<any[]>([])
     const [leaderboardFilter, setLeaderboardFilter] = useState<'all' | 'today'>('all')
+    const [leaderboardTimeWindow, setLeaderboardTimeWindow] = useState<'all_time' | 'day' | 'week' | 'month' | '6_months' | 'year'>('all_time')
     const [leaderboardSortDesc, setLeaderboardSortDesc] = useState<boolean>(false)
     const [leaderboardTrack, setLeaderboardTrack] = useState<string>('')
+    const [leaderboardCar, setLeaderboardCar] = useState<string>('')
+    const [leaderboardWeather, setLeaderboardWeather] = useState<string>('')
     const [presets, setPresets] = useState<any[]>([])
+    const [carPresets, setCarPresets] = useState<CarPreset[]>([])
+    const [selectedCarPresetId, setSelectedCarPresetId] = useState<string | null>(null)
     const [activeTelemFields, setActiveTelemFields] = useState<string[]>(['velocity', 'rpms', 'gforce', 'normalized_pos', 'gear', 'completed_laps', 'gas', 'brake', 'position'])
     const [showRigPanel, setShowRigPanel] = useState(true)
     const [mumbleAssignments, setMumbleAssignments] = useState<Record<string, string>>({})
@@ -231,6 +242,15 @@ function App() {
             } catch { /* offline */ }
         }
 
+        const fetchCarPresets = async () => {
+            try {
+                const res = await fetch('/api/car_presets')
+                if (!res.ok) return
+                const data = await res.json()
+                if (Array.isArray(data)) setCarPresets(data)
+            } catch { /* offline */ }
+        }
+
         const fetchTelemConfig = async () => {
             try {
                 const res = await fetch('/api/telem_config')
@@ -312,8 +332,11 @@ function App() {
     const fetchFilteredLeaderboard = async () => {
         try {
             const params = new URLSearchParams()
-            params.set('view', leaderboardFilter === 'today' ? 'today' : 'all_best')
+            params.set('view', 'filtered')
+            if (leaderboardTimeWindow && leaderboardTimeWindow !== 'all_time') params.set('time_window', leaderboardTimeWindow)
             if (leaderboardTrack) params.set('track', leaderboardTrack)
+            if (leaderboardCar) params.set('car', leaderboardCar)
+            if (leaderboardWeather) params.set('weather', leaderboardWeather)
             if (leaderboardSortDesc) params.set('sort_desc', 'true')
             
             const res = await fetch(`/api/leaderboard?${params.toString()}`)
@@ -328,21 +351,37 @@ function App() {
             const interval = setInterval(fetchFilteredLeaderboard, 2000)
             return () => clearInterval(interval)
         }
-    }, [leaderboardFilter, leaderboardTrack, leaderboardSortDesc, activeTab])
+    }, [leaderboardTimeWindow, leaderboardTrack, leaderboardCar, leaderboardWeather, leaderboardSortDesc, activeTab])
     const toggleCarInPool = async (carId: string) => {
-        const newPool = activeCarPool.includes(carId)
-            ? activeCarPool.filter((id: string) => id !== carId)
-            : [...activeCarPool, carId]
+        if (selectedCarPresetId) {
+            const preset = carPresets.find(p => p.id === selectedCarPresetId)
+            if (!preset) return
+            const newCars = preset.cars.includes(carId)
+                ? preset.cars.filter(id => id !== carId)
+                : [...preset.cars, carId]
+            
+            const updatedPresets = carPresets.map(p => p.id === selectedCarPresetId ? { ...p, cars: newCars } : p)
+            setCarPresets(updatedPresets)
+            try {
+                await fetch('/api/car_presets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updatedPresets)
+                })
+            } catch {}
+        } else {
+            const newPool = activeCarPool.includes(carId)
+                ? activeCarPool.filter((id: string) => id !== carId)
+                : [...activeCarPool, carId]
 
-        setActiveCarPool(newPool)
-        try {
-            await fetch('/api/carpool', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cars: newPool })
-            })
-        } catch (err) {
-            console.error("Failed to update car pool:", err)
+            setActiveCarPool(newPool)
+            try {
+                await fetch('/api/carpool', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cars: newPool })
+                })
+            } catch {}
         }
     }
 
@@ -773,55 +812,121 @@ function App() {
                         <div className="max-w-5xl">
                             <div className="flex items-center justify-between mb-8">
                                 <div>
-                                    <h2 className="text-xl font-black italic uppercase">Fleet Authorization</h2>
-                                    <p className="text-xs text-white/40 uppercase tracking-widest font-bold">Enable or disable cars available across all groups</p>
+                                    <h2 className="text-xl font-black italic uppercase">Fleet Authorization & Presets</h2>
+                                    <p className="text-xs text-white/40 uppercase tracking-widest font-bold">Enable or disable cars available across all groups or manage presets</p>
                                 </div>
                                 <div className="flex items-center gap-4">
+                                    <select 
+                                        className="bg-black border border-white/10 rounded-xl px-4 py-2 text-sm font-bold uppercase"
+                                        value={selectedCarPresetId || ""}
+                                        onChange={(e) => setSelectedCarPresetId(e.target.value || null)}
+                                    >
+                                        <option value="">Global Active Pool</option>
+                                        {carPresets.map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                        ))}
+                                    </select>
                                     <button
-                                        onClick={async () => {
-                                            const allIds = (catalogCars.length > 0 ? catalogCars : ALL_CARS).map(c => c.id)
-                                            const allSelected = allIds.every(id => activeCarPool.includes(id))
-                                            const newPool = allSelected ? [] : allIds
-                                            setActiveCarPool(newPool)
-                                            try {
-                                                await fetch('/api/carpool', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({ cars: newPool })
-                                                })
-                                            } catch {}
+                                        onClick={() => {
+                                            const name = prompt("Enter preset name:");
+                                            if (name) {
+                                                const newId = Math.random().toString(36).substring(7);
+                                                const newPresets = [...carPresets, { id: newId, name, cars: [] }];
+                                                setCarPresets(newPresets);
+                                                setSelectedCarPresetId(newId);
+                                                fetch('/api/car_presets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newPresets) });
+                                            }
                                         }}
                                         className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border bg-white/5 border-white/10 text-white/50 hover:border-ridge-brand/50 hover:text-ridge-brand"
                                     >
-                                        {((catalogCars.length > 0 ? catalogCars : ALL_CARS).map(c => c.id)).every(id => activeCarPool.includes(id)) ? 'Deselect All' : 'Select All'}
+                                        New Preset
+                                    </button>
+                                    {selectedCarPresetId && (
+                                        <>
+                                            <button
+                                                onClick={() => {
+                                                    const newPresets = carPresets.filter(p => p.id !== selectedCarPresetId);
+                                                    setSelectedCarPresetId(null);
+                                                    setCarPresets(newPresets);
+                                                    fetch('/api/car_presets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newPresets) });
+                                                }}
+                                                className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border bg-red-500/10 border-red-500/20 text-red-500 hover:border-red-500 hover:text-white"
+                                            >
+                                                Delete Preset
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    const preset = carPresets.find(p => p.id === selectedCarPresetId);
+                                                    if (preset) {
+                                                        setActiveCarPool(preset.cars);
+                                                        try {
+                                                            await fetch('/api/carpool', {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ cars: preset.cars })
+                                                            })
+                                                        } catch {}
+                                                    }
+                                                }}
+                                                className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border bg-ridge-brand/20 border-ridge-brand/50 text-white hover:bg-ridge-brand/40"
+                                            >
+                                                Apply to Global Pool
+                                            </button>
+                                        </>
+                                    )}
+                                    <button
+                                        onClick={async () => {
+                                            const allIds = (catalogCars.length > 0 ? catalogCars : ALL_CARS).map(c => c.id)
+                                            const currentPool = selectedCarPresetId ? (carPresets.find(p => p.id === selectedCarPresetId)?.cars || []) : activeCarPool;
+                                            const allSelected = allIds.every(id => currentPool.includes(id))
+                                            const newPool = allSelected ? [] : allIds
+                                            
+                                            if (selectedCarPresetId) {
+                                                const updatedPresets = carPresets.map(p => p.id === selectedCarPresetId ? { ...p, cars: newPool } : p)
+                                                setCarPresets(updatedPresets)
+                                                try {
+                                                    await fetch('/api/car_presets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedPresets) })
+                                                } catch {}
+                                            } else {
+                                                setActiveCarPool(newPool)
+                                                try {
+                                                    await fetch('/api/carpool', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cars: newPool }) })
+                                                } catch {}
+                                            }
+                                        }}
+                                        className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border bg-white/5 border-white/10 text-white/50 hover:border-ridge-brand/50 hover:text-ridge-brand"
+                                    >
+                                        {((catalogCars.length > 0 ? catalogCars : ALL_CARS).map(c => c.id)).every(id => (selectedCarPresetId ? (carPresets.find(p => p.id === selectedCarPresetId)?.cars || []) : activeCarPool).includes(id)) ? 'Deselect All' : 'Select All'}
                                     </button>
                                     <div className="text-right">
-                                        <p className="text-xs font-black uppercase text-white/40">Authorized</p>
-                                        <p className="text-2xl font-black italic text-ridge-brand">{activeCarPool.length} / {catalogCars.length || ALL_CARS.length}</p>
+                                        <p className="text-xs font-black uppercase text-white/40">{selectedCarPresetId ? 'Preset Cars' : 'Authorized'}</p>
+                                        <p className="text-2xl font-black italic text-ridge-brand">{(selectedCarPresetId ? (carPresets.find(p => p.id === selectedCarPresetId)?.cars || []) : activeCarPool).length} / {catalogCars.length || ALL_CARS.length}</p>
                                     </div>
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                {(catalogCars.length > 0 ? catalogCars : ALL_CARS.map(c => ({...c, brand: '', car_class: ''}))).map((car) => (
+                                {(catalogCars.length > 0 ? catalogCars : ALL_CARS.map(c => ({...c, brand: '', car_class: ''}))).map((car) => {
+                                    const isSelected = (selectedCarPresetId ? (carPresets.find(p => p.id === selectedCarPresetId)?.cars || []) : activeCarPool).includes(car.id);
+                                    return (
                                     <button
                                         key={car.id}
                                         onClick={() => toggleCarInPool(car.id)}
-                                        className={`group text-left p-4 rounded-2xl border transition-all relative overflow-hidden flex flex-col justify-between h-32 ${activeCarPool.includes(car.id)
+                                        className={`group text-left p-4 rounded-2xl border transition-all relative overflow-hidden flex flex-col justify-between h-32 ${isSelected
                                             ? 'bg-ridge-brand/10 border-ridge-brand/50 text-white'
                                             : 'bg-white/5 border-white/5 text-white/20'
                                             }`}
                                     >
                                         <div className="flex justify-between items-start">
-                                            <Car size={32} className={`transition-all ${activeCarPool.includes(car.id) ? 'text-ridge-brand' : 'opacity-20'}`} />
-                                            {activeCarPool.includes(car.id) ? <Check className="text-ridge-brand" size={16} /> : <Zap size={16} className="opacity-10" />}
+                                            <Car size={32} className={`transition-all ${isSelected ? 'text-ridge-brand' : 'opacity-20'}`} />
+                                            {isSelected ? <Check className="text-ridge-brand" size={16} /> : <Zap size={16} className="opacity-10" />}
                                         </div>
                                         <div>
                                             {car.brand && <span className="text-[8px] font-bold uppercase text-white/30 block">{car.brand}</span>}
-                                            <span className={`font-black italic uppercase text-xs tracking-tighter ${activeCarPool.includes(car.id) ? 'text-white' : 'group-hover:text-white/40 transition-colors'}`}>{car.name}</span>
+                                            <span className={`font-black italic uppercase text-xs tracking-tighter ${isSelected ? 'text-white' : 'group-hover:text-white/40 transition-colors'}`}>{car.name}</span>
                                         </div>
-                                        {activeCarPool.includes(car.id) && <div className="absolute -right-2 -bottom-2 w-12 h-12 bg-ridge-brand/20 blur-xl rounded-full" />}
+                                        {isSelected && <div className="absolute -right-2 -bottom-2 w-12 h-12 bg-ridge-brand/20 blur-xl rounded-full" />}
                                     </button>
-                                ))}
+                                )})}
                             </div>
                         </div>
                     )}
@@ -829,7 +934,7 @@ function App() {
                     {/* MAP POOL VIEW — globally available tracks for all groups */}
                     {activeTab === 'maps' && (
                         <div className="max-w-5xl">
-                            <div className="flex items-center justify-between mb-8">
+                                                        <div className="flex items-center justify-between mb-8">
                                 <div>
                                     <h2 className="text-xl font-black italic uppercase">Track Authorization</h2>
                                     <p className="text-xs text-white/40 uppercase tracking-widest font-bold">Enable or disable tracks available across all groups</p>
@@ -860,26 +965,28 @@ function App() {
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                {catalogTracks.map((track) => (
+                                {(catalogCars.length > 0 ? catalogCars : ALL_CARS.map(c => ({...c, brand: '', car_class: ''}))).map((car) => {
+                                    const isSelected = (selectedCarPresetId ? (carPresets.find(p => p.id === selectedCarPresetId)?.cars || []) : activeCarPool).includes(car.id);
+                                    return (
                                     <button
-                                        key={track.id}
-                                        onClick={() => toggleMapInPool(track.id)}
-                                        className={`group text-left p-4 rounded-2xl border transition-all relative overflow-hidden flex flex-col justify-between h-32 ${activeMapPool.includes(track.id)
+                                        key={car.id}
+                                        onClick={() => toggleCarInPool(car.id)}
+                                        className={`group text-left p-4 rounded-2xl border transition-all relative overflow-hidden flex flex-col justify-between h-32 ${isSelected
                                             ? 'bg-ridge-brand/10 border-ridge-brand/50 text-white'
                                             : 'bg-white/5 border-white/5 text-white/20'
                                             }`}
                                     >
                                         <div className="flex justify-between items-start">
-                                            <MapPin size={32} className={`transition-all ${activeMapPool.includes(track.id) ? 'text-ridge-brand' : 'opacity-20'}`} />
-                                            {activeMapPool.includes(track.id) ? <Check className="text-ridge-brand" size={16} /> : <Zap size={16} className="opacity-10" />}
+                                            <Car size={32} className={`transition-all ${isSelected ? 'text-ridge-brand' : 'opacity-20'}`} />
+                                            {isSelected ? <Check className="text-ridge-brand" size={16} /> : <Zap size={16} className="opacity-10" />}
                                         </div>
                                         <div>
-                                            <span className={`font-black italic uppercase text-xs tracking-tighter ${activeMapPool.includes(track.id) ? 'text-white' : 'group-hover:text-white/40 transition-colors'}`}>{track.name}</span>
-                                            <span className="text-[8px] font-mono text-white/20 block mt-0.5">{track.id}</span>
+                                            {car.brand && <span className="text-[8px] font-bold uppercase text-white/30 block">{car.brand}</span>}
+                                            <span className={`font-black italic uppercase text-xs tracking-tighter ${isSelected ? 'text-white' : 'group-hover:text-white/40 transition-colors'}`}>{car.name}</span>
                                         </div>
-                                        {activeMapPool.includes(track.id) && <div className="absolute -right-2 -bottom-2 w-12 h-12 bg-ridge-brand/20 blur-xl rounded-full" />}
+                                        {isSelected && <div className="absolute -right-2 -bottom-2 w-12 h-12 bg-ridge-brand/20 blur-xl rounded-full" />}
                                     </button>
-                                ))}
+                                )})}
                             </div>
                         </div>
                     )}
@@ -1121,8 +1228,10 @@ function App() {
 
                     {/* LEADERBOARD VIEW */}
                     {activeTab === 'leaderboard' && (() => {
-                        // Available tracks from leaderboard data
+                        // Available tracks, cars, weathers from leaderboard data
                         const tracks = [...new Set(leaderboard.map((e: any) => e.track).filter(Boolean))]
+                        const cars = [...new Set(leaderboard.map((e: any) => e.car).filter(Boolean))]
+                        const weathers = [...new Set(leaderboard.map((e: any) => e.weather).filter(Boolean))]
                         // Data is already sorted by the backend API based on our parameters
                         const filtered = leaderboard.slice(0, 50)
 
@@ -1165,46 +1274,69 @@ function App() {
 
                             {/* Filters */}
                             <div className="flex items-center gap-3 mb-6 flex-wrap">
-                                <button
-                                    onClick={() => setLeaderboardFilter('all')}
-                                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
-                                        leaderboardFilter === 'all'
-                                            ? 'bg-ridge-brand/20 border-ridge-brand/50 text-ridge-brand'
-                                            : 'bg-white/5 border-white/10 text-white/30 hover:border-white/20'
-                                    }`}
-                                >All Time</button>
-                                <button
-                                    onClick={() => setLeaderboardFilter('today')}
-                                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${
-                                        leaderboardFilter === 'today'
-                                            ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
-                                            : 'bg-white/5 border-white/10 text-white/40 hover:border-white/20'
-                                    }`}
-                                >Today</button>
+                                {/* Time Window */}
+                                <div className="relative">
+                                    <select
+                                        value={leaderboardTimeWindow}
+                                        onChange={(e) => setLeaderboardTimeWindow(e.target.value as any)}
+                                        className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 pr-7 text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer appearance-none hover:border-white/20 transition-all text-white/80"
+                                    >
+                                        <option value="all_time">All Time</option>
+                                        <option value="day">Last 24 Hours</option>
+                                        <option value="week">Last Week</option>
+                                        <option value="month">Last Month</option>
+                                        <option value="6_months">Last 6 Months</option>
+                                        <option value="year">Last Year</option>
+                                    </select>
+                                    <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                                </div>
+
+                                {/* Track Filter */}
+                                <div className="relative">
+                                    <select
+                                        value={leaderboardTrack}
+                                        onChange={(e) => setLeaderboardTrack(e.target.value)}
+                                        className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 pr-7 text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer appearance-none hover:border-white/20 transition-all text-white/80"
+                                    >
+                                        <option value="">All Tracks</option>
+                                        {tracks.map(t => <option key={t as string} value={t as string}>{formatTrack(t as string)}</option>)}
+                                    </select>
+                                    <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                                </div>
+
+                                {/* Car Filter */}
+                                <div className="relative">
+                                    <select
+                                        value={leaderboardCar}
+                                        onChange={(e) => setLeaderboardCar(e.target.value)}
+                                        className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 pr-7 text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer appearance-none hover:border-white/20 transition-all text-white/80"
+                                    >
+                                        <option value="">All Cars</option>
+                                        {cars.map(c => <option key={c as string} value={c as string}>{c}</option>)}
+                                    </select>
+                                    <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                                </div>
+
+                                {/* Weather Filter */}
+                                <div className="relative">
+                                    <select
+                                        value={leaderboardWeather}
+                                        onChange={(e) => setLeaderboardWeather(e.target.value)}
+                                        className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 pr-7 text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer appearance-none hover:border-white/20 transition-all text-white/80"
+                                    >
+                                        <option value="">All Weather</option>
+                                        {weathers.map(w => <option key={w as string} value={w as string}>{w}</option>)}
+                                    </select>
+                                    <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                                </div>
 
                                 {/* Sort Toggle */}
                                 <button
                                     onClick={() => setLeaderboardSortDesc(!leaderboardSortDesc)}
-                                    className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border bg-white/5 border-white/10 text-white/40 hover:border-white/20 flex items-center gap-2 ml-2"
+                                    className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border bg-white/5 border-white/10 text-white/40 hover:border-white/20 flex items-center gap-2 ml-auto"
                                 >
                                     Sort: {leaderboardSortDesc ? "Longest Time" : "Shortest Time"}
                                 </button>
-
-                                {tracks.length > 0 && (
-                                    <div className="relative ml-2">
-                                        <select
-                                            value={leaderboardTrack}
-                                            onChange={(e) => setLeaderboardTrack(e.target.value)}
-                                            className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 pr-7 text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer appearance-none"
-                                        >
-                                            <option value="">All Tracks</option>
-                                            {tracks.map(t => <option key={t} value={t}>{formatTrack(t)}</option>)}
-                                        </select>
-                                        <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-                                    </div>
-                                )}
-
-                                <span className="ml-auto text-[10px] text-white/30 font-bold uppercase">{filtered.length} records</span>
                             </div>
 
                             {/* Grid */}
@@ -1216,6 +1348,7 @@ function App() {
                                             <th className="text-left px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white/50">Driver</th>
                                             <th className="text-left px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white/50">Car</th>
                                             <th className="text-left px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white/50">Track</th>
+                                            <th className="text-left px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white/50">Weather</th>
                                             <th className="text-right px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white/50">Time</th>
                                             <th className="text-right px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white/50">Date</th>
                                             <th className="text-right px-5 py-4 text-[10px] font-black uppercase tracking-widest text-white/50"></th>
@@ -1240,6 +1373,9 @@ function App() {
                                                 </td>
                                                 <td className="px-5 py-3.5">
                                                     <span className="text-[11px] font-bold uppercase text-white/60">{formatTrack(entry.track || '')}</span>
+                                                </td>
+                                                <td className="px-5 py-3.5">
+                                                    <span className="text-[11px] font-bold uppercase text-white/60">{entry.weather || '—'}</span>
                                                 </td>
                                                 <td className="px-5 py-3.5 text-right">
                                                     <span className="text-[11px] font-bold text-white/50 tabular-nums">

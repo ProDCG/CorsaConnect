@@ -33,7 +33,9 @@ def show_summary(conn: sqlite3.Connection) -> None:
     print(f"{'Driver':<15} {'Rig':<10} {'Track':<20} {'Laps':<6} {'Session'}")
     print("-" * 70)
     for r in rows:
-        print(f"{r['driver_name'] or '-':<15} {r['rig_id']:<10} {r['track'] or '-':<20} {r['lap_count']:<6} {r['session_id'] or '-'}")
+        print(
+            f"{r['driver_name'] or '-':<15} {r['rig_id']:<10} {r['track'] or '-':<20} {r['lap_count']:<6} {r['session_id'] or '-'}"
+        )
     print()
 
 

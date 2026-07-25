@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import socket
 import time
 
 from fastapi import APIRouter, BackgroundTasks
@@ -25,6 +24,7 @@ def create_router(state: AppState) -> APIRouter:
     def _get_orchestrator_ip() -> str:
         """Best-effort LAN IP discovery for the orchestrator machine."""
         from shared.utils import get_local_ip
+
         return get_local_ip()
 
     action_status_map: dict[str, str] = {
@@ -47,11 +47,11 @@ def create_router(state: AppState) -> APIRouter:
         driver_name = rig.get("driver_name")
         if driver_name and str(driver_name).strip():
             payload["driver_name"] = str(driver_name).strip()
-            
+
         # Sled agent Pure weather fallback: if "None", force Clear (15) to prevent rain
         if payload.get("weather") == "None":
             payload["weather"] = "15"
-            
+
         return payload
 
     @router.post("/command")
@@ -135,6 +135,7 @@ def create_router(state: AppState) -> APIRouter:
         if command.action == "LAUNCH_RACE" and group.mode == "multiplayer":
             # Import the server manager to look up the running server's port
             from apps.orchestrator.routers.server import _manager as srv_mgr
+
             if srv_mgr:
                 srv_info = srv_mgr.get_server_ip_port(group_id)
                 if srv_info:
@@ -143,7 +144,9 @@ def create_router(state: AppState) -> APIRouter:
                     server_http_port = srv_info[2]
                     logger.info(
                         "Multiplayer group '%s': server at %s:%d",
-                        group.name, server_ip, server_port,
+                        group.name,
+                        server_ip,
+                        server_port,
                     )
                 else:
                     logger.warning(
@@ -158,6 +161,46 @@ def create_router(state: AppState) -> APIRouter:
                 state.update_rig_field(rid, "status", "idle")
                 state.update_rig_field(rid, "kill_requested_at", time.time())
             logger.info("KILL_RACE: set %d rigs to idle for group '%s'", len(group.rig_ids), group.name)
+
+            if state.settings.discord_webhook_url:
+                from apps.orchestrator.services.discord import send_discord_webhook
+
+                # Fetch leaderboard for this group's session
+                best_laps = state.leaderboard_db.get_session_best(session_id=group.id)
+
+                if best_laps:
+
+                    def _format_time(total_ms: int) -> str:
+                        mins = total_ms // 60000
+                        secs = (total_ms % 60000) // 1000
+                        ms = total_ms % 1000
+                        return f"{mins}:{secs:02d}.{ms:03d}"
+
+                    fields = []
+                    for i, entry in enumerate(best_laps[:10]):
+                        driver = entry.driver_name or entry.rig_id
+                        time_str = _format_time(entry.lap_time_ms) if entry.lap_time_ms else "—"
+                        car_name = (
+                            " ".join(entry.car.split("_")[1:]).title()
+                            if entry.car and "_" in entry.car
+                            else (entry.car or "Unknown")
+                        )
+                        fields.append(
+                            {
+                                "name": f"#{i + 1} - {driver}",
+                                "value": f"**Time:** {time_str}\n**Car:** {car_name}",
+                                "inline": False,
+                            }
+                        )
+
+                    track_name = group.track.replace("_", " ").title()
+                    background_tasks.add_task(
+                        send_discord_webhook,
+                        state.settings.discord_webhook_url,
+                        f"🏁 Session Ended: {group.name}",
+                        f"The session at {track_name} has concluded. Here are the final results:",
+                        fields,
+                    )
         elif command.action == "LAUNCH_RACE":
             for rid in group.rig_ids:
                 state.update_rig_field(rid, "kill_requested_at", None)
@@ -179,7 +222,9 @@ def create_router(state: AppState) -> APIRouter:
                 # Inject group settings for LAUNCH_RACE
                 if command.action == "LAUNCH_RACE":
                     payload["track"] = payload.get("track") or group.track
-                    payload["track_layout"] = payload.get("track_layout") if "track_layout" in payload else group.track_layout
+                    payload["track_layout"] = (
+                        payload.get("track_layout") if "track_layout" in payload else group.track_layout
+                    )
                     # Sled agent Pure weather fallback: if "None", force Clear (15) to prevent rain
                     w = payload.get("weather") or group.weather
                     if w == "None":

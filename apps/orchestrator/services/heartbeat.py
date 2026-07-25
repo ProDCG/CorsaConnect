@@ -48,9 +48,14 @@ class HeartbeatProtocol(asyncio.DatagramProtocol):
 
             # Log meaningful state transitions at INFO level
             if old_status != status:
-                logger.info("Rig %s heartbeat: %s -> %s (ip=%s, car=%s)",
-                            rig_id, old_status, status, addr[0],
-                            payload.get("selected_car", "none"))
+                logger.info(
+                    "Rig %s heartbeat: %s -> %s (ip=%s, car=%s)",
+                    rig_id,
+                    old_status,
+                    status,
+                    addr[0],
+                    payload.get("selected_car", "none"),
+                )
         except Exception as e:
             logger.error("Error processing heartbeat: %s", e)
 

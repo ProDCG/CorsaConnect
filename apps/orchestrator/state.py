@@ -16,6 +16,7 @@ from apps.orchestrator.services.leaderboard_db import LeaderboardDB
 from shared.constants import DEFAULT_CAR_POOL
 from shared.models import (
     Branding,
+    CarPreset,
     GlobalSettings,
     LeaderboardEntry,
     Preset,
@@ -39,6 +40,7 @@ class AppState:
         self._settings: GlobalSettings = GlobalSettings()
         self._leaderboard: list[LeaderboardEntry] = []
         self._presets: list[Preset] = []
+        self._car_presets: list[CarPreset] = []
         self._telem_config: TelemetryConfig = TelemetryConfig()
         self._server_status: str = "offline"
         self._mumble_assignments: dict[str, str] = {}  # rig_id -> channel name
@@ -50,6 +52,7 @@ class AppState:
         os.makedirs(self._data_dir, exist_ok=True)
         logger.info("Data directory resolved to: %s (exists=%s)", self._data_dir, os.path.isdir(self._data_dir))
         self._presets_file = os.path.join(self._data_dir, "presets.json")
+        self._car_presets_file = os.path.join(self._data_dir, "car_presets.json")
         self._telem_config_file = os.path.join(self._data_dir, "telem_config.json")
         self._groups_file = os.path.join(self._data_dir, "groups.json")
         self._car_pool_file = os.path.join(self._data_dir, "car_pool.json")
@@ -77,6 +80,14 @@ class AppState:
             except Exception:
                 logger.warning("Could not load presets file, starting fresh")
 
+        if os.path.exists(self._car_presets_file):
+            try:
+                with open(self._car_presets_file) as f:
+                    raw = json.load(f)
+                self._car_presets = [CarPreset(**p) for p in raw]
+            except Exception:
+                logger.warning("Could not load car presets file, starting fresh")
+
         if os.path.exists(self._telem_config_file):
             try:
                 with open(self._telem_config_file) as f:
@@ -93,7 +104,8 @@ class AppState:
                     if "car_pool" in g:
                         g["car_pool"] = [
                             c.replace("ks_porsche_911_gt3_r", "ks_porsche_911_gt3_rs")
-                            if c == "ks_porsche_911_gt3_r" else c
+                            if c == "ks_porsche_911_gt3_r"
+                            else c
                             for c in g["car_pool"]
                         ]
                 self._groups = {g["id"]: RigGroup(**g) for g in raw}
@@ -150,6 +162,10 @@ class AppState:
     def _save_presets(self) -> None:
         with open(self._presets_file, "w") as f:
             json.dump([p.model_dump() for p in self._presets], f, indent=2)
+
+    def _save_car_presets(self) -> None:
+        with open(self._car_presets_file, "w") as f:
+            json.dump([p.model_dump() for p in self._car_presets], f, indent=2)
 
     def _save_telem_config(self) -> None:
         with open(self._telem_config_file, "w") as f:
@@ -258,15 +274,32 @@ class AppState:
             group = self._groups.get(group_id)
             if not group:
                 return None
-            for field in ("name", "mode", "track", "track_layout", "weather", "car_pool",
-                          "ai_count", "ai_difficulty", 
-                          "practice_enabled", "practice_time",
-                          "qualy_enabled", "qualy_time", 
-                          "race_enabled", "race_laps", 
-                          "penalties_enabled", "unlimited_fuel", "damage_enabled",
-                          "allow_wrong_way", "sun_angle",
-                          "time_mult", "session_duration_min",
-                          "ambient_temp", "track_grip", "freeplay"):
+            for field in (
+                "name",
+                "mode",
+                "track",
+                "track_layout",
+                "weather",
+                "car_pool",
+                "ai_count",
+                "ai_difficulty",
+                "practice_enabled",
+                "practice_time",
+                "qualy_enabled",
+                "qualy_time",
+                "race_enabled",
+                "race_laps",
+                "penalties_enabled",
+                "unlimited_fuel",
+                "damage_enabled",
+                "allow_wrong_way",
+                "sun_angle",
+                "time_mult",
+                "session_duration_min",
+                "ambient_temp",
+                "track_grip",
+                "freeplay",
+            ):
                 value = kwargs.get(field)
                 if value is not None:
                     setattr(group, field, value)
@@ -410,6 +443,17 @@ class AppState:
         with self._lock:
             self._presets = list(value)
             self._save_presets()
+
+    @property
+    def car_presets(self) -> list[CarPreset]:
+        with self._lock:
+            return list(self._car_presets)
+
+    @car_presets.setter
+    def car_presets(self, value: list[CarPreset]) -> None:
+        with self._lock:
+            self._car_presets = list(value)
+            self._save_car_presets()
 
     # ------------------------------------------------------------------
     # Telemetry config

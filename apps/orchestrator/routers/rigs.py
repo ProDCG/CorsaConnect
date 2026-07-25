@@ -50,16 +50,16 @@ def _parse_lap_time_ms(raw: object) -> int | None:
             # Check if parts[2] contains a decimal or if it's an integer representing milliseconds
             if "." not in parts[2] and len(parts[2]) <= 3:
                 # Format: MM:SS:mmm (e.g. 2:13:123)
-                m, sec, ms = int(parts[0]), int(parts[1]), int(parts[2])
-                return int((m * 60 + sec) * 1000 + ms)
+                m, s_int, ms = int(parts[0]), int(parts[1]), int(parts[2])
+                return int((m * 60 + s_int) * 1000 + ms)
             else:
                 # Format: HH:MM:SS.mmm
-                h, m, sec = int(parts[0]), int(parts[1]), float(parts[2])
-                return int((h * 3600 + m * 60 + sec) * 1000)
+                h, m, s_float = int(parts[0]), int(parts[1]), float(parts[2])
+                return int((h * 3600 + m * 60 + s_float) * 1000)
         elif len(parts) == 2:
             # MM:SS.mmm
-            m, sec = int(parts[0]), float(parts[1])
-            return int((m * 60 + sec) * 1000)
+            m, s_float = int(parts[0]), float(parts[1])
+            return int((m * 60 + s_float) * 1000)
         else:
             # SS.mmm
             return int(float(s) * 1000)
@@ -116,9 +116,9 @@ def create_router(state: AppState) -> APIRouter:
                 elapsed = time.time() - kill_req_at
                 if elapsed < 10:
                     logger.debug(
-                        "Rig %s: blocking heartbeat promotion to 'racing' "
-                        "(kill requested %.1fs ago)",
-                        rig_id, elapsed,
+                        "Rig %s: blocking heartbeat promotion to 'racing' (kill requested %.1fs ago)",
+                        rig_id,
+                        elapsed,
                     )
                 else:
                     # Guard expired — allow and clear
@@ -129,14 +129,14 @@ def create_router(state: AppState) -> APIRouter:
                 # Normal downgrade — allow unless very rapid
                 last_seen = rig.get("last_seen")
                 if isinstance(last_seen, (int, float)) and time.time() - last_seen < 3:
-                    logger.debug("Rig %s: blocking heartbeat downgrade %s -> %s (too soon)",
-                                  rig_id, current_status, new_status)
+                    logger.debug(
+                        "Rig %s: blocking heartbeat downgrade %s -> %s (too soon)", rig_id, current_status, new_status
+                    )
                 else:
                     state.update_rig_field(rig_id, "status", new_status)
                     # Clear kill guard on natural idle transition
                     state.update_rig_field(rig_id, "kill_requested_at", None)
-                    logger.info("Rig %s: %s -> %s (allowed)",
-                                 rig_id, current_status, new_status)
+                    logger.info("Rig %s: %s -> %s (allowed)", rig_id, current_status, new_status)
             else:
                 state.update_rig_field(rig_id, "status", new_status)
                 if current_status != new_status:
@@ -165,9 +165,7 @@ def create_router(state: AppState) -> APIRouter:
                 if completed > last_count:
                     state.update_rig_field(rig_id, "last_lap_count", completed)
                     # Look up track/group context from the rig's group
-                    rig_group = next(
-                        (g for g in state.get_groups() if rig_id in g.rig_ids), None
-                    )
+                    rig_group = next((g for g in state.get_groups() if rig_id in g.rig_ids), None)
 
                     # Parse lap time from telemetry
                     lap_time_ms: int | None = None
@@ -176,15 +174,15 @@ def create_router(state: AppState) -> APIRouter:
                         lap_time_ms = _parse_lap_time_ms(raw_time)
 
                     entry = LeaderboardEntry(
-                            rig_id=rig_id,
-                            driver_name=str(rig.get("driver_name", "")) or None,
-                            car=str(rig.get("selected_car", "")),
-                            track=rig_group.track if rig_group else None,
-                            group_name=rig_group.name if rig_group else None,
-                            lap=int(completed),
-                            lap_time_ms=lap_time_ms,
-                            session_id=rig_group.id if rig_group else None,
-                        )
+                        rig_id=rig_id,
+                        driver_name=str(rig.get("driver_name", "")) or None,
+                        car=str(rig.get("selected_car", "")),
+                        track=rig_group.track if rig_group else None,
+                        group_name=rig_group.name if rig_group else None,
+                        lap=int(completed),
+                        lap_time_ms=lap_time_ms,
+                        session_id=rig_group.id if rig_group else None,
+                    )
                     state.add_leaderboard_entry(entry)
                     # Also upsert into session_best (peak performance per driver)
                     state.upsert_session_best(entry)
@@ -254,11 +252,12 @@ def create_router(state: AppState) -> APIRouter:
         rig = state.get_rig(rig_id)
         if not rig or not rig.get("ip"):
             return {"status": "error", "message": "Rig not found or no IP"}
-        
-        import socket
+
         import json
+        import socket
+
         from shared.constants import COMMAND_PORT
-        
+
         try:
             # Connect to the sled agent's command port
             with socket.create_connection((str(rig.get("ip")), COMMAND_PORT), timeout=2) as s:
@@ -270,4 +269,3 @@ def create_router(state: AppState) -> APIRouter:
             return {"status": "error", "message": str(e)}
 
     return router
-

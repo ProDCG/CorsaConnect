@@ -1,5 +1,6 @@
 import socket
 
+
 def get_local_ip() -> str:
     """Best-effort local IP discovery, including when offline.
     Prioritizes the 192.168.10.x subnet for the isolated ethernet network.
@@ -14,7 +15,18 @@ def get_local_ip() -> str:
         pass
 
     # 2. Fall back to standard route detection
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    except Exception:
+        # Fallback to hostname resolution immediately if socket creation fails
+        try:
+            ip = socket.gethostbyname(socket.gethostname())
+            if ip and not ip.startswith("127."):
+                return ip
+        except Exception:
+            pass
+        return "127.0.0.1"
+
     try:
         # Try a public IP first (works if default route exists)
         s.connect(("8.8.8.8", 80))
@@ -47,5 +59,5 @@ def get_local_ip() -> str:
             return ip
     except Exception:
         pass
-        
+
     return "127.0.0.1"

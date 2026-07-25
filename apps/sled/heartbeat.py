@@ -9,14 +9,13 @@ import time
 from typing import TYPE_CHECKING
 
 from apps.sled.config import SledConfig
+from shared.utils import get_local_ip
 
 if TYPE_CHECKING:
     from apps.sled.agent import RigAgent
 
 logger = logging.getLogger("ridge.heartbeat")
 
-
-from shared.utils import get_local_ip
 
 def _get_local_ip() -> str:
     """Best-effort local IP discovery."""
@@ -110,8 +109,11 @@ class HeartbeatService:
                                     orch_car = my_rig.get("selected_car")
                                     if orch_car and str(orch_car) not in ("", "None"):
                                         if self.agent.selected_car != orch_car:
-                                            logger.info("Car synced from orchestrator: %s -> %s",
-                                                         self.agent.selected_car, orch_car)
+                                            logger.info(
+                                                "Car synced from orchestrator: %s -> %s",
+                                                self.agent.selected_car,
+                                                orch_car,
+                                            )
                                             self.agent.selected_car = str(orch_car)
                                     if my_rig.get("status") == "ready":
                                         self.agent.status = "ready"

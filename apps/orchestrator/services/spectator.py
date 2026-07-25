@@ -29,15 +29,14 @@ SPECTATOR_MONITOR_INDEX = 1
 # Numpad → AC keypress mapping
 # Keys are sent to the AC window even when it is not the foreground window.
 _NUMPAD_MAP: dict[str, str | list[str]] = {
-    "num 4":    "left",          # Previous driver
-    "num 6":    "right",         # Next driver
-    "num enter":"f1",            # Cycle camera mode
-    "num 8":    "f1",            # Cockpit cam
-    "num 2":    "f2",            # Chase cam
-    "num 5":    "f3",            # TV / track cam
+    "num 4": "left",  # Previous driver
+    "num 6": "right",  # Next driver
+    "num enter": "f1",  # Cycle camera mode
+    "num 8": "f1",  # Cockpit cam
+    "num 2": "f2",  # Chase cam
+    "num 5": "f3",  # TV / track cam
     # num 1-9 → Ctrl+1 through Ctrl+9 for direct slot jump
     "num 1": ["ctrl", "1"],
-    "num 2": ["ctrl", "2"],
     "num 3": ["ctrl", "3"],
     "num 7": ["ctrl", "7"],
     "num 9": ["ctrl", "9"],
@@ -72,8 +71,17 @@ def _generate_spectator_race_ini(
 
     # Map sun_angle to seconds-from-midnight for the [TIME] section
     time_map = {
-        -16: 25200, 8: 28800, 24: 32400, 40: 37800, 56: 43200,
-        72: 48600, 88: 54000, 104: 59400, 120: 64800, 136: 70200, 163: 79200
+        -16: 25200,
+        8: 28800,
+        24: 32400,
+        40: 37800,
+        56: 43200,
+        72: 48600,
+        88: 54000,
+        104: 59400,
+        120: 64800,
+        136: 70200,
+        163: 79200,
     }
     time_seconds = time_map.get(int(sun_angle), 43200)
 
@@ -178,7 +186,7 @@ def _write_low_quality_video_ini(ac_folder: str) -> str | None:
         return None
 
     try:
-        with open(video_ini, "r", encoding="utf-8", errors="replace") as f:
+        with open(video_ini, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
 
         # Write a backup if not already done
@@ -191,30 +199,30 @@ def _write_low_quality_video_ini(ac_folder: str) -> str | None:
         # Pure's required [POST_PROCESS] values — all keys are enforced wholesale
         # so the shader initialises correctly regardless of what was in the file.
         _pure_pp: dict[str, str] = {
-            "DOF":          "5",
-            "ENABLED":      "1",
-            "FILTER":       "pureHDR",
-            "FXAA":         "1",
-            "GLARE":        "5",
+            "DOF": "5",
+            "ENABLED": "1",
+            "FILTER": "pureHDR",
+            "FXAA": "1",
+            "GLARE": "5",
             "HEAT_SHIMMER": "1",
-            "QUALITY":      "5",
-            "RAYS_OF_GOD":  "1",
+            "QUALITY": "5",
+            "RAYS_OF_GOD": "1",
         }
         # Keys to reduce in [VIDEO] for spectator performance
         _video_overrides: dict[str, str] = {
-            "SHADOW_MAP_SIZE":      "512",
-            "SHADOW_MAP_SIZE2":     "512",
-            "SHADOW_MAP_SIZE3":     "256",
+            "SHADOW_MAP_SIZE": "512",
+            "SHADOW_MAP_SIZE2": "512",
+            "SHADOW_MAP_SIZE3": "256",
             "REFLECTION_RESOLUTION": "0",
-            "REFLECTION_DISTANCE":  "0",
-            "MOTION_BLUR":          "0",
-            "DEPTH_OF_FIELD":       "0",
-            "ANISOTROPIC":          "4",
-            "WIDTH":                "1920",
-            "HEIGHT":               "1080",
-            "FULLSCREEN":           "0",   # Must be windowed for monitor 2 move
-            "BORDERLESS":           "1",
-            "DISABLE_LEGACY_HDR":   "1",   # Required for Pure's HDR pipeline
+            "REFLECTION_DISTANCE": "0",
+            "MOTION_BLUR": "0",
+            "DEPTH_OF_FIELD": "0",
+            "ANISOTROPIC": "4",
+            "WIDTH": "1920",
+            "HEIGHT": "1080",
+            "FULLSCREEN": "0",  # Must be windowed for monitor 2 move
+            "BORDERLESS": "1",
+            "DISABLE_LEGACY_HDR": "1",  # Required for Pure's HDR pipeline
         }
 
         new_lines: list[str] = []
@@ -294,6 +302,7 @@ def _restore_video_ini() -> None:
     if os.path.exists(backup):
         try:
             import shutil
+
             shutil.copy2(backup, video_ini)
             os.remove(backup)
             logger.info("Restored original video.ini from backup")
@@ -323,7 +332,7 @@ def _move_window_to_monitor(window_title_fragment: str, monitor_index: int = 1) 
             monitors.append((rc.left, rc.top, rc.right, rc.bottom))
             return True
 
-        MONITOR_ENUM_PROC = ctypes.WINFUNCTYPE(
+        MONITOR_ENUM_PROC = ctypes.WINFUNCTYPE(  # type: ignore[attr-defined]
             ctypes.c_bool,
             ctypes.c_ulong,
             ctypes.c_ulong,
@@ -358,12 +367,10 @@ def _move_window_to_monitor(window_title_fragment: str, monitor_index: int = 1) 
             logger.warning("Could not find AC window containing '%s'", window_title_fragment)
             return
 
-        SWP_NOSIZE = 0x0001
         SWP_NOZORDER = 0x0004
         # Move to top-left of target monitor, keep size
         user32.SetWindowPos(found_hwnd, None, left, top, width, height, SWP_NOZORDER)
-        logger.info("Moved AC spectator window to monitor %d (%dx%d @ %d,%d)",
-                    monitor_index, width, height, left, top)
+        logger.info("Moved AC spectator window to monitor %d (%dx%d @ %d,%d)", monitor_index, width, height, left, top)
     except Exception as e:
         logger.warning("Could not move window to monitor %d: %s", monitor_index, e)
 
@@ -372,6 +379,7 @@ def _send_key_to_ac(key: str | list[str]) -> None:
     """Send a keypress to the AC window using pydirectinput."""
     try:
         import pydirectinput  # type: ignore[import]
+
         if isinstance(key, list):
             # Combo: e.g. ["ctrl", "1"]
             for k in key[:-1]:
@@ -414,6 +422,7 @@ def _start_numpad_listener() -> threading.Thread | None:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 class SpectatorService:
     """Singleton service managing the spectator AC instance on Monitor 2."""
@@ -460,8 +469,13 @@ class SpectatorService:
             # Generate the dedicated race.ini
             try:
                 ini_path = _generate_spectator_race_ini(
-                    server_ip, server_port, server_http_port,
-                    track, config_track, car, sun_angle,
+                    server_ip,
+                    server_port,
+                    server_http_port,
+                    track,
+                    config_track,
+                    car,
+                    sun_angle,
                 )
             except Exception as e:
                 logger.error("Failed to generate spectator_race.ini: %s", e)
@@ -534,6 +548,7 @@ class SpectatorService:
         # Also force-kill by name on Windows
         if IS_WINDOWS:
             import subprocess as _sp
+
             for exe in ("acs.exe", "acs_x86.exe"):
                 try:
                     _sp.run(["taskkill", "/F", "/T", "/IM", exe], capture_output=True, timeout=5)

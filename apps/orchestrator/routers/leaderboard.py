@@ -18,7 +18,10 @@ def create_router(state: AppState) -> APIRouter:
         track: str | None = Query(None),
         session_id: str | None = Query(None),
         group: str | None = Query(None),
-        view: str | None = Query(None),  # "recent", "session_best", "all_best", "today"
+        car: str | None = Query(None),
+        weather: str | None = Query(None),
+        time_window: str | None = Query(None),
+        view: str | None = Query(None),  # "recent", "session_best", "all_best", "today", "filtered"
         sort_desc: bool = Query(False),
     ) -> list[LeaderboardEntry]:
         """Full leaderboard data for the admin dashboard.
@@ -28,7 +31,12 @@ def create_router(state: AppState) -> APIRouter:
           - "recent"       → most recent session's raw laps
           - "session_best" → peak performance per driver (current session)
           - "all_best"     → peak performance per driver (all sessions)
+          - "filtered"     → advanced filtering (track, car, weather, time_window)
         """
+        if view == "filtered":
+            return state.leaderboard_db.get_filtered_leaderboard(
+                track=track, car=car, weather=weather, time_window=time_window
+            )
         if view == "today":
             return state.leaderboard_db.get_today_best(track=track, sort_desc=sort_desc)
         if view == "session_best":
@@ -47,8 +55,6 @@ def create_router(state: AppState) -> APIRouter:
     async def clear_leaderboard() -> dict[str, str]:
         """Clear all leaderboard data."""
         state.leaderboard_db.clear_leaderboard()
-        # Also clear in-memory state if tracking recent session laps
-        state.leaderboard = []
         return {"status": "success"}
 
     @router.delete("/leaderboard/{record_id}")
@@ -64,20 +70,21 @@ def create_router(state: AppState) -> APIRouter:
         import random
         import time
         import uuid
+
         from apps.orchestrator.services.content_scanner import scan_cars, scan_tracks
-        
+
         content_folder = state.settings.content_folder
         cars = [c.id for c in scan_cars(content_folder)]
         tracks = [t.id for t in scan_tracks(content_folder)]
-        
+
         if not cars:
             cars = ["ks_ferrari_488_gt3"]
         if not tracks:
             tracks = ["spa"]
-            
+
         car = random.choice(cars)
         track = random.choice(tracks)
-        
+
         entry = LeaderboardEntry(
             rig_id=f"RIG-{random.randint(1, 8):02d}",
             driver_name=random.choice(["Mason", "Alex", "Jordan", "Taylor", "Riley", "Casey", "Morgan", "Drew"]),
@@ -99,6 +106,14 @@ def create_router(state: AppState) -> APIRouter:
         top_10_all_time = state.leaderboard_db.get_session_best_all(limit=10)
         top_10_today = state.leaderboard_db.get_today_best(limit=10)
         hall_of_fame = state.leaderboard_db.get_hall_of_fame(limit=10)
+        lobby_override_title = None
+
+        if state.settings.active_lobby_group_id:
+            group = state.get_group(state.settings.active_lobby_group_id)
+            if group:
+                group_laps = state.leaderboard_db.get_session_best(session_id=group.id)
+                top_10_today = group_laps
+                lobby_override_title = f"{group.name} Leaderboard"
 
         active_rigs = [
             {
@@ -133,6 +148,7 @@ def create_router(state: AppState) -> APIRouter:
             "active_rigs": active_rigs,
             "total_rigs": len(state.get_rigs()),
             "server_status": state.server_status,
+            "lobby_override_title": lobby_override_title,
         }
 
     return router

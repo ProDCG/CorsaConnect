@@ -57,7 +57,7 @@ explicit_package_bases = true
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
-module = ["psutil", "cv2", "PIL.*", "pymumble_py3", "pymumble_py3.*"]
+module = ["psutil", "cv2", "PIL.*", "pymumble_py3", "pymumble_py3.*", "pydirectinput"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

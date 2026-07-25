@@ -156,6 +156,9 @@ class GlobalSettings(BaseModel):
     selected_weather: str = "15"
     content_folder: str = r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa"
     enable_csp: bool = False
+    active_lobby_group_id: str | None = None
+    discord_webhook_url: str | None = None
+    enable_per_lap_logging: bool = False
 
 
 class Branding(BaseModel):
@@ -204,6 +207,14 @@ class Preset(BaseModel):
     car_pool: list[str] = Field(default_factory=list)
 
 
+class CarPreset(BaseModel):
+    """A saved configuration for a list of cars."""
+
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8])
+    name: str
+    cars: list[str] = Field(default_factory=list)
+
+
 # --- Leaderboard Models ---
 
 
@@ -213,13 +224,18 @@ class LeaderboardEntry(BaseModel):
     id: int | None = None
     rig_id: str
     driver_name: str | None = None
+    driver_email: str | None = None
+    driver_phone: str | None = None
     car: str | None = None
     track: str | None = None
+    weather: str | None = None
     group_name: str | None = None
+    session_type: str | None = None  # race, qualify, practice
     lap: int = 0
     lap_time_ms: int | None = None  # Per-lap time in milliseconds
     session_id: str | None = None
     timestamp: float = Field(default_factory=time.time)
+    notification_pending: bool = False
 
 
 # --- Heartbeat Models ---

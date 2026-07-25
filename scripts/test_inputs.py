@@ -8,6 +8,7 @@ except ImportError:
     print("Please install it by running: pip install pygame")
     sys.exit(1)
 
+
 def main():
     pygame.init()
     pygame.joystick.init()
@@ -15,7 +16,7 @@ def main():
     # Create a small window. Pygame REQUIRES a focused window to capture keyboard events!
     screen = pygame.display.set_mode((400, 200))
     pygame.display.set_caption("CLICK ME FOR INPUTS")
-    
+
     font = pygame.font.SysFont(None, 24)
     text = font.render("Keep this window focused!", True, (255, 255, 255))
     screen.blit(text, (20, 80))
@@ -32,7 +33,9 @@ def main():
         joy = pygame.joystick.Joystick(i)
         joy.init()
         joysticks.append(joy)
-        print(f"  [{i}] {joy.get_name()} (Buttons: {joy.get_numbuttons()}, Axes: {joy.get_numaxes()}, Hats: {joy.get_numhats()})")
+        print(
+            f"  [{i}] {joy.get_name()} (Buttons: {joy.get_numbuttons()}, Axes: {joy.get_numaxes()}, Hats: {joy.get_numhats()})"
+        )
 
     print("\nListening for inputs... Press Ctrl+C to exit.")
     print("-" * 50)
@@ -41,7 +44,7 @@ def main():
         while True:
             # Pump events so pygame reads from the OS
             pygame.event.pump()
-            
+
             for event in pygame.event.get():
                 if event.type == pygame.JOYBUTTONDOWN:
                     print(f"[BUTTON PRESSED] Controller {event.joy} | Button ID: {event.button}")
@@ -49,7 +52,7 @@ def main():
                     print(f"[BUTTON RELEASED] Controller {event.joy} | Button ID: {event.button}")
                 elif event.type == pygame.JOYHATMOTION:
                     print(f"[D-PAD/HAT] Controller {event.joy} | Hat {event.hat} | Value: {event.value}")
-                # We typically ignore JOYAXISMOTION (steering/pedals) in this output 
+                # We typically ignore JOYAXISMOTION (steering/pedals) in this output
                 # to prevent console spam from micro-movements, but you can uncomment this if needed:
                 # elif event.type == pygame.JOYAXISMOTION:
                 #     if abs(event.value) > 0.1:  # Only print significant movements
@@ -63,6 +66,7 @@ def main():
         print("\nExiting...")
     finally:
         pygame.quit()
+
 
 if __name__ == "__main__":
     main()

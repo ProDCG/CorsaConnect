@@ -20,37 +20,37 @@ _DEFAULT_GEOTAG = (45.6156, 9.2811)
 # Content Manager weather type IDs — maps AC weather preset to CM's internal type.
 # Without the correct type, CM may override sun angle and weather settings.
 _CM_WEATHER_TYPES: dict[str, int] = {
-    "0_sun":           16,   # LightThunderstorm base -> CM Clear
-    "1_nosun":         16,
-    "2_clouds":        16,
-    "3_clear":         16,
-    "4_mid_clouds":    16,
-    "5_light_clouds":  17,
-    "6_heavy_clouds":  18,
+    "0_sun": 16,  # LightThunderstorm base -> CM Clear
+    "1_nosun": 16,
+    "2_clouds": 16,
+    "3_clear": 16,
+    "4_mid_clouds": 16,
+    "5_light_clouds": 17,
+    "6_heavy_clouds": 18,
 }
 
 
 def _sun_angle_to_seconds(angle: float) -> int:
-    """Convert a sun angle to exact seconds from midnight 00:00 for CSP's [TIME] section.
-    """
+    """Convert a sun angle to exact seconds from midnight 00:00 for CSP's [TIME] section."""
     time_map = {
         -16: 25200,  # Dawn (07:00)
-        8: 28800,    # Sunrise (08:00)
-        24: 32400,   # Morning (09:00)
-        40: 37800,   # Late Morning (10:30)
-        56: 43200,   # Midday (12:00)
-        72: 48600,   # Early Afternoon (13:30)
-        88: 54000,   # Afternoon (15:00)
+        8: 28800,  # Sunrise (08:00)
+        24: 32400,  # Morning (09:00)
+        40: 37800,  # Late Morning (10:30)
+        56: 43200,  # Midday (12:00)
+        72: 48600,  # Early Afternoon (13:30)
+        88: 54000,  # Afternoon (15:00)
         104: 59400,  # Late Afternoon (16:30)
         120: 64800,  # Sunset (18:00)
         136: 70200,  # Dusk (19:30)
-        163: 79200   # Night (22:00)
+        163: 79200,  # Night (22:00)
     }
-    
+
+    angle_int = int(angle)
     # Use exact map if possible
-    if angle in time_map:
-        return time_map[angle]
-        
+    if angle_int in time_map:
+        return time_map[angle_int]
+
     # Linear interpolation (0 = 07:30, 16 degrees = 1 hour)
     seconds = int(27000 + (angle / 16.0) * 3600)
     if seconds < 0:
@@ -206,29 +206,14 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             )
 
         # [DYNAMIC_TRACK]
-        lines.append(
-            f"\n[DYNAMIC_TRACK]\n"
-            f"SESSION_START={track_grip}\n"
-            f"RANDOMNESS=2\n"
-            f"LAP_GAIN=132\n"
-            f"SESSION_TRANSFER=0"
-        )
+        lines.append(f"\n[DYNAMIC_TRACK]\nSESSION_START={track_grip}\nRANDOMNESS=2\nLAP_GAIN=132\nSESSION_TRANSFER=0")
 
         # [WIND]
-        lines.append(
-            "\n[WIND]\n"
-            "SPEED_KMH_MIN=0\n"
-            "SPEED_KMH_MAX=0\n"
-            "DIRECTION_DEG=90"
-        )
+        lines.append("\n[WIND]\nSPEED_KMH_MIN=0\nSPEED_KMH_MAX=0\nDIRECTION_DEG=90")
 
         # [TEMPERATURE]
         road_temp = max(0, ambient_temp - 3)  # Road is typically a bit cooler
-        lines.append(
-            f"\n[TEMPERATURE]\n"
-            f"AMBIENT={ambient_temp}\n"
-            f"ROAD={road_temp}"
-        )
+        lines.append(f"\n[TEMPERATURE]\nAMBIENT={ambient_temp}\nROAD={road_temp}")
 
         # Sessions — only for offline (non-server) mode
         if not use_server:
@@ -245,35 +230,16 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             )
 
         # [GROOVE]
-        lines.append(
-            "\n[GROOVE]\n"
-            "VIRTUAL_LAPS=10\n"
-            "MAX_LAPS=30\n"
-            "STARTING_LAPS=0"
-        )
+        lines.append("\n[GROOVE]\nVIRTUAL_LAPS=10\nMAX_LAPS=30\nSTARTING_LAPS=0")
 
         # [GHOST_CAR]
-        lines.append(
-            "\n[GHOST_CAR]\n"
-            "RECORDING=0\n"
-            "PLAYING=0\n"
-            "LOAD=0\n"
-            "FILE=\n"
-            "ENABLED=0"
-        )
+        lines.append("\n[GHOST_CAR]\nRECORDING=0\nPLAYING=0\nLOAD=0\nFILE=\nENABLED=0")
 
         # [LAP_INVALIDATOR]
-        lines.append(
-            "\n[LAP_INVALIDATOR]\n"
-            "ALLOWED_TYRES_OUT=-1"
-        )
+        lines.append("\n[LAP_INVALIDATOR]\nALLOWED_TYRES_OUT=-1")
 
         # [HEADER]
-        lines.append(
-            "\n[HEADER]\n"
-            "VERSION=2\n"
-            "CM_FEATURE_SET=2"
-        )
+        lines.append("\n[HEADER]\nVERSION=2\nCM_FEATURE_SET=2")
 
         # [REMOTE]
         server_port = int(str(params.get("server_port", 9600) or 9600))
@@ -293,10 +259,10 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
 
         # [LIGHTING] — sun angle, time multiplier, and CM-specific weather fields
         try:
-            w_id = int(weather) if weather != "None" else -1
+            int(weather) if weather != "None" else -1
         except (ValueError, TypeError):
-            w_id = 15
-            
+            pass
+
         lines.append(
             f"\n[LIGHTING]\n"
             f"SPECULAR_MULT=1.0\n"
@@ -312,49 +278,22 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         # NOTE: __CM_WEATHER_CONTROLLER and __CM_WEATHER_TYPE are intentionally
         # omitted — the reference Pure race.ini does not include them.  Pure
         # activates via CONTROLLER=pure in [WEATHER] + FILTER=pureHDR in video.ini.
-        
+
         # Calculate time_seconds for GRAPHICS string
         time_seconds = _sun_angle_to_seconds(sun_angle)
 
         # [WEATHER] — expanded for CSP Weather FX
-        lines.append(
-            f"\n[WEATHER]\n"
-            f"NAME=sol_42_thunderstorm\n"
-            f"GRAPHICS=sol_42_thunderstorm\n"
-            f"CONTROLLER=pure\n"
-            f"TYPE=1"
-        )
+        lines.append("\n[WEATHER]\nNAME=sol_42_thunderstorm\nGRAPHICS=sol_42_thunderstorm\nCONTROLLER=pure\nTYPE=1")
 
         # [TIME] — seconds from midnight for CSP
-        lines.append(
-            f"\n[TIME]\n"
-            f"TIME={time_seconds}\n"
-            f"DAYS=21\n"
-            f"MONTHS=6\n"
-            f"YEARS=2026"
-        )
+        lines.append(f"\n[TIME]\nTIME={time_seconds}\nDAYS=21\nMONTHS=6\nYEARS=2026")
 
         # Trailing standard sections
-        lines.append(
-            "\n[BENCHMARK]\n"
-            "ACTIVE=0"
-        )
-        lines.append(
-            "\n[REPLAY]\n"
-            "ACTIVE=0"
-        )
-        lines.append(
-            "\n[RESTART]\n"
-            "ACTIVE=0"
-        )
-        lines.append(
-            "\n[__PREVIEW_GENERATION]\n"
-            "ACTIVE=0"
-        )
-        lines.append(
-            "\n[OPTIONS]\n"
-            "USE_MPH=0"
-        )
+        lines.append("\n[BENCHMARK]\nACTIVE=0")
+        lines.append("\n[REPLAY]\nACTIVE=0")
+        lines.append("\n[RESTART]\nACTIVE=0")
+        lines.append("\n[__PREVIEW_GENERATION]\nACTIVE=0")
+        lines.append("\n[OPTIONS]\nUSE_MPH=0")
 
         content = "\n".join(lines)
 
@@ -366,13 +305,7 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         os.makedirs(ext_dir, exist_ok=True)
         weather_fx_path = os.path.join(ext_dir, "weather_fx.ini")
         with open(weather_fx_path, "w") as wf:
-            wf.write(
-                "[BASIC]\n"
-                "ENABLED=1\n\n"
-                "[CONTROLLER]\n"
-                "ACTIVE=1\n"
-                "IMPLEMENTATION=pure\n"
-            )
+            wf.write("[BASIC]\nENABLED=1\n\n[CONTROLLER]\nACTIVE=1\nIMPLEMENTATION=pure\n")
         logger.info("Wrote weather_fx.ini: %s", weather_fx_path)
 
         # --- Write CSP Extra Options (Wrong Way) ---
@@ -458,8 +391,18 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         except Exception as ve:
             logger.warning("Verification read failed: %s", ve)
 
-        logger.info("Wrote race.ini: CAR=%s TRACK=%s AI=%d/%d%% SERVER=%s SERVER_IP=%s SERVER_PORT=%s SUN=%.1f TIME_MULT=%.1f",
-                     car, track, ai_count, ai_difficulty, use_server, server_ip, server_port, sun_angle, time_mult)
+        logger.info(
+            "Wrote race.ini: CAR=%s TRACK=%s AI=%d/%d%% SERVER=%s SERVER_IP=%s SERVER_PORT=%s SUN=%.1f TIME_MULT=%.1f",
+            car,
+            track,
+            ai_count,
+            ai_difficulty,
+            use_server,
+            server_ip,
+            server_port,
+            sun_angle,
+            time_mult,
+        )
         return cfg_path
 
     except Exception as e:
@@ -471,14 +414,14 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
 # pipeline.  These values are merged section-by-section into the rig's own
 # video.ini so the player's [VIDEO] resolution/refresh/fullscreen is preserved.
 _PURE_POST_PROCESS_KEYS: dict[str, str] = {
-    "DOF":          "5",
-    "ENABLED":      "1",
-    "FILTER":       "pureHDR",
-    "FXAA":         "1",
-    "GLARE":        "5",
+    "DOF": "5",
+    "ENABLED": "1",
+    "FILTER": "pureHDR",
+    "FXAA": "1",
+    "GLARE": "5",
     "HEAT_SHIMMER": "1",
-    "QUALITY":      "5",
-    "RAYS_OF_GOD":  "1",
+    "QUALITY": "5",
+    "RAYS_OF_GOD": "1",
 }
 
 
@@ -505,7 +448,7 @@ def _ensure_pure_video_ini() -> None:
         return
 
     try:
-        with open(video_ini, "r", encoding="utf-8", errors="replace") as f:
+        with open(video_ini, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
 
         new_lines: list[str] = []

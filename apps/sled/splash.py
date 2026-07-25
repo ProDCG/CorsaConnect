@@ -30,9 +30,11 @@ from urllib.error import URLError
 # Optional deps — graceful fallback if missing
 try:
     from PIL import Image, ImageOps
+
     HAS_PIL = True
     try:
         from PIL import ImageTk
+
         HAS_IMAGETK = True
     except ImportError:
         HAS_IMAGETK = False
@@ -42,6 +44,7 @@ except ImportError:
 
 try:
     import cv2
+
     HAS_CV2 = True
 except ImportError:
     HAS_CV2 = False
@@ -62,6 +65,7 @@ def _pil_to_tk(pil_img: Image.Image) -> tk.PhotoImage:
     w, h = rgb.size
     ppm = f"P6\n{w} {h}\n255\n".encode() + rgb.tobytes()
     return tk.PhotoImage(data=ppm)
+
 
 _LOG_HANDLERS: list[logging.Handler] = [logging.StreamHandler()]
 try:
@@ -85,11 +89,13 @@ POLL_INTERVAL_MS = 3000  # Poll orchestrator every 3 seconds
 
 def _load_rig_config():
     from apps.sled.config import load_config
+
     try:
         return load_config()
     except Exception as e:
         logger.error(f"Failed to load config in splash: {e}")
         from apps.sled.config import SledConfig
+
         return SledConfig()
 
 
@@ -155,8 +161,11 @@ class DesktopBlocker:
 
         # Canvas
         self.canvas = tk.Canvas(
-            self.root, width=self.sw, height=self.sh,
-            bg=BG_COLOR, highlightthickness=0,
+            self.root,
+            width=self.sw,
+            height=self.sh,
+            bg=BG_COLOR,
+            highlightthickness=0,
         )
         self.canvas.pack(fill="both", expand=True)
 
@@ -165,7 +174,8 @@ class DesktopBlocker:
 
         # Status label — bottom-left, right below rig ID
         self.status_text = self.canvas.create_text(
-            30, self.sh - 30,
+            30,
+            self.sh - 30,
             text="INITIALIZING SYSTEMS...",
             font=("Arial", 9, "bold"),
             fill="#444444",
@@ -175,7 +185,8 @@ class DesktopBlocker:
 
         # Mode indicator (top right)
         self.mode_indicator = self.canvas.create_text(
-            self.sw - 20, 20,
+            self.sw - 20,
+            20,
             text="LOCKOUT",
             font=("Arial", 8, "bold"),
             fill="#333333",
@@ -215,6 +226,7 @@ class DesktopBlocker:
         url = f"http://{self.orchestrator_ip}:8000/assets/{filename}"
         try:
             import tempfile
+
             with urlrequest.urlopen(url, timeout=5) as resp:
                 data = resp.read()
             tmp = tempfile.NamedTemporaryFile(suffix=Path(filename).suffix, delete=False)
@@ -320,7 +332,6 @@ class DesktopBlocker:
         # Start video background (async, non-blocking)
         self.root.after(500, self._start_video_background)
 
-
         # Main title removed — video background + logos only
 
         # --- Bottom-right: Talbot Media + RSR logos ---
@@ -330,7 +341,8 @@ class DesktopBlocker:
 
         # Fallback text (will be hidden if logos load successfully)
         self._collab_text_id = self.canvas.create_text(
-            sw - 30, sh - 50,
+            sw - 30,
+            sh - 50,
             text="TALBOT MEDIA  \u2715  RIDGE SIM RACING",
             font=("Arial", 13, "bold italic"),
             fill=BRAND_COLOR,
@@ -338,7 +350,8 @@ class DesktopBlocker:
             tags="branding",
         )
         self.canvas.create_text(
-            sw - 30, sh - 30,
+            sw - 30,
+            sh - 30,
             text="POWERED BY RIDGE-LINK",
             font=("Arial", 8, "bold"),
             fill="#444444",
@@ -348,7 +361,8 @@ class DesktopBlocker:
 
         # --- Bottom-left: rig identifier ---
         self.canvas.create_text(
-            30, sh - 55,
+            30,
+            sh - 55,
             text=self.rig_id,
             font=("Arial", 18, "bold italic"),
             fill="#FFFFFF",
@@ -358,7 +372,8 @@ class DesktopBlocker:
 
         # Exit hint (very dark so customers can't see it)
         self.canvas.create_text(
-            sw // 2, sh - 10,
+            sw // 2,
+            sh - 10,
             text="Ctrl+Shift+Q to unlock  |  Ctrl+Shift+D for dev mode  |  Esc x5 to unlock",
             font=("Arial", 7),
             fill="#1a1a1a",
@@ -405,11 +420,18 @@ class DesktopBlocker:
             line_top = y_base + 10
             line_bot = y_base + talbot.height() - 10
             self.canvas.create_line(
-                line_x, line_top, line_x, line_bot,
-                fill="#FFFFFF", width=2, tags="branding",
+                line_x,
+                line_top,
+                line_x,
+                line_bot,
+                fill="#FFFFFF",
+                width=2,
+                tags="branding",
             )
             self._logo_refs.append(rsr)
-            self.canvas.create_image(x_start + talbot.width() + cross_width + gap, y_base, anchor="nw", image=rsr, tags="branding")
+            self.canvas.create_image(
+                x_start + talbot.width() + cross_width + gap, y_base, anchor="nw", image=rsr, tags="branding"
+            )
             placed = True
         elif talbot:
             self._logo_refs.append(talbot)
@@ -440,7 +462,8 @@ class DesktopBlocker:
         # Create timer label at top-center of canvas
         if self._timer_label_id is None:
             self._timer_label_id = self.canvas.create_text(
-                self.sw // 2, 40,
+                self.sw // 2,
+                40,
                 text="",
                 font=("Arial", 28, "bold"),
                 fill="#FFFFFF",
@@ -513,8 +536,14 @@ class DesktopBlocker:
             car_pool = data.get("car_pool", [])
             session_duration = int(data.get("session_duration_min", 0))
 
-            logger.debug("Poll result: mode=%s status=%s (current: mode=%s status=%s locally_unlocked=%s)",
-                         new_mode, new_status, self._current_mode, self._current_status, self._locally_unlocked)
+            logger.debug(
+                "Poll result: mode=%s status=%s (current: mode=%s status=%s locally_unlocked=%s)",
+                new_mode,
+                new_status,
+                self._current_mode,
+                self._current_status,
+                self._locally_unlocked,
+            )
 
             # Mode change
             if new_mode != self._current_mode:
@@ -572,7 +601,7 @@ class DesktopBlocker:
         elif status == "racing":
             # Only schedule the hide ONCE — polling can re-trigger _apply_status
             # every cycle which causes flickering if we keep scheduling.
-            if not getattr(self, '_hide_scheduled', False):
+            if not getattr(self, "_hide_scheduled", False):
                 self._hide_scheduled = True
                 self.update_status("LAUNCHING RACE...")
                 logger.info("Racing detected — will hide splash in 1.5s")
@@ -657,9 +686,7 @@ class DesktopBlocker:
         """Periodically re-assert topmost so splash survives other windows opening."""
         # Do NOT re-assert topmost while racing — the splash is hidden so AC
         # can render.  Re-asserting pulls the splash back over the game.
-        if (not self._dev_mode
-                and self._current_mode == "lockout"
-                and self._current_status not in ("racing",)):
+        if not self._dev_mode and self._current_mode == "lockout" and self._current_status not in ("racing",):
             try:
                 self.root.attributes("-topmost", True)
             except Exception:
@@ -668,16 +695,20 @@ class DesktopBlocker:
 
     def yield_to_ac(self) -> None:
         """Temporarily lower splash so AC can render on top."""
+
         def _lower() -> None:
             self.root.attributes("-topmost", False)
+
         self.root.after(0, _lower)
 
     def reclaim_top(self) -> None:
         """Re-assert topmost after AC closes."""
+
         def _raise() -> None:
             if self._current_mode == "lockout":
                 self.root.attributes("-topmost", True)
                 self.root.lift()
+
         self.root.after(0, _raise)
 
     def update_status(self, text: str) -> None:
@@ -759,12 +790,15 @@ class DesktopBlocker:
 
     def _report_unlock(self) -> None:
         """Tell the orchestrator this rig is now in freeuse mode."""
+
         def _send():
             for attempt in range(2):
                 try:
                     url = f"http://{self.orchestrator_ip}:8000/rigs/{self.rig_id}/mode"
                     data = json.dumps({"mode": "freeuse"}).encode()
-                    req = urlrequest.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+                    req = urlrequest.Request(
+                        url, data=data, headers={"Content-Type": "application/json"}, method="POST"
+                    )
                     urlrequest.urlopen(req, timeout=5)
                     logger.info("Reported unlock to orchestrator")
                     return
@@ -772,6 +806,7 @@ class DesktopBlocker:
                     logger.warning("Failed to report unlock (attempt %d): %s", attempt + 1, e)
                     if attempt == 0:
                         time.sleep(1)
+
         threading.Thread(target=_send, daemon=True).start()
 
     def destroy(self) -> None:
@@ -858,12 +893,10 @@ if __name__ == "__main__":
     except Exception:
         import traceback
 
-        _crash_log = os.path.join(
-            Path(__file__).resolve().parent.parent.parent, "ridge_crash.log"
-        )
+        _crash_log = os.path.join(Path(__file__).resolve().parent.parent.parent, "ridge_crash.log")
         try:
             with open(_crash_log, "a") as _f:
-                _f.write(f"\n{'='*60}\nCRASH at {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                _f.write(f"\n{'=' * 60}\nCRASH at {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
                 traceback.print_exc(file=_f)
         except Exception:
             pass

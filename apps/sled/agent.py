@@ -77,9 +77,14 @@ class RigAgent:
                     self.telemetry_data = data
                     now = time.time()
                     if data.get("status") == 2 and now - last_print > 30:
-                        logger.info("Telemetry: status=%s speed=%.0f gear=%s laps=%s",
-                                     data.get("status"), data.get("velocity", [0])[0] if isinstance(data.get("velocity"), list) else 0,
-                                     data.get("gear", "?"), data.get("completed_laps", "?"))
+                        velocity = data.get("velocity")
+                        logger.info(
+                            "Telemetry: status=%s speed=%.0f gear=%s laps=%s",
+                            data.get("status"),
+                            velocity[0] if isinstance(velocity, list) and velocity else 0,
+                            data.get("gear", "?"),
+                            data.get("completed_laps", "?"),
+                        )
                         last_print = now
                 time.sleep(0.1)
             except Exception as e:
@@ -93,6 +98,7 @@ class RigAgent:
         if IS_WINDOWS:
             try:
                 import psutil
+
                 for proc in psutil.process_iter(["name"]):
                     try:
                         name = (proc.info.get("name") or "").lower()
@@ -105,7 +111,8 @@ class RigAgent:
                 try:
                     out = subprocess.check_output(
                         ["tasklist", "/FI", "IMAGENAME eq acs.exe", "/NH"],
-                        capture_output=False, text=True, timeout=3,
+                        text=True,
+                        timeout=3,
                     )
                     if "acs.exe" in out.lower():
                         return True
@@ -114,6 +121,7 @@ class RigAgent:
         else:
             try:
                 import psutil
+
                 for proc in psutil.process_iter(["name"]):
                     try:
                         name = (proc.info.get("name") or "").lower()
@@ -131,6 +139,7 @@ class RigAgent:
         mumble_names = {"mumble.exe", "mumble"}
         try:
             import psutil
+
             for proc in psutil.process_iter(["name"]):
                 try:
                     pinfo = proc.info
@@ -144,7 +153,8 @@ class RigAgent:
                 try:
                     out = subprocess.check_output(
                         ["tasklist", "/FI", "IMAGENAME eq mumble.exe", "/NH"],
-                        capture_output=False, text=True, timeout=3,
+                        text=True,
+                        timeout=3,
                     )
                     if "mumble.exe" in out.lower():
                         return True
@@ -215,6 +225,7 @@ class RigAgent:
 
             # Glob search
             import glob
+
             for pattern in [
                 r"C:\Program Files*\Mumble*\**\mumble.exe",
             ]:
@@ -260,6 +271,7 @@ class RigAgent:
             ctx.verify_mode = ssl.CERT_NONE
 
             import socket
+
             with socket.create_connection((host, port), timeout=5) as raw_sock:
                 with ctx.wrap_socket(raw_sock, server_hostname=host) as ssl_sock:
                     der_cert = ssl_sock.getpeercert(binary_form=True)
@@ -412,29 +424,33 @@ class RigAgent:
         proc = launch_ac(self.config, params)
         if proc:
             self.current_process = proc
-            
+
             # Start auto-drive keypress thread if enabled
             if self.config.auto_drive_enabled:
                 import threading
-                def auto_press():
+
+                def auto_press() -> None:
                     import time
-                    import ctypes
-                    logger.info("Auto-drive armed. Waiting %d seconds before pressing key...", self.config.auto_drive_delay_sec)
+
+                    logger.info(
+                        "Auto-drive armed. Waiting %d seconds before pressing key...", self.config.auto_drive_delay_sec
+                    )
                     time.sleep(self.config.auto_drive_delay_sec)
                     if self.status != "idle":
                         logger.info("Simulating DirectX-level Ctrl + Space via pydirectinput to start driving")
                         try:
                             import pydirectinput
-                            pydirectinput.keyDown('ctrl')
-                            pydirectinput.press('space')
-                            pydirectinput.keyUp('ctrl')
+
+                            pydirectinput.keyDown("ctrl")
+                            pydirectinput.press("space")
+                            pydirectinput.keyUp("ctrl")
                         except ImportError:
                             logger.error("pydirectinput not installed! Run: pip install pydirectinput")
                         except Exception as e:
                             logger.error("Auto-drive pydirectinput failed: %s", e)
-                
+
                 threading.Thread(target=auto_press, daemon=True).start()
-                
+
         else:
             logger.error("Could not launch AC — check config.json paths")
 
@@ -462,11 +478,13 @@ class RigAgent:
         # Force-kill AC processes by name (belt and suspenders)
         if IS_WINDOWS:
             import subprocess as _sp
+
             for exe in ("AssettoCorsa.exe", "assettocorsa.exe", "acs.exe", "acs_x86.exe"):
                 try:
                     _sp.run(
                         ["taskkill", "/F", "/T", "/IM", exe],
-                        capture_output=True, timeout=5,
+                        capture_output=True,
+                        timeout=5,
                     )
                 except Exception:
                     pass
@@ -474,6 +492,7 @@ class RigAgent:
             # Linux/Mac fallback via psutil
             try:
                 import psutil
+
                 for proc in psutil.process_iter(["name"]):
                     try:
                         name = proc.info.get("name", "")
@@ -483,6 +502,7 @@ class RigAgent:
                         pass
             except ImportError:
                 import subprocess as _sp
+
                 for exe in ("AssettoCorsa.exe", "assettocorsa.exe", "acs.exe", "acs_x86.exe"):
                     try:
                         _sp.run(["pkill", "-f", exe], capture_output=True)
@@ -497,30 +517,30 @@ class RigAgent:
         try:
             import pydirectinput
             # pydirectinput works globally if AC is the foreground window
-            
+
             if action == "NEXT_CAR":
-                pydirectinput.press('pgdn')
+                pydirectinput.press("pgdn")
             elif action == "PREV_CAR":
-                pydirectinput.press('pgup')
+                pydirectinput.press("pgup")
             elif action == "CHANGE_CAM":
-                pydirectinput.press('f1')
+                pydirectinput.press("f1")
             elif action.startswith("GOTO_CAR_"):
                 # GOTO_CAR_1, GOTO_CAR_2, etc. -> Ctrl+1, Ctrl+2
                 try:
                     num = int(action.split("_")[-1])
                     if 0 <= num <= 9:
-                        pydirectinput.keyDown('ctrl')
+                        pydirectinput.keyDown("ctrl")
                         pydirectinput.press(str(num))
-                        pydirectinput.keyUp('ctrl')
+                        pydirectinput.keyUp("ctrl")
                         logger.info("Jumped to car slot %d", num)
                 except ValueError:
                     pass
             elif action == "CAM_INTERNAL":
-                pydirectinput.press('f1')
+                pydirectinput.press("f1")
             elif action == "CAM_EXTERNAL":
-                pydirectinput.press('f2')
+                pydirectinput.press("f2")
             elif action == "CAM_TRACK":
-                pydirectinput.press('f3')
+                pydirectinput.press("f3")
             else:
                 logger.warning("Unknown spectate action: %s", action)
         except ImportError:

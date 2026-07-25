@@ -305,6 +305,7 @@ class ACTelemetry:
         """Check if SimHub process is running and set simhub_connected accordingly."""
         try:
             import psutil
+
             for proc in psutil.process_iter(["name"]):
                 try:
                     pinfo = proc.info
@@ -321,9 +322,11 @@ class ACTelemetry:
             if os.name == "nt":
                 try:
                     import subprocess
+
                     out = subprocess.check_output(
                         ["tasklist", "/FI", "IMAGENAME eq SimHubWPF.exe", "/NH"],
-                        text=True, timeout=3,
+                        text=True,
+                        timeout=3,
                     )
                     if "simhub" in out.lower():
                         if not self.simhub_connected:

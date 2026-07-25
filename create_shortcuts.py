@@ -44,7 +44,11 @@ def main() -> None:
     desktop = os.path.join(os.environ.get("USERPROFILE", ""), "Desktop")
     startup = os.path.join(
         os.environ.get("APPDATA", ""),
-        "Microsoft", "Windows", "Start Menu", "Programs", "Startup",
+        "Microsoft",
+        "Windows",
+        "Start Menu",
+        "Programs",
+        "Startup",
     )
 
     if role == "rig":

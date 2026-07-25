@@ -32,7 +32,11 @@ async def dispatch_command_async(ip: str, port: int, payload: dict[str, object])
         except Exception as e:
             logger.warning(
                 "Attempt %d/%d failed to send %s to %s: %s",
-                attempt, MAX_RETRIES, action, ip, e,
+                attempt,
+                MAX_RETRIES,
+                action,
+                ip,
+                e,
             )
             if attempt < MAX_RETRIES:
                 await asyncio.sleep(1.0)

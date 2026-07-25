@@ -11,15 +11,16 @@ from __future__ import annotations
 
 import argparse
 import random
-import sqlite3
+import sys
 import time
 import uuid
-import sys
 from pathlib import Path
+
 # Add project root to sys.path so we can import apps
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from apps.orchestrator.services.leaderboard_db import LeaderboardDB
+
 from shared.models import LeaderboardEntry
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "leaderboard.db"
@@ -36,6 +37,7 @@ SAMPLE_CARS = [
     "ks_mclaren_650s_gt3",
 ]
 
+
 def add_lap(
     driver: str,
     rig_id: str,
@@ -48,7 +50,7 @@ def add_lap(
 ) -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     db = LeaderboardDB(DB_PATH)
-    
+
     entry = LeaderboardEntry(
         rig_id=rig_id,
         driver_name=driver,
@@ -60,10 +62,10 @@ def add_lap(
         session_id=session_id,
         timestamp=time.time(),
     )
-    
+
     db.insert(entry)
     db.upsert_session_best(entry)
-    
+
     print(f"  ✓ Lap {lap_num} — {driver} on {track} in {car} ({lap_time_ms}ms)")
 
 

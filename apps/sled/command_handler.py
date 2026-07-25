@@ -67,9 +67,12 @@ class CommandHandler:
             self.agent.stop_kiosk()
             # Resolve car: payload (from orchestrator) > agent selection > None
             payload_car = payload.get("car")
-            resolved_car = payload_car if (payload_car and str(payload_car) not in ("", "None")) else self.agent.selected_car
-            logger.info("Car resolution: payload=%s, agent=%s, resolved=%s",
-                         payload_car, self.agent.selected_car, resolved_car)
+            resolved_car = (
+                payload_car if (payload_car and str(payload_car) not in ("", "None")) else self.agent.selected_car
+            )
+            logger.info(
+                "Car resolution: payload=%s, agent=%s, resolved=%s", payload_car, self.agent.selected_car, resolved_car
+            )
             params = {
                 "car": resolved_car,
                 "track": payload.get("track", "monza"),
@@ -113,6 +116,7 @@ class CommandHandler:
             self.agent.status = "syncing"
             try:
                 from apps.sled.launcher import sync_mods
+
                 content_folder = str(payload.get("content_folder", self.config.admin_shared_folder))
                 sync_mods(self.config, source_override=content_folder)
                 self.agent.status = "idle"
@@ -126,11 +130,13 @@ class CommandHandler:
             # 1. Kill any active race
             self.agent.kill_race()
             import time
+
             time.sleep(1)
 
             # 2. Run the recovery/restart script
             import os
             import subprocess as _sp
+
             repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             if os.name == "nt":
                 # Prefer RESTART.bat (comprehensive: kills all, pulls, restarts)
@@ -159,7 +165,7 @@ class CommandHandler:
                     _sp.Popen(
                         ["cmd", "/c", script],
                         cwd=repo_root,
-                        creationflags=_sp.CREATE_NEW_CONSOLE,
+                        creationflags=getattr(_sp, "CREATE_NEW_CONSOLE", 0),
                     )
                     # The script kills python.exe, so this process will die.
                     # Give it a moment, then force-exit just in case.
@@ -179,7 +185,7 @@ class CommandHandler:
         elif action == "START_MUMBLE":
             logger.info("Mumble launch requested from orchestrator")
             self.agent.start_mumble()
-        
+
         elif action == "SPECTATE_ACTION":
             sub_action = str(payload.get("spectate_action", ""))
             self.agent.spectate_action(sub_action)

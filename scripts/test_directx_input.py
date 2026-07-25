@@ -1,5 +1,5 @@
-import time
 import sys
+import time
 
 try:
     import pydirectinput
@@ -17,8 +17,8 @@ for i in range(5, 0, -1):
 print("Sending DirectX-level Ctrl+Space...")
 
 # pydirectinput sends inputs at the DirectX level, which games cannot ignore
-pydirectinput.keyDown('ctrl')
-pydirectinput.press('space')
-pydirectinput.keyUp('ctrl')
+pydirectinput.keyDown("ctrl")
+pydirectinput.press("space")
+pydirectinput.keyUp("ctrl")
 
 print("Done! Did it drop you into the car?")

@@ -23,7 +23,6 @@ router = APIRouter(prefix="/server", tags=["server"])
 _spectator: SpectatorService = SpectatorService()
 
 
-
 class StartServerRequest(BaseModel):
     """Request body for starting a server for a group."""
 
@@ -172,13 +171,13 @@ def create_router(state: AppState) -> APIRouter:
             return {"status": "error", "message": "Group not found"}
 
         import os
-        
+
         # Read the direct config from disk if it exists
         repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         cfg_path = os.path.join(repo_root, "data", "servers", group_id, "cfg", "server_cfg.ini")
-        
+
         if os.path.exists(cfg_path):
-            with open(cfg_path, "r", encoding="utf-8") as f:
+            with open(cfg_path, encoding="utf-8") as f:
                 cfg_str = f.read()
         else:
             cfg_str = f"Config file not found at {cfg_path}. Please start the server at least once to generate it."
@@ -198,6 +197,7 @@ def create_router(state: AppState) -> APIRouter:
             return {"status": "error", "message": "Group not found"}
 
         from shared.utils import get_local_ip  # noqa: F401 (kept for reference)
+
         # Use localhost — spectator runs on the same machine as the server.
         # Connecting via LAN IP to yourself is often blocked by Windows firewall
         # even when the same port accepts external connections just fine.
@@ -208,7 +208,10 @@ def create_router(state: AppState) -> APIRouter:
 
         # Resolve AC path from settings
         ac_settings = state.settings
-        ac_path = getattr(ac_settings, "ac_path", None) or r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\acs.exe"
+        ac_path = (
+            getattr(ac_settings, "ac_path", None)
+            or r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\acs.exe"
+        )
 
         # Resolve track config
         config_track = group.track_layout or ""
@@ -228,7 +231,7 @@ def create_router(state: AppState) -> APIRouter:
         return result
 
     @router.post("/spectate/stop")
-    async def stop_spectate() -> dict[str, object]:
+    async def stop_spectate() -> dict[str, str]:
         """Kill the spectator AC window and restore video settings."""
         return _spectator.kill()
 

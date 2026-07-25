@@ -82,12 +82,14 @@ def scan_cars(content_folder: str) -> list[ScannedCar]:
                 except (json.JSONDecodeError, KeyError, IndexError) as e:
                     logger.debug("Could not parse ui_car.json for %s: %s", entry, e)
 
-            cars.append(ScannedCar(
-                id=entry,
-                name=name,
-                brand=brand.strip().title() if brand else "",
-                car_class=car_class.strip().title() if car_class else "",
-            ))
+            cars.append(
+                ScannedCar(
+                    id=entry,
+                    name=name,
+                    brand=brand.strip().title() if brand else "",
+                    car_class=car_class.strip().title() if car_class else "",
+                )
+            )
     except OSError as e:
         logger.error("Failed to scan cars directory %s: %s", cars_dir, e)
 
@@ -133,7 +135,7 @@ def scan_tracks(content_folder: str) -> list[ScannedTrack]:
                     name = data.get("name", entry)
                 except (json.JSONDecodeError, KeyError):
                     pass
-            
+
             # Scan for track config variants inside the ui/ directory
             ui_dir = os.path.join(track_path, "ui")
             if os.path.isdir(ui_dir):
@@ -141,7 +143,7 @@ def scan_tracks(content_folder: str) -> list[ScannedTrack]:
                     sub_ui_dir = os.path.join(ui_dir, sub)
                     if not os.path.isdir(sub_ui_dir):
                         continue
-                        
+
                     sub_ui = os.path.join(sub_ui_dir, "ui_track.json")
                     if os.path.isfile(sub_ui):
                         layout_name = sub

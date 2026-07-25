@@ -237,10 +237,9 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
     const [cars, setCars] = useState<CatalogCar[]>([])
     const [tracks, setTracks] = useState<CatalogTrack[]>([])
     const [weather, setWeather] = useState<CatalogWeather[]>([])
+    const [carPresets, setCarPresets] = useState<any[]>([])
 
     // Car filters (category + brand)
-    const [filterCategory, setFilterCategory] = useState('All')
-    const [filterBrand, setFilterBrand] = useState('All')
 
     // Preview Config modal state
     const [previewConfig, setPreviewConfig] = useState<string | null>(null)
@@ -249,6 +248,8 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
     const [spectatorGroupId, setSpectatorGroupId] = useState<string | null>(null)
     const [spectatorLoading, setSpectatorLoading] = useState(false)
 
+    // Settings state
+    const [activeLobbyGroupId, setActiveLobbyGroupId] = useState<string | null>(null)
 
     /* ---- Data fetching ---- */
 
@@ -285,14 +286,27 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
             setCars(data.cars || [])
             setTracks(data.tracks || [])
             setWeather(data.weather || [])
+            
+            const presetRes = await fetch('/api/car_presets')
+            if (presetRes.ok) {
+                const presetData = await presetRes.json()
+                if (Array.isArray(presetData)) setCarPresets(presetData)
+            }
+        } catch { /* offline */ }
+    }, [])
+    const fetchSettings = useCallback(async () => {
+        try {
+            const res = await fetch('/api/settings')
+            const data = await res.json()
+            setActiveLobbyGroupId(data.active_lobby_group_id || null)
         } catch { /* offline */ }
     }, [])
 
     useEffect(() => {
-        fetchGroups(); fetchServers(); fetchCatalogs()
-        const interval = setInterval(() => { fetchGroups(); fetchServers() }, 3000)
+        fetchGroups(); fetchServers(); fetchCatalogs(); fetchSettings()
+        const interval = setInterval(() => { fetchGroups(); fetchServers(); fetchSettings() }, 3000)
         return () => clearInterval(interval)
-    }, [fetchGroups, fetchServers, fetchCatalogs])
+    }, [fetchGroups, fetchServers, fetchCatalogs, fetchSettings])
 
     /* ---- Spectator ---- */
 
@@ -710,6 +724,29 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                         </button>
                                     )
                                 })()}
+                                {(() => {
+                                    const isLobbyActive = activeLobbyGroupId === selectedGroup.id
+                                    return (
+                                        <button onClick={async () => {
+                                            const newVal = isLobbyActive ? null : selectedGroup.id
+                                            await fetch('/api/settings', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ active_lobby_group_id: newVal })
+                                            })
+                                            setActiveLobbyGroupId(newVal)
+                                        }}
+                                        className={`px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-black uppercase ${
+                                            isLobbyActive
+                                                ? 'bg-ridge-brand/20 text-ridge-brand border border-ridge-brand/30'
+                                                : 'bg-white/5 hover:bg-white/10 text-white/40 hover:text-white border border-transparent'
+                                        }`}
+                                        title="Toggle TV Leaderboard">
+                                            <Trophy size={14} />
+                                            <span className="hidden sm:inline">Lobby</span>
+                                        </button>
+                                    )
+                                })()}
                                 <button onClick={() => deleteGroup(selectedGroup.id)}
                                     className="bg-white/5 hover:bg-red-500/20 text-white/20 hover:text-red-400 p-2 rounded-xl transition-all">
                                     <Trash2 size={14} />
@@ -723,30 +760,55 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                 <Users size={10} /> Assigned Rigs ({selectedGroup.rig_ids.length})
                             </h3>
 
-                            {/* Car Filters */}
-                            {(() => {
-                                const enabledCars = activeCarPool.length > 0
-                                    ? cars.filter(c => activeCarPool.includes(c.id))
-                                    : cars;
-                                const categories = ['All', ...Array.from(new Set(enabledCars.map(c => c.car_class).filter(Boolean))).sort()]
-                                const brands = ['All', ...Array.from(new Set(enabledCars.map(c => c.brand).filter(Boolean))).sort()]
-                                return (
-                                    <div className="flex gap-3 mb-3">
-                                        <div className="flex-1">
-                                            <label className="flex items-center gap-1 text-[8px] uppercase font-black text-white/40 tracking-widest mb-1">Category</label>
-                                            <Select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
-                                                {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                                            </Select>
-                                        </div>
-                                        <div className="flex-1">
-                                            <label className="flex items-center gap-1 text-[8px] uppercase font-black text-white/40 tracking-widest mb-1">Brand</label>
-                                            <Select value={filterBrand} onChange={e => setFilterBrand(e.target.value)}>
-                                                {brands.map(b => <option key={b} value={b}>{b}</option>)}
-                                            </Select>
-                                        </div>
+                                                        {/* Group Car Preset & Bulk Assign */}
+                            <div className="flex gap-4 mb-4 mt-2">
+                                <div className="flex-1 bg-white/5 p-3 rounded-xl border border-white/10">
+                                    <label className="text-[9px] font-black uppercase tracking-widest text-white/50 block mb-2">Apply Car Preset to Group</label>
+                                    <div className="flex gap-2">
+                                        <select
+                                            className="bg-black border border-white/10 rounded-lg px-2 py-1 text-xs font-bold w-full"
+                                            onChange={async (e) => {
+                                                if (!e.target.value) return;
+                                                const preset = carPresets.find(p => p.id === e.target.value);
+                                                if (preset) {
+                                                    await updateGroup(selectedGroup.id, { car_pool: preset.cars });
+                                                    e.target.value = "";
+                                                }
+                                            }}
+                                        >
+                                            <option value="">-- Select Preset --</option>
+                                            {carPresets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                        </select>
                                     </div>
-                                )
-                            })()}
+                                </div>
+                                <div className="flex-1 bg-white/5 p-3 rounded-xl border border-white/10">
+                                    <label className="text-[9px] font-black uppercase tracking-widest text-white/50 block mb-2">Assign Car to All Rigs</label>
+                                    <div className="flex gap-2">
+                                        <select
+                                            className="bg-black border border-white/10 rounded-lg px-2 py-1 text-xs font-bold w-full"
+                                            onChange={async (e) => {
+                                                if (!e.target.value) return;
+                                                await fetch(`/api/groups/${selectedGroup.id}/select_car`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ car: e.target.value })
+                                                });
+                                                e.target.value = "";
+                                                fetchGroups();
+                                            }}
+                                        >
+                                            <option value="">-- Select Car --</option>
+                                            {(() => {
+                                                let enabledCars = activeCarPool.length > 0 ? cars.filter(c => activeCarPool.includes(c.id)) : cars;
+                                                if (selectedGroup.car_pool && selectedGroup.car_pool.length > 0) {
+                                                    enabledCars = cars.filter(c => selectedGroup.car_pool.includes(c.id));
+                                                }
+                                                return enabledCars.map(c => <option key={c.id} value={c.id}>{c.name}</option>);
+                                            })()}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
 
                             <div className="flex flex-wrap gap-2">
                                 {selectedGroup.rig_ids.map(rigId => {
@@ -770,18 +832,9 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                                     <option value="">🎲 Random</option>
                                                     {(() => {
                                                         const seen = new Set<string>();
-                                                        // Only show cars enabled in the Cars tab
                                                         let enabledCars = activeCarPool.length > 0
                                                             ? cars.filter(c => activeCarPool.includes(c.id))
                                                             : cars;
-                                                        // Apply category filter
-                                                        if (filterCategory !== 'All') {
-                                                            enabledCars = enabledCars.filter(c => c.car_class === filterCategory)
-                                                        }
-                                                        // Apply brand filter
-                                                        if (filterBrand !== 'All') {
-                                                            enabledCars = enabledCars.filter(c => c.brand === filterBrand)
-                                                        }
                                                         return enabledCars
                                                             .filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; })
                                                             .sort((a, b) => displayName(a.id).localeCompare(displayName(b.id)))

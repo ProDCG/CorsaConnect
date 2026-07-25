@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
+from pydantic import BaseModel
 
 from apps.orchestrator.state import AppState
 from shared.models import RigGroup, RigGroupAddRig, RigGroupCreate, RigGroupUpdate
 
 router = APIRouter(prefix="/groups", tags=["groups"])
+
+
+class GroupCarSelect(BaseModel):
+    """Payload for selecting a car for all rigs in a group."""
+
+    car: str
 
 
 def create_router(state: AppState) -> APIRouter:
@@ -61,5 +68,19 @@ def create_router(state: AppState) -> APIRouter:
         if state.remove_rig_from_group(group_id, rig_id):
             return {"status": "success"}
         return {"status": "error", "message": "Group or rig not found"}
+
+    @router.post("/{group_id}/select_car")
+    async def select_car_for_group(group_id: str, body: GroupCarSelect) -> dict[str, str]:
+        """Select a car for all rigs in a group simultaneously."""
+        group = state.get_group(group_id)
+        if not group:
+            return {"status": "error", "message": "Group not found"}
+
+        for rig_id in group.rig_ids:
+            # We must make sure rig is active in state
+            if state.get_rig(rig_id):
+                state.update_rig_field(rig_id, "selected_car", body.car)
+
+        return {"status": "success", "message": f"Car {body.car} selected for group {group_id}"}
 
     return router
