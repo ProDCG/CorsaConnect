@@ -143,13 +143,47 @@ class LeaderboardDB:
         ]
 
     def delete_record(self, record_id: int) -> bool:
-        """Delete a specific record from laps. Does not affect session_best for simplicity."""
+        """Delete a specific record from laps and clean up session_best if applicable."""
         conn = self._connect()
-        cursor = conn.execute("DELETE FROM laps WHERE id = ?", (record_id,))
-        deleted = cursor.rowcount > 0
+        row = conn.execute("SELECT * FROM laps WHERE id = ?", (record_id,)).fetchone()
+        if not row:
+            conn.close()
+            return False
+
+        conn.execute("DELETE FROM laps WHERE id = ?", (record_id,))
+
+        # Recompute or remove from session_best
+        if row["session_id"] and row["rig_id"]:
+            best_remaining = conn.execute(
+                """SELECT * FROM laps 
+                   WHERE rig_id = ? AND session_id = ? AND lap_time_ms IS NOT NULL AND lap_time_ms > 0
+                   ORDER BY lap_time_ms ASC LIMIT 1""",
+                (row["rig_id"], row["session_id"]),
+            ).fetchone()
+            if best_remaining:
+                conn.execute(
+                    """UPDATE session_best SET
+                           lap_time_ms = ?,
+                           lap = ?,
+                           timestamp = ?
+                       WHERE rig_id = ? AND session_id = ?""",
+                    (
+                        best_remaining["lap_time_ms"],
+                        best_remaining["lap"],
+                        best_remaining["timestamp"],
+                        row["rig_id"],
+                        row["session_id"],
+                    ),
+                )
+            else:
+                conn.execute(
+                    "DELETE FROM session_best WHERE rig_id = ? AND session_id = ?",
+                    (row["rig_id"], row["session_id"]),
+                )
+
         conn.commit()
         conn.close()
-        return deleted
+        return True
 
     def clear_leaderboard(self) -> None:
         """Clear all records from laps and session_best."""

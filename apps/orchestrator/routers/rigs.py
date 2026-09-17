@@ -188,49 +188,62 @@ def create_router(state: AppState) -> APIRouter:
             state.update_rig_field(rig_id, "telemetry", update.telemetry)
 
             # Leaderboard: capture lap completions
+            current_status = str(rig.get("status", "idle"))
             completed = update.telemetry.get("completed_laps", 0)
             last_count = rig.get("last_lap_count", 0)
-            if isinstance(completed, (int, float)) and isinstance(last_count, (int, float)):
-                if completed < last_count:
+            race_armed = rig.get("race_armed", True)
+
+            if current_status == "racing" and isinstance(completed, (int, float)) and isinstance(last_count, (int, float)):
+                if completed == 0:
+                    # AC has cleanly started at lap 0 — arm the session
+                    state.update_rig_field(rig_id, "last_lap_count", 0)
+                    state.update_rig_field(rig_id, "race_armed", True)
+                elif completed < last_count:
                     # Session reset or restart detected — resync last_lap_count so new laps are captured
                     state.update_rig_field(rig_id, "last_lap_count", completed)
+                    state.update_rig_field(rig_id, "race_armed", True)
                 elif completed > last_count:
-                    state.update_rig_field(rig_id, "last_lap_count", completed)
-
-                    # Lap validation check (reject out-laps and cut laps)
-                    is_valid = update.telemetry.get("is_lap_valid", True)
-                    if is_valid is False or is_valid == 0:
-                        logger.info("Rig %s lap %d completed but marked INVALID (out-lap/cut) — skipping leaderboard", rig_id, completed)
+                    if not race_armed:
+                        # Stale telemetry leftover from the previous race before new session reset to 0 — ignore
+                        logger.debug("Rig %s: ignoring stale lap count %d before session reset", rig_id, completed)
+                        state.update_rig_field(rig_id, "last_lap_count", completed)
                     else:
-                        # Look up track/group context from the rig's group
-                        rig_group = next(
-                            (g for g in state.get_groups() if rig_id in g.rig_ids), None
-                        )
+                        state.update_rig_field(rig_id, "last_lap_count", completed)
 
-                        # Parse lap time from telemetry
-                        lap_time_ms: int | None = None
-                        raw_time = update.telemetry.get("last_lap_time")
-                        if raw_time is not None:
-                            lap_time_ms = _parse_lap_time_ms(raw_time)
+                        # Lap validation check (reject out-laps and cut laps)
+                        is_valid = update.telemetry.get("is_lap_valid", True)
+                        if is_valid is False or is_valid == 0:
+                            logger.info("Rig %s lap %d completed but marked INVALID (out-lap/cut) — skipping leaderboard", rig_id, completed)
+                        else:
+                            # Look up track/group context from the rig's group
+                            rig_group = next(
+                                (g for g in state.get_groups() if rig_id in g.rig_ids), None
+                            )
 
-                        if lap_time_ms and lap_time_ms > 0:
-                            entry = LeaderboardEntry(
-                                rig_id=rig_id,
-                                driver_name=str(rig.get("driver_name", "")) or None,
-                                car=str(rig.get("selected_car", "")),
-                                track=rig_group.track if rig_group else None,
-                                group_name=rig_group.name if rig_group else None,
-                                lap=int(completed),
-                                lap_time_ms=lap_time_ms,
-                                session_id=rig_group.id if rig_group else None,
-                            )
-                            state.add_leaderboard_entry(entry)
-                            # Also upsert into session_best (peak performance per driver)
-                            state.upsert_session_best(entry)
-                            logger.info(
-                                "Recorded lap for %s (driver: %s): lap %d, time: %d ms",
-                                rig_id, entry.driver_name, completed, lap_time_ms
-                            )
+                            # Parse lap time from telemetry
+                            lap_time_ms: int | None = None
+                            raw_time = update.telemetry.get("last_lap_time")
+                            if raw_time is not None:
+                                lap_time_ms = _parse_lap_time_ms(raw_time)
+
+                            if lap_time_ms and lap_time_ms > 0:
+                                entry = LeaderboardEntry(
+                                    rig_id=rig_id,
+                                    driver_name=str(rig.get("driver_name", "")) or None,
+                                    car=str(rig.get("selected_car", "")),
+                                    track=rig_group.track if rig_group else None,
+                                    group_name=rig_group.name if rig_group else None,
+                                    lap=int(completed),
+                                    lap_time_ms=lap_time_ms,
+                                    session_id=rig_group.id if rig_group else None,
+                                )
+                                state.add_leaderboard_entry(entry)
+                                # Also upsert into session_best (peak performance per driver)
+                                state.upsert_session_best(entry)
+                                logger.info(
+                                    "Recorded lap for %s (driver: %s): lap %d, time: %d ms",
+                                    rig_id, entry.driver_name, completed, lap_time_ms
+                                )
 
         # Service connectivity indicators
         if update.simhub_connected is not None:

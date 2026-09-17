@@ -62,6 +62,21 @@ class ACTelemetry:
                 logger.debug("SimHub API connected (getgamedata)")
                 self.simhub_connected = True
 
+            # Calculate normalized track position (0.0 to 1.0)
+            raw_pos = new_data.get("TrackPositionPercent")
+            if raw_pos is None:
+                raw_pos = new_data.get("TrackPosition")
+            if raw_pos is None and (new_data.get("TrackLength") or 0) > 0:
+                raw_pos = (new_data.get("TrackPositionMeters") or 0) / float(new_data.get("TrackLength"))
+
+            if raw_pos is not None:
+                pos_val = float(raw_pos)
+                if pos_val > 1.0:
+                    pos_val = pos_val / 100.0
+                normalized_pos = round(max(0.0, min(1.0, pos_val)), 4)
+            else:
+                normalized_pos = 0.0
+
             # Core driving data
             result: dict[str, object] = {
                 "packet_id": int(time.time() * 100),
@@ -77,12 +92,12 @@ class ACTelemetry:
                     round(new_data.get("AccelerationSurge", 0), 2),
                 ],
                 "status": 2 if raw.get("GameRunning") else 0,
-                "completed_laps": new_data.get("CompletedLaps", 0),
+                "completed_laps": new_data.get("CompletedLaps", 0) if raw.get("GameRunning") else 0,
                 "current_lap": new_data.get("CurrentLap", 1),
                 "total_laps": new_data.get("TotalLaps", 0),
                 "remaining_laps": new_data.get("RemainingLaps", 0),
                 "position": new_data.get("Position", 0),
-                "normalized_pos": round(new_data.get("TrackPositionPercent", 0) / 100.0, 4),
+                "normalized_pos": normalized_pos,
                 "track_position_meters": round(new_data.get("TrackPositionMeters", 0), 1),
                 "track_length": round(new_data.get("TrackLength", 0), 1),
                 # Fuel

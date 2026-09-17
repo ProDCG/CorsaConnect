@@ -1043,12 +1043,21 @@ function App() {
                                                 )}
 
                                                 {/* Circuit Progress */}
-                                                {has('normalized_pos') && (
-                                                    <div>
-                                                        <div className="flex justify-between text-[8px] font-black uppercase text-white/40 mb-1"><span>Track Progress</span><span>{Math.round(t(rig,'normalized_pos') * 100)}%</span></div>
-                                                        <div className="h-1 bg-black/40 rounded-full overflow-hidden"><div className="h-full bg-ridge-brand transition-all duration-300 rounded-full" style={{ width: `${t(rig,'normalized_pos') * 100}%` }} /></div>
-                                                    </div>
-                                                )}
+                                                {has('normalized_pos') && (() => {
+                                                    const raw = Number(t(rig, 'normalized_pos', 0)) || 0
+                                                    const pct = raw > 1 ? Math.min(100, Math.round(raw)) : Math.min(100, Math.round(raw * 100))
+                                                    return (
+                                                        <div>
+                                                            <div className="flex justify-between text-[8px] font-black uppercase text-white/40 mb-1">
+                                                                <span>Track Progress</span>
+                                                                <span className="text-ridge-brand font-mono">{pct}%</span>
+                                                            </div>
+                                                            <div className="h-1.5 bg-black/40 rounded-full overflow-hidden">
+                                                                <div className="h-full bg-ridge-brand transition-all duration-200 rounded-full" style={{ width: `${pct}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })()}
 
                                                 {/* Fuel */}
                                                 {(has('fuel_percent') || has('fuel')) && (
