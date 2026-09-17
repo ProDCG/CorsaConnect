@@ -20,49 +20,78 @@ def _parse_lap_time_ms(raw: object) -> int | None:
     """Parse a lap time value into milliseconds.
 
     Handles:
-      - int/float already in ms (> 1000)
-      - float seconds (< 1000)
-      - String formats: "MM:SS.mmm", "HH:MM:SS.mmm", "SS.mmm"
+      - int/float already in ms (if >= 1000 or integer)
+      - float seconds (if float < 1000)
+      - String formats:
+          - "HH:MM:SS.ffffff" or "HH:MM:SS.mmm"
+          - "HH:MM:SS"
+          - "MM:SS.mmm" or "MM:SS:mmm"
+          - "MM:SS"
+          - "SS.mmm" or "SS"
     """
     if raw is None:
         return None
 
-    # Already numeric
+    # Numeric handling
     if isinstance(raw, (int, float)):
         v = float(raw)
         if v <= 0:
             return None
-        # If value is > 1000, assume it's already in ms
-        if v > 1000:
+        # If integer or >= 1000, it's ms (e.g. 105320 ms or 8500 ms drag)
+        if isinstance(raw, int) or v >= 1000:
             return int(v)
-        # Otherwise it's seconds
+        # If float < 1000, it's seconds (e.g. 8.25s -> 8250 ms, 105.32s -> 105320 ms)
         return int(v * 1000)
 
     # String parsing
     s = str(raw).strip()
-    if not s or s in ("--:--", "0", "0:00.000"):
+    if not s or s in ("--:--", "0", "0:00.000", "00:00:00", "00:00:00.0000000"):
         return None
 
     try:
+        # Check if plain number in string form
+        try:
+            val = float(s)
+            if val <= 0:
+                return None
+            if val >= 1000:
+                return int(val)
+            return int(val * 1000)
+        except ValueError:
+            pass
+
         parts = s.split(":")
         if len(parts) == 3:
-            # Could be HH:MM:SS.mmm or MM:SS:mmm (where mm is separated by a colon)
-            # Check if parts[2] contains a decimal or if it's an integer representing milliseconds
-            if "." not in parts[2] and len(parts[2]) <= 3:
-                # Format: MM:SS:mmm (e.g. 2:13:123)
-                m, sec, ms = int(parts[0]), int(parts[1]), int(parts[2])
-                return int((m * 60 + sec) * 1000 + ms)
-            else:
-                # Format: HH:MM:SS.mmm
-                h, m, sec = int(parts[0]), int(parts[1]), float(parts[2])
-                return int((h * 3600 + m * 60 + sec) * 1000)
+            # Format could be HH:MM:SS(.mmm) or MM:SS:mmm
+            p0 = float(parts[0])
+            p1 = float(parts[1])
+
+            # If parts[2] has a dot (e.g., "00:01:45.320"), it is HH:MM:SS.mmm
+            if "." in parts[2]:
+                p2 = float(parts[2])
+                ms = (p0 * 3600 + p1 * 60 + p2) * 1000
+                return int(ms) if ms > 0 else None
+
+            # If parts[2] is an integer:
+            # If parts[2] >= 60 (e.g. "1:45:320"), it is MM:SS:mmm where parts[2] is milliseconds
+            p2_int = int(parts[2])
+            if p2_int >= 60:
+                ms = (p0 * 60 + p1) * 1000 + p2_int
+                return int(ms) if ms > 0 else None
+
+            # Otherwise standard HH:MM:SS (e.g. "00:01:45" or "00:09:12")
+            ms = (p0 * 3600 + p1 * 60 + p2_int) * 1000
+            return int(ms) if ms > 0 else None
+
         elif len(parts) == 2:
-            # MM:SS.mmm
-            m, sec = int(parts[0]), float(parts[1])
-            return int((m * 60 + sec) * 1000)
+            # MM:SS.mmm or MM:SS
+            m, sec = float(parts[0]), float(parts[1])
+            ms = (m * 60 + sec) * 1000
+            return int(ms) if ms > 0 else None
         else:
-            # SS.mmm
-            return int(float(s) * 1000)
+            # SS.mmm or SS
+            ms = float(s) * 1000
+            return int(ms) if ms > 0 else None
     except (ValueError, IndexError):
         return None
 
@@ -162,32 +191,46 @@ def create_router(state: AppState) -> APIRouter:
             completed = update.telemetry.get("completed_laps", 0)
             last_count = rig.get("last_lap_count", 0)
             if isinstance(completed, (int, float)) and isinstance(last_count, (int, float)):
-                if completed > last_count:
+                if completed < last_count:
+                    # Session reset or restart detected — resync last_lap_count so new laps are captured
                     state.update_rig_field(rig_id, "last_lap_count", completed)
-                    # Look up track/group context from the rig's group
-                    rig_group = next(
-                        (g for g in state.get_groups() if rig_id in g.rig_ids), None
-                    )
+                elif completed > last_count:
+                    state.update_rig_field(rig_id, "last_lap_count", completed)
 
-                    # Parse lap time from telemetry
-                    lap_time_ms: int | None = None
-                    raw_time = update.telemetry.get("last_lap_time")
-                    if raw_time is not None:
-                        lap_time_ms = _parse_lap_time_ms(raw_time)
-
-                    entry = LeaderboardEntry(
-                            rig_id=rig_id,
-                            driver_name=str(rig.get("driver_name", "")) or None,
-                            car=str(rig.get("selected_car", "")),
-                            track=rig_group.track if rig_group else None,
-                            group_name=rig_group.name if rig_group else None,
-                            lap=int(completed),
-                            lap_time_ms=lap_time_ms,
-                            session_id=rig_group.id if rig_group else None,
+                    # Lap validation check (reject out-laps and cut laps)
+                    is_valid = update.telemetry.get("is_lap_valid", True)
+                    if is_valid is False or is_valid == 0:
+                        logger.info("Rig %s lap %d completed but marked INVALID (out-lap/cut) — skipping leaderboard", rig_id, completed)
+                    else:
+                        # Look up track/group context from the rig's group
+                        rig_group = next(
+                            (g for g in state.get_groups() if rig_id in g.rig_ids), None
                         )
-                    state.add_leaderboard_entry(entry)
-                    # Also upsert into session_best (peak performance per driver)
-                    state.upsert_session_best(entry)
+
+                        # Parse lap time from telemetry
+                        lap_time_ms: int | None = None
+                        raw_time = update.telemetry.get("last_lap_time")
+                        if raw_time is not None:
+                            lap_time_ms = _parse_lap_time_ms(raw_time)
+
+                        if lap_time_ms and lap_time_ms > 0:
+                            entry = LeaderboardEntry(
+                                rig_id=rig_id,
+                                driver_name=str(rig.get("driver_name", "")) or None,
+                                car=str(rig.get("selected_car", "")),
+                                track=rig_group.track if rig_group else None,
+                                group_name=rig_group.name if rig_group else None,
+                                lap=int(completed),
+                                lap_time_ms=lap_time_ms,
+                                session_id=rig_group.id if rig_group else None,
+                            )
+                            state.add_leaderboard_entry(entry)
+                            # Also upsert into session_best (peak performance per driver)
+                            state.upsert_session_best(entry)
+                            logger.info(
+                                "Recorded lap for %s (driver: %s): lap %d, time: %d ms",
+                                rig_id, entry.driver_name, completed, lap_time_ms
+                            )
 
         # Service connectivity indicators
         if update.simhub_connected is not None:

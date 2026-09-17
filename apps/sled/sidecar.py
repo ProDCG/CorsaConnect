@@ -109,6 +109,10 @@ def run_sidecar(udp_port: int = 9996) -> None:
                 "completed_laps": g.completedLaps,
                 "position": g.position,
                 "normalized_pos": round(g.normalizedCarPosition, 4),
+                "current_lap_time": g.iCurrentTime if g.iCurrentTime > 0 else (str(g.currentTime).strip() or "00:00:00"),
+                "last_lap_time": g.iLastTime if g.iLastTime > 0 else (str(g.lastTime).strip() or "00:00:00"),
+                "best_lap_time": g.iBestTime if g.iBestTime > 0 else (str(g.bestTime).strip() or "00:00:00"),
+                "is_lap_valid": bool(getattr(g, "isValidLap", 1) != 0),
             }
 
             sock.sendto(json.dumps(payload).encode("utf-8"), (UDP_IP, udp_port))
