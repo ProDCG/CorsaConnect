@@ -89,7 +89,10 @@ function App() {
     const [leaderboardSortDesc, setLeaderboardSortDesc] = useState<boolean>(false)
     const [leaderboardTrack, setLeaderboardTrack] = useState<string>('')
     const [presets, setPresets] = useState<any[]>([])
-    const [activeTelemFields, setActiveTelemFields] = useState<string[]>(['velocity', 'rpms', 'gforce', 'normalized_pos', 'gear', 'completed_laps', 'gas', 'brake', 'position'])
+    const [activeTelemFields, setActiveTelemFields] = useState<string[]>([
+        'velocity', 'rpms', 'gforce', 'normalized_pos', 'gear', 'completed_laps', 'gas', 'brake', 'position',
+        'current_lap_time', 'last_lap_time', 'best_lap_time', 'is_lap_valid'
+    ])
     const [showRigPanel, setShowRigPanel] = useState(true)
     const [mumbleAssignments, setMumbleAssignments] = useState<Record<string, string>>({})
     const [mumbleStatus, setMumbleStatus] = useState<{ bot_connected: boolean; channels: string[] }>({ bot_connected: false, channels: [] })
@@ -956,6 +959,15 @@ function App() {
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2">
+                                                {rig.status === 'racing' && rig.telemetry && (
+                                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border transition-all ${
+                                                        t(rig, 'is_lap_valid') !== false 
+                                                            ? 'bg-green-500/15 text-green-400 border-green-500/30' 
+                                                            : 'bg-red-500/25 text-red-400 border-red-500/40 animate-pulse'
+                                                    }`}>
+                                                        {t(rig, 'is_lap_valid') !== false ? '✓ VALID' : '✗ CUT / INVALID'}
+                                                    </span>
+                                                )}
                                                 {rig.status === 'racing' && (
                                                     <button
                                                         onClick={async () => {
@@ -1015,12 +1027,44 @@ function App() {
                                                     return <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${Math.min(cells.length, 4)}, 1fr)` }}>{cells}</div>
                                                 })()}
 
-                                                {/* Lap times */}
+                                                {/* Lap times & Validity */}
                                                 {(has('current_lap_time') || has('last_lap_time') || has('best_lap_time')) && (
                                                     <div className="grid grid-cols-3 gap-2">
-                                                        {has('current_lap_time') && <div className="bg-black/30 p-2 rounded-xl text-center"><p className="text-[8px] font-black uppercase text-white/40">Current</p><span className="text-[11px] font-black tabular-nums text-white/70">{t(rig,'current_lap_time','--:--')}</span></div>}
-                                                        {has('last_lap_time') && <div className="bg-black/30 p-2 rounded-xl text-center"><p className="text-[8px] font-black uppercase text-white/40">Last</p><span className="text-[11px] font-black tabular-nums text-white/70">{t(rig,'last_lap_time','--:--')}</span></div>}
-                                                        {has('best_lap_time') && <div className="bg-black/30 p-2 rounded-xl text-center"><p className="text-[8px] font-black uppercase text-white/40">Best</p><span className="text-[11px] font-black tabular-nums text-purple-400">{t(rig,'best_lap_time','--:--')}</span></div>}
+                                                        {has('current_lap_time') && (
+                                                            <div className={`p-2 rounded-xl text-center border transition-all ${
+                                                                t(rig, 'is_lap_valid') === false 
+                                                                    ? 'bg-red-500/10 border-red-500/30' 
+                                                                    : 'bg-black/30 border-transparent'
+                                                            }`}>
+                                                                <div className="flex justify-between items-center text-[8px] font-black uppercase mb-0.5">
+                                                                    <span className="text-white/40">Current</span>
+                                                                    {has('is_lap_valid') && (
+                                                                        <span className={`text-[7px] font-black px-1 rounded ${
+                                                                            t(rig, 'is_lap_valid') !== false 
+                                                                                ? 'bg-green-500/20 text-green-400' 
+                                                                                : 'bg-red-500/30 text-red-400'
+                                                                        }`}>
+                                                                            {t(rig, 'is_lap_valid') !== false ? 'OK' : 'CUT'}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <span className={`text-[11px] font-black tabular-nums ${
+                                                                    t(rig, 'is_lap_valid') === false ? 'text-red-400' : 'text-white/70'
+                                                                }`}>{t(rig, 'current_lap_time', '--:--')}</span>
+                                                            </div>
+                                                        )}
+                                                        {has('last_lap_time') && (
+                                                            <div className="bg-black/30 p-2 rounded-xl text-center">
+                                                                <p className="text-[8px] font-black uppercase text-white/40 mb-0.5">Last</p>
+                                                                <span className="text-[11px] font-black tabular-nums text-white/70">{t(rig, 'last_lap_time', '--:--')}</span>
+                                                            </div>
+                                                        )}
+                                                        {has('best_lap_time') && (
+                                                            <div className="bg-black/30 p-2 rounded-xl text-center">
+                                                                <p className="text-[8px] font-black uppercase text-white/40 mb-0.5">Best</p>
+                                                                <span className="text-[11px] font-black tabular-nums text-purple-400">{t(rig, 'best_lap_time', '--:--')}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
 
@@ -1081,7 +1125,7 @@ function App() {
 
                                                 {/* Brakes */}
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                    {has('brake_temps') && <CornerGrid label="Brake Temp °C" fl={t(rig,'brake_temp_fl')} fr={t(rig,'brake_temp_fr')} rl={t(rig,'brake_temp_rl')} rr={t(rig,'brake_temp_rr')} unit="°" color="text-orange-400/70" />}
+                                                    {has('brake_temps') && <CornerGrid label="Brake Temp °C" fl={t(rig,'brake_temp_fl')} fr={t(rig,'brake_temp_fr')} rl={t(rig,'brake_temp_rl')} rr={t(rig,'brake_temp_rl')} unit="°" color="text-orange-400/70" />}
                                                     {has('brake_bias') && <div className="bg-black/30 p-2.5 rounded-xl"><p className="text-[8px] font-black uppercase text-white/40 mb-1">Brake Bias</p><span className="text-lg font-black italic">{t(rig,'brake_bias')}%</span><span className="text-[8px] text-white/20 ml-1">front</span></div>}
                                                 </div>
 
@@ -1091,7 +1135,6 @@ function App() {
                                                         {has('abs') && <div className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${t(rig,'abs_active') ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-white/5 text-white/20 border-white/5'}`}>ABS {t(rig,'abs_level')}</div>}
                                                         {has('tc') && <div className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${t(rig,'tc_active') ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-white/5 text-white/20 border-white/5'}`}>TC {t(rig,'tc_level')}</div>}
                                                         {has('drs') && <div className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${t(rig,'drs_enabled') ? 'bg-green-500/20 text-green-400 border-green-500/30' : t(rig,'drs_available') ? 'bg-yellow-500/10 text-yellow-400/60 border-yellow-500/20' : 'bg-white/5 text-white/20 border-white/5'}`}>{t(rig,'drs_enabled') ? 'DRS ON' : t(rig,'drs_available') ? 'DRS RDY' : 'DRS'}</div>}
-                                                        {has('is_lap_valid') && <div className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${t(rig,'is_lap_valid') ? 'bg-green-500/10 text-green-400/60 border-green-500/20' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>{t(rig,'is_lap_valid') ? 'VALID' : 'INVALID'}</div>}
                                                     </div>
                                                 )}
 

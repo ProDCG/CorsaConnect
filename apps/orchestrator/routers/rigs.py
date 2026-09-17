@@ -211,7 +211,10 @@ def create_router(state: AppState) -> APIRouter:
                         state.update_rig_field(rig_id, "last_lap_count", completed)
 
                         # Lap validation check (reject out-laps and cut laps)
-                        is_valid = update.telemetry.get("is_lap_valid", True)
+                        is_valid = update.telemetry.get("last_lap_valid")
+                        if is_valid is None:
+                            is_valid = update.telemetry.get("is_lap_valid", True)
+
                         if is_valid is False or is_valid == 0:
                             logger.info("Rig %s lap %d completed but marked INVALID (out-lap/cut) — skipping leaderboard", rig_id, completed)
                         else:

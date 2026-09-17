@@ -31,6 +31,11 @@ class ACTelemetry:
         self.graphics_mmap: Any = None
         self.static_mmap: Any = None
 
+        # Lap validity tracking state
+        self.current_lap_valid: bool = True
+        self.last_lap_valid: bool = True
+        self._last_completed_laps: int = 0
+
         # UDP bridge socket
         self.udp_sock: socket.socket | None = None
         try:
@@ -170,11 +175,16 @@ class ACTelemetry:
                 # Max speed this session
                 "max_speed": round(new_data.get("MaxSpeedKmh", 0), 1),
                 "engine_torque": round(new_data.get("EngineTorque", 0), 1),
-                # Validity
+                # Validity (instantaneous frame check)
                 "is_lap_valid": (
-                    bool(new_data.get("IsLapValid"))
-                    if new_data.get("IsLapValid") is not None
-                    else not bool(new_data.get("LapInvalidated", False))
+                    (
+                        bool(raw.get("GameRawData", {}).get("Graphics", {}).get("isValidLap") != 0)
+                        if isinstance(raw.get("GameRawData"), dict) and isinstance(raw.get("GameRawData", {}).get("Graphics"), dict) and "isValidLap" in raw.get("GameRawData", {}).get("Graphics", {})
+                        else (bool(new_data.get("IsLapValid")) if new_data.get("IsLapValid") is not None else True)
+                    )
+                    and (int(raw.get("GameRawData", {}).get("Physics", {}).get("numberOfTyresOut", 0) or 0) < 3 if isinstance(raw.get("GameRawData"), dict) and isinstance(raw.get("GameRawData", {}).get("Physics"), dict) else True)
+                    and (float(raw.get("GameRawData", {}).get("Graphics", {}).get("penaltyTime", 0) or 0) <= 0 if isinstance(raw.get("GameRawData"), dict) and isinstance(raw.get("GameRawData", {}).get("Graphics"), dict) else True)
+                    and (int(raw.get("GameRawData", {}).get("Graphics", {}).get("penalty", 0) or 0) <= 0 if isinstance(raw.get("GameRawData"), dict) and isinstance(raw.get("GameRawData", {}).get("Graphics"), dict) else True)
                 ),
             }
             return result
@@ -261,6 +271,13 @@ class ACTelemetry:
                 self.graphics_mmap.read(ctypes.sizeof(SPageFileGraphic))  # type: ignore[union-attr]
             )
 
+            is_valid_instant = (
+                bool(getattr(g, "isValidLap", 1) != 0)
+                and (getattr(p, "numberOfTyresOut", 0) < 3)
+                and (getattr(g, "penaltyTime", 0.0) <= 0)
+                and (getattr(g, "penalty", 0) <= 0)
+            )
+
             return {
                 "packet_id": p.packetId,
                 "gas": round(max(0.0, p.gas), 2),
@@ -276,10 +293,16 @@ class ACTelemetry:
                 "current_lap_time": g.iCurrentTime if g.iCurrentTime > 0 else (str(g.currentTime).strip() or "00:00:00"),
                 "last_lap_time": g.iLastTime if g.iLastTime > 0 else (str(g.lastTime).strip() or "00:00:00"),
                 "best_lap_time": g.iBestTime if g.iBestTime > 0 else (str(g.bestTime).strip() or "00:00:00"),
-                "is_lap_valid": bool(getattr(g, "isValidLap", 1) != 0),
+                "is_lap_valid": is_valid_instant,
             }
         except Exception:
             return None
+
+    def reset_lap_state(self) -> None:
+        """Reset lap tracking state on session restart or race launch."""
+        self.current_lap_valid = True
+        self.last_lap_valid = True
+        self._last_completed_laps = 0
 
     # ------------------------------------------------------------------
     # Public API
@@ -302,18 +325,38 @@ class ACTelemetry:
             self._check_service_processes()
 
         result = self._get_simhub_data()
-        if result:
-            return result
+        if not result:
+            result = self._get_udp_data()
+        if not result:
+            result = self._get_mmap_data()
 
-        result = self._get_udp_data()
-        if result:
-            return result
+        if not result:
+            return {}
 
-        result = self._get_mmap_data()
-        if result:
-            return result
+        # Lap validity latch state machine
+        completed_laps = int(result.get("completed_laps", 0) or 0)
+        instant_valid = bool(result.get("is_lap_valid", True))
 
-        return {}
+        if completed_laps > self._last_completed_laps:
+            # Completed a lap! Latch the outcome of the lap that just finished
+            self.last_lap_valid = self.current_lap_valid
+            self._last_completed_laps = completed_laps
+            # Reset current lap validity for the new lap (starting with instant state)
+            self.current_lap_valid = instant_valid
+        elif completed_laps < self._last_completed_laps:
+            # Session reset / new race
+            self._last_completed_laps = completed_laps
+            self.current_lap_valid = True
+            self.last_lap_valid = True
+        else:
+            # Mid-lap: if any frame is invalid, the lap becomes invalid for its duration
+            if not instant_valid:
+                self.current_lap_valid = False
+
+        result["is_lap_valid"] = self.current_lap_valid
+        result["last_lap_valid"] = self.last_lap_valid
+
+        return result
 
     def _check_simhub_process(self) -> None:
         """Check if SimHub process is running and set simhub_connected accordingly."""
