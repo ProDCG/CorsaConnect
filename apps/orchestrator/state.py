@@ -545,11 +545,25 @@ class AppState:
         with self._lock:
             return dict(self._active_session) if self._active_session else None
 
-    def get_all_sessions(self) -> list[dict[str, object]]:
+    def get_all_sessions(self, max_finished_age_seconds: int = 180) -> list[dict[str, object]]:
         with self._lock:
             if not hasattr(self, "_sessions"):
                 self._sessions = {}
-            return [dict(s) for s in self._sessions.values()]
+            now = time.time()
+            active_list: list[dict[str, object]] = []
+            for sid, sdata in list(self._sessions.items()):
+                if sdata.get("status") == "racing":
+                    active_list.append(dict(sdata))
+                else:
+                    finished_at = sdata.get("finished_at") or sdata.get("started_at", now)
+                    if (now - finished_at) <= max_finished_age_seconds:
+                        active_list.append(dict(sdata))
+                    else:
+                        # Auto-expire session from memory after 3 minutes
+                        self._sessions.pop(sid, None)
+                        if self._active_session and self._active_session.get("session_id") == sid:
+                            self._active_session = None
+            return active_list
 
     def get_latest_session_id(self) -> str | None:
         with self._lock:

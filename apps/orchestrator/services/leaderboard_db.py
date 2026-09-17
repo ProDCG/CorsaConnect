@@ -486,17 +486,19 @@ class LeaderboardDB:
             "drivers": drivers,
         }
 
-    def get_recent_session_ids(self, limit: int = 5) -> list[str]:
-        """Get distinct recent session IDs ordered by latest lap timestamp."""
+    def get_recent_session_ids(self, limit: int = 5, max_age_seconds: int = 180) -> list[str]:
+        """Get distinct recent session IDs within max_age_seconds ordered by latest lap timestamp."""
         conn = self._connect()
+        cutoff = time.time() - max_age_seconds
         rows = conn.execute(
             """SELECT session_id, MAX(timestamp) as latest_ts 
                FROM laps 
                WHERE session_id IS NOT NULL AND session_id != ''
                GROUP BY session_id 
+               HAVING latest_ts >= ?
                ORDER BY latest_ts DESC 
                LIMIT ?""",
-            (limit,)
+            (cutoff, limit),
         ).fetchall()
         conn.close()
         return [r["session_id"] for r in rows if r["session_id"]]
