@@ -403,6 +403,7 @@ class RigAgent:
         will detect the AC process and promote status automatically.
         """
         self.kill_race()
+        self.telemetry_data = {}
 
         car = params.get("car", self.selected_car)
         track = params.get("track", "monza")
@@ -446,6 +447,7 @@ class RigAgent:
         """
         # 1. Set idle immediately — triggers splash restore via heartbeat/poll
         self.status = "idle"
+        self.telemetry_data = {}
         logger.info("Status set to idle — splash should restore now")
 
         # 2. Wait for splash to fully cover the desktop before killing AC
