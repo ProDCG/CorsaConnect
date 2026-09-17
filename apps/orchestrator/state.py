@@ -42,6 +42,8 @@ class AppState:
         self._telem_config: TelemetryConfig = TelemetryConfig()
         self._server_status: str = "offline"
         self._mumble_assignments: dict[str, str] = {}  # rig_id -> channel name
+        self._active_session: dict[str, object] | None = None
+        self._latest_session_id: str | None = None
 
         # Persistence
         repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -447,3 +449,101 @@ class AppState:
         with self._lock:
             self._mumble_assignments.pop(rig_id, None)
             self._save_mumble_assignments()
+
+    # ------------------------------------------------------------------
+    # Race session tracking (supports multiple concurrent sessions)
+    # ------------------------------------------------------------------
+
+    def start_race_session(
+        self,
+        track: str,
+        group_name: str | None = None,
+        group_id: str | None = None,
+        rig_ids: list[str] | None = None,
+    ) -> str:
+        """Create and start a new unique race session."""
+        import uuid
+        session_id = f"sess_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+        with self._lock:
+            if not hasattr(self, "_sessions"):
+                self._sessions = {}
+            self._latest_session_id = session_id
+            session_obj = {
+                "session_id": session_id,
+                "track": track,
+                "group_name": group_name or "Open Session",
+                "group_id": group_id,
+                "started_at": time.time(),
+                "status": "racing",
+                "rig_ids": list(rig_ids) if rig_ids else [],
+            }
+            self._sessions[session_id] = session_obj
+            self._active_session = session_obj
+
+            # Assign session_id to participating rigs
+            if rig_ids:
+                for rid in rig_ids:
+                    if rid in self._rigs:
+                        self._rigs[rid]["current_session_id"] = session_id
+        logger.info("Started new race session: %s (%s @ %s, rigs=%s)", session_id, group_name, track, rig_ids)
+        return session_id
+
+    def finish_race_session(self, session_id: str | None = None, rig_ids: list[str] | None = None) -> None:
+        """Mark sessions as finished."""
+        with self._lock:
+            if not hasattr(self, "_sessions"):
+                self._sessions = {}
+            now = time.time()
+            if session_id and session_id in self._sessions:
+                self._sessions[session_id]["status"] = "finished"
+                self._sessions[session_id]["finished_at"] = now
+                logger.info("Finished race session: %s", session_id)
+            elif rig_ids:
+                for sid, sdata in self._sessions.items():
+                    s_rids = sdata.get("rig_ids", [])
+                    if any(r in s_rids for r in rig_ids):
+                        sdata["status"] = "finished"
+                        sdata["finished_at"] = now
+                        logger.info("Finished race session for rigs %s: %s", rig_ids, sid)
+            else:
+                for sid, sdata in self._sessions.items():
+                    if sdata.get("status") == "racing":
+                        sdata["status"] = "finished"
+                        sdata["finished_at"] = now
+                if self._active_session:
+                    self._active_session["status"] = "finished"
+                    self._active_session["finished_at"] = now
+                logger.info("Finished all active race sessions")
+
+    def clear_active_session(self, session_id: str | None = None) -> None:
+        """Manually clear session(s)."""
+        with self._lock:
+            if not hasattr(self, "_sessions"):
+                self._sessions = {}
+            if session_id:
+                self._sessions.pop(session_id, None)
+                for rig in self._rigs.values():
+                    if rig.get("current_session_id") == session_id:
+                        rig["current_session_id"] = None
+            else:
+                self._sessions.clear()
+                self._active_session = None
+                self._latest_session_id = None
+                for rig in self._rigs.values():
+                    rig["current_session_id"] = None
+        logger.info("Cleared race session(s)")
+
+    def get_active_session(self) -> dict[str, object] | None:
+        with self._lock:
+            return dict(self._active_session) if self._active_session else None
+
+    def get_all_sessions(self) -> list[dict[str, object]]:
+        with self._lock:
+            if not hasattr(self, "_sessions"):
+                self._sessions = {}
+            return [dict(s) for s in self._sessions.values()]
+
+    def get_latest_session_id(self) -> str | None:
+        with self._lock:
+            return self._latest_session_id
+

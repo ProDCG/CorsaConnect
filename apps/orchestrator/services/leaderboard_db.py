@@ -405,3 +405,96 @@ class LeaderboardDB:
         ).fetchall()
         conn.close()
         return [{"driver": r["driver"], "fastest_laps": r["fastest_laps"]} for r in rows]
+
+    def get_session_standings(self, session_id: str) -> dict[str, object] | None:
+        """Get full standings and driver breakdown for a specific session."""
+        if not session_id:
+            return None
+
+        conn = self._connect()
+
+        # Fetch session metadata
+        meta_row = conn.execute(
+            "SELECT track, group_name, MIN(timestamp) as started_at FROM laps WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+        if not meta_row or not meta_row["track"]:
+            meta_row = conn.execute(
+                "SELECT track, group_name, MIN(timestamp) as started_at FROM session_best WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+
+        track = meta_row["track"] if meta_row else None
+        group_name = meta_row["group_name"] if meta_row else None
+        started_at = meta_row["started_at"] if meta_row else None
+
+        # Query all drivers in this session with best lap, total laps, last lap
+        query = """
+            SELECT 
+                COALESCE(driver_name, rig_id) as driver_key,
+                driver_name,
+                rig_id,
+                car,
+                track,
+                group_name,
+                MIN(lap_time_ms) as best_lap_time_ms,
+                MAX(lap) as total_laps,
+                MAX(timestamp) as last_lap_timestamp,
+                (SELECT l2.lap_time_ms FROM laps l2 
+                 WHERE (l2.driver_name = laps.driver_name OR (laps.driver_name IS NULL AND l2.rig_id = laps.rig_id))
+                   AND l2.session_id = laps.session_id 
+                 ORDER BY l2.lap DESC, l2.timestamp DESC LIMIT 1) as last_lap_time_ms
+            FROM laps
+            WHERE session_id = ? AND lap_time_ms IS NOT NULL AND lap_time_ms > 0
+            GROUP BY COALESCE(driver_name, rig_id)
+            ORDER BY best_lap_time_ms ASC
+        """
+        rows = conn.execute(query, (session_id,)).fetchall()
+        conn.close()
+
+        if not rows:
+            return None
+
+        p1_best = rows[0]["best_lap_time_ms"]
+        drivers: list[dict[str, object]] = []
+
+        for idx, r in enumerate(rows):
+            best_ms = r["best_lap_time_ms"]
+            gap_ms = (best_ms - p1_best) if (best_ms and p1_best) else 0
+            drivers.append({
+                "position": idx + 1,
+                "driver_name": r["driver_name"],
+                "rig_id": r["rig_id"],
+                "car": r["car"],
+                "track": r["track"] or track,
+                "group_name": r["group_name"] or group_name,
+                "best_lap_time_ms": best_ms,
+                "gap_ms": gap_ms,
+                "total_laps": r["total_laps"] or 0,
+                "last_lap_time_ms": r["last_lap_time_ms"],
+                "timestamp": r["last_lap_timestamp"],
+            })
+
+        return {
+            "session_id": session_id,
+            "track": track,
+            "group_name": group_name,
+            "started_at": started_at,
+            "drivers": drivers,
+        }
+
+    def get_recent_session_ids(self, limit: int = 5) -> list[str]:
+        """Get distinct recent session IDs ordered by latest lap timestamp."""
+        conn = self._connect()
+        rows = conn.execute(
+            """SELECT session_id, MAX(timestamp) as latest_ts 
+               FROM laps 
+               WHERE session_id IS NOT NULL AND session_id != ''
+               GROUP BY session_id 
+               ORDER BY latest_ts DESC 
+               LIMIT ?""",
+            (limit,)
+        ).fetchall()
+        conn.close()
+        return [r["session_id"] for r in rows if r["session_id"]]
+

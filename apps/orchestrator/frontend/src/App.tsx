@@ -1200,6 +1200,16 @@ function App() {
                                     </button>
                                     <button 
                                         onClick={async () => {
+                                            if (confirm("Clear current session standings from the lobby screen?")) {
+                                                await fetch('/api/leaderboard/clear_session', { method: 'POST' });
+                                            }
+                                        }}
+                                        className="text-[10px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-4 py-2 rounded-xl transition-all border border-amber-500/20"
+                                    >
+                                        Clear Lobby Session
+                                    </button>
+                                    <button 
+                                        onClick={async () => {
                                             if (confirm("Are you sure you want to permanently clear the entire leaderboard?")) {
                                                 await fetch('/api/leaderboard', { method: 'DELETE' });
                                                 setLeaderboard([]);

@@ -238,7 +238,7 @@ def create_router(state: AppState) -> APIRouter:
                                     group_name=rig_group.name if rig_group else None,
                                     lap=int(completed),
                                     lap_time_ms=lap_time_ms,
-                                    session_id=rig_group.id if rig_group else None,
+                                    session_id=str(rig.get("current_session_id") or state.get_latest_session_id() or (rig_group.id if rig_group else "session")),
                                 )
                                 state.add_leaderboard_entry(entry)
                                 # Also upsert into session_best (peak performance per driver)
