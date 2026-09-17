@@ -58,6 +58,27 @@ def create_router(state: AppState) -> APIRouter:
             return {"status": "success"}
         return {"status": "error", "message": "Record not found"}
 
+    @router.post("/leaderboard/delete_entry")
+    async def delete_entry_by_match(payload: dict[str, object]) -> dict[str, str]:
+        """Delete an entry by ID or by rig/track/session/lap_time criteria."""
+        rig_id = str(payload.get("rig_id") or "")
+        track = str(payload.get("track") or "") or None
+        session_id = str(payload.get("session_id") or "") or None
+        lap_time_ms = payload.get("lap_time_ms")
+        lap_ms = int(lap_time_ms) if isinstance(lap_time_ms, (int, float)) else None
+
+        if payload.get("id"):
+            try:
+                rec_id = int(str(payload["id"]))
+                if state.leaderboard_db.delete_record(rec_id):
+                    return {"status": "success"}
+            except ValueError:
+                pass
+
+        if state.leaderboard_db.delete_by_match(rig_id=rig_id, track=track, session_id=session_id, lap_time_ms=lap_ms):
+            return {"status": "success"}
+        return {"status": "error", "message": "Record not found"}
+
     @router.post("/leaderboard/test_lap")
     async def add_test_lap() -> dict[str, str]:
         """Inject a fake lap for UI testing."""

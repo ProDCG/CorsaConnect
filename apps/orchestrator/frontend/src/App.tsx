@@ -1266,21 +1266,39 @@ function App() {
                                                         {entry.timestamp ? new Date(entry.timestamp * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                                                     </span>
                                                 </td>
-                                                <td className="px-5 py-3.5 text-right opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    {entry.id && (
-                                                        <button
-                                                            onClick={async () => {
-                                                                if (confirm("Delete this record?")) {
+                                                <td className="px-5 py-3.5 text-right">
+                                                    <button
+                                                        onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            const driver = entry.driver_name || entry.rig_id;
+                                                            if (confirm(`Delete record for ${driver}?`)) {
+                                                                if (entry.id) {
                                                                     await fetch(`/api/leaderboard/${entry.id}`, { method: 'DELETE' });
-                                                                    setLeaderboard(leaderboard.filter((e: any) => e.id !== entry.id));
+                                                                } else {
+                                                                    await fetch('/api/leaderboard/delete_entry', {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({
+                                                                            id: entry.id,
+                                                                            rig_id: entry.rig_id,
+                                                                            driver_name: entry.driver_name,
+                                                                            track: entry.track,
+                                                                            lap_time_ms: entry.lap_time_ms,
+                                                                            session_id: entry.session_id,
+                                                                        }),
+                                                                    });
                                                                 }
-                                                            }}
-                                                            className="text-white/20 hover:text-red-400 transition-colors"
-                                                            title="Delete Record"
-                                                        >
-                                                            <Trash size={14} />
-                                                        </button>
-                                                    )}
+                                                                setLeaderboard(prev => prev.filter((item: any) => {
+                                                                    if (entry.id && item.id) return item.id !== entry.id;
+                                                                    return !(item.rig_id === entry.rig_id && item.lap_time_ms === entry.lap_time_ms && item.track === entry.track);
+                                                                }));
+                                                            }
+                                                        }}
+                                                        className="text-white/30 hover:text-red-400 p-1.5 rounded-lg hover:bg-white/10 transition-all inline-flex items-center justify-center"
+                                                        title="Delete Record"
+                                                    >
+                                                        <Trash size={14} />
+                                                    </button>
                                                 </td>
                                             </tr>
                                         )) : (
