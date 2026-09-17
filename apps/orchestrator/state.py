@@ -485,6 +485,14 @@ class AppState:
                 for rid in rig_ids:
                     if rid in self._rigs:
                         self._rigs[rid]["current_session_id"] = session_id
+                    else:
+                        self._rigs[rid] = {
+                            "rig_id": rid,
+                            "status": "idle",
+                            "driver_name": None,
+                            "selected_car": None,
+                            "current_session_id": session_id,
+                        }
         logger.info("Started new race session: %s (%s @ %s, rigs=%s)", session_id, group_name, track, rig_ids)
         return session_id
 

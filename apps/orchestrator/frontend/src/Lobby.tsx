@@ -122,6 +122,25 @@ export default function Lobby() {
         return () => clearInterval(timer)
     }, [autoRotate])
 
+    // Keyboard shortcuts for screen toggling and pause/play
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+            if (e.key === '1') {
+                setActiveScreen('sessions')
+                setCountdown(ROTATION_INTERVAL)
+            } else if (e.key === '2') {
+                setActiveScreen('facility')
+                setCountdown(ROTATION_INTERVAL)
+            } else if (e.key === ' ') {
+                e.preventDefault()
+                setAutoRotate((prev) => !prev)
+            }
+        }
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [])
+
     if (!data) {
         return (
             <div className="h-screen w-screen bg-black flex items-center justify-center">
@@ -206,66 +225,75 @@ export default function Lobby() {
             </div>
 
             {/* Header */}
-            <div className="flex justify-between items-center px-12 py-5 border-b border-white/5 shrink-0">
-                <div className="flex items-center gap-6">
+            <div className="flex justify-between items-center px-10 py-4 border-b border-white/5 shrink-0 bg-black/40 backdrop-blur-md">
+                <div className="flex items-center gap-4">
                     <div>
-                        <h1 className="text-4xl font-black italic uppercase tracking-tighter leading-none">
+                        <h1 className="text-3xl font-black italic uppercase tracking-tighter leading-none">
                             <span className="text-ridge-brand">Ridge</span> Racing
                         </h1>
-                        <p className="text-[10px] font-black uppercase tracking-[0.5em] text-white/40 mt-1">
-                            Live Facility Leaderboard
+                        <p className="text-[9px] font-black uppercase tracking-[0.4em] text-white/40 mt-1">
+                            Facility TV Display
                         </p>
-                    </div>
-
-                    {/* Mode Toggle Pills */}
-                    <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/10 ml-6">
-                        <button
-                            onClick={() => {
-                                setActiveScreen('sessions')
-                                setCountdown(ROTATION_INTERVAL)
-                            }}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-black italic uppercase tracking-wider transition-all ${
-                                activeScreen === 'sessions'
-                                    ? 'bg-ridge-brand text-black shadow-md'
-                                    : 'text-white/40 hover:text-white'
-                            }`}
-                        >
-                            Race Standings
-                        </button>
-                        <button
-                            onClick={() => {
-                                setActiveScreen('facility')
-                                setCountdown(ROTATION_INTERVAL)
-                            }}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-black italic uppercase tracking-wider transition-all ${
-                                activeScreen === 'facility'
-                                    ? 'bg-ridge-brand text-black shadow-md'
-                                    : 'text-white/40 hover:text-white'
-                            }`}
-                        >
-                            Facility Records
-                        </button>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-6">
+                {/* Mode Toggle Pills - Prominent Screen Selector */}
+                <div className="flex items-center bg-black/80 p-1 rounded-2xl border-2 border-white/20 shadow-2xl">
+                    <button
+                        onClick={() => {
+                            setActiveScreen('sessions')
+                            setCountdown(ROTATION_INTERVAL)
+                        }}
+                        className={`flex items-center gap-2.5 px-5 py-2 rounded-xl text-xs font-black italic uppercase tracking-wider transition-all cursor-pointer ${
+                            activeScreen === 'sessions'
+                                ? 'bg-ridge-brand text-black shadow-lg shadow-ridge-brand/30 ring-1 ring-ridge-brand'
+                                : 'text-white/60 hover:text-white hover:bg-white/5'
+                        }`}
+                    >
+                        <Flag size={15} className={activeScreen === 'sessions' ? 'text-black' : 'text-ridge-brand'} />
+                        <span>Live Standings</span>
+                        {sessions.length > 0 && (
+                            <span className={`px-1.5 py-0.2 text-[9px] font-black rounded-md ${
+                                activeScreen === 'sessions' ? 'bg-black text-ridge-brand' : 'bg-ridge-brand/20 text-ridge-brand'
+                            }`}>
+                                {sessions.length}
+                            </span>
+                        )}
+                    </button>
+                    <button
+                        onClick={() => {
+                            setActiveScreen('facility')
+                            setCountdown(ROTATION_INTERVAL)
+                        }}
+                        className={`flex items-center gap-2.5 px-5 py-2 rounded-xl text-xs font-black italic uppercase tracking-wider transition-all cursor-pointer ${
+                            activeScreen === 'facility'
+                                ? 'bg-ridge-brand text-black shadow-lg shadow-ridge-brand/30 ring-1 ring-ridge-brand'
+                                : 'text-white/60 hover:text-white hover:bg-white/5'
+                        }`}
+                    >
+                        <Trophy size={15} className={activeScreen === 'facility' ? 'text-black' : 'text-amber-400'} />
+                        <span>Facility Records</span>
+                    </button>
+                </div>
+
+                <div className="flex items-center gap-4">
                     {/* Auto-Rotation Control Button */}
                     <button
                         onClick={() => setAutoRotate(!autoRotate)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
                             autoRotate
-                                ? 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
-                                : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
+                                ? 'bg-white/5 border-white/15 text-white/70 hover:bg-white/10'
+                                : 'bg-amber-500/15 border-amber-500/40 text-amber-400 hover:bg-amber-500/25'
                         }`}
-                        title={autoRotate ? 'Pause 15s screen rotation' : 'Resume 15s screen rotation'}
+                        title={autoRotate ? 'Pause 15s screen rotation (Space)' : 'Resume 15s screen rotation (Space)'}
                     >
                         {autoRotate ? <Pause size={12} /> : <Play size={12} />}
-                        <span>{autoRotate ? `Flip in ${countdown}s` : 'Rotation Paused'}</span>
+                        <span>{autoRotate ? `Flip in ${countdown}s` : 'Paused'}</span>
                     </button>
 
-                    <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-xl border border-white/5">
+                    <div className="flex items-center gap-2 bg-black/60 px-3.5 py-1.5 rounded-xl border border-white/10">
                         <div className={`w-2.5 h-2.5 rounded-full ${data.active_rigs.length > 0 ? 'bg-green-500 animate-pulse' : 'bg-white/20'}`} />
-                        <span className="text-[11px] font-black uppercase tracking-widest text-white/50">
+                        <span className="text-[11px] font-black uppercase tracking-widest text-white/70">
                             {data.active_rigs.length} Racing / {data.total_rigs} Online
                         </span>
                     </div>
@@ -312,63 +340,74 @@ export default function Lobby() {
                                         {/* Drivers Standings Table */}
                                         <div className="space-y-3 flex-1">
                                             {sess.drivers.length > 0 ? (
-                                                sess.drivers.map((d, idx) => (
-                                                    <div
-                                                        key={d.rig_id}
-                                                        className={`flex items-center justify-between p-4 rounded-2xl transition-all ${
-                                                            idx === 0
-                                                                ? 'bg-ridge-brand/10 border-2 border-ridge-brand/60 shadow-lg shadow-ridge-brand/10'
-                                                                : idx === 1
-                                                                    ? 'bg-white/[0.04] border border-white/15'
-                                                                    : idx === 2
-                                                                        ? 'bg-white/[0.03] border border-white/10'
-                                                                        : 'bg-white/[0.015] border border-white/5'
-                                                        }`}
-                                                    >
-                                                        <div className="flex items-center gap-4">
-                                                            <div className={`text-2xl font-black italic w-8 text-center ${
-                                                                idx === 0 ? 'text-ridge-brand' : idx < 3 ? 'text-white/60' : 'text-white/30'
-                                                            }`}>
-                                                                {idx === 0 ? <Crown className="inline text-ridge-brand mb-1" size={20} /> : `P${d.position}`}
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-xl font-black italic uppercase tracking-tight">
-                                                                    {d.driver_name || d.rig_id}
-                                                                </p>
-                                                                <div className="flex items-center gap-2 mt-0.5">
-                                                                    <span className="text-[9px] font-mono text-white/30">{d.rig_id}</span>
-                                                                    {d.car && (
-                                                                        <span className="text-[9px] font-bold uppercase text-white/40 tracking-wider">
-                                                                            {formatCarName(d.car)}
-                                                                        </span>
+                                                sess.drivers.map((d, idx) => {
+                                                    const hasLap = Boolean(d.best_lap_time_ms && d.best_lap_time_ms > 0)
+                                                    return (
+                                                        <div
+                                                            key={d.rig_id}
+                                                            className={`flex items-center justify-between p-4 rounded-2xl transition-all ${
+                                                                hasLap && idx === 0
+                                                                    ? 'bg-ridge-brand/10 border-2 border-ridge-brand/60 shadow-lg shadow-ridge-brand/10'
+                                                                    : hasLap && idx === 1
+                                                                        ? 'bg-white/[0.04] border border-white/15'
+                                                                        : hasLap && idx === 2
+                                                                            ? 'bg-white/[0.03] border border-white/10'
+                                                                            : 'bg-white/[0.015] border border-white/5 opacity-80'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center gap-4">
+                                                                <div className={`text-2xl font-black italic w-8 text-center ${
+                                                                    hasLap && idx === 0 ? 'text-ridge-brand' : hasLap && idx < 3 ? 'text-white/60' : 'text-white/20'
+                                                                }`}>
+                                                                    {hasLap ? (
+                                                                        idx === 0 ? <Crown className="inline text-ridge-brand mb-1" size={20} /> : `P${d.position}`
+                                                                    ) : (
+                                                                        '—'
                                                                     )}
-                                                                    <span className="text-[9px] font-mono text-white/30">
-                                                                        • {d.total_laps} {d.total_laps === 1 ? 'Lap' : 'Laps'}
-                                                                    </span>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xl font-black italic uppercase tracking-tight">
+                                                                        {d.driver_name || d.rig_id}
+                                                                    </p>
+                                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                                        <span className="text-[9px] font-mono text-white/40">{d.rig_id}</span>
+                                                                        {d.car && (
+                                                                            <span className="text-[9px] font-bold uppercase text-white/40 tracking-wider">
+                                                                                {formatCarName(d.car)}
+                                                                            </span>
+                                                                        )}
+                                                                        <span className="text-[9px] font-mono text-white/30">
+                                                                            • {d.total_laps} {d.total_laps === 1 ? 'Lap' : 'Laps'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Lap Times & Gap */}
+                                                            <div className="text-right flex items-center gap-6">
+                                                                <div className="min-w-[70px]">
+                                                                    <p className="text-xs font-black uppercase text-white/30 tracking-widest">Gap</p>
+                                                                    <p className={`text-sm font-black italic tabular-nums ${
+                                                                        !hasLap
+                                                                            ? 'text-white/20'
+                                                                            : idx === 0
+                                                                                ? 'text-ridge-brand'
+                                                                                : 'text-amber-400/90'
+                                                                    }`}>
+                                                                        {hasLap ? formatGap(d.gap_ms) : '—'}
+                                                                    </p>
+                                                                </div>
+
+                                                                <div className="min-w-[110px]">
+                                                                    <p className="text-xs font-black uppercase text-white/30 tracking-widest">Best Lap</p>
+                                                                    <p className="text-2xl font-black italic tabular-nums text-white">
+                                                                        {formatTime(d.best_lap_time_ms)}
+                                                                    </p>
                                                                 </div>
                                                             </div>
                                                         </div>
-
-                                                        {/* Lap Times & Gap */}
-                                                        <div className="text-right flex items-center gap-6">
-                                                            <div>
-                                                                <p className="text-xs font-black uppercase text-white/30 tracking-widest">Gap</p>
-                                                                <p className={`text-sm font-black italic tabular-nums ${
-                                                                    idx === 0 ? 'text-ridge-brand' : 'text-amber-400/90'
-                                                                }`}>
-                                                                    {formatGap(d.gap_ms)}
-                                                                </p>
-                                                            </div>
-
-                                                            <div className="min-w-[100px]">
-                                                                <p className="text-xs font-black uppercase text-white/30 tracking-widest">Best Lap</p>
-                                                                <p className="text-2xl font-black italic tabular-nums text-white">
-                                                                    {formatTime(d.best_lap_time_ms)}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))
+                                                    )
+                                                })
                                             ) : (
                                                 <div className="py-12 text-center text-white/20">
                                                     <Timer size={32} className="mx-auto mb-2 opacity-40" />

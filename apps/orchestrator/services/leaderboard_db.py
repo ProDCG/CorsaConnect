@@ -417,39 +417,46 @@ class LeaderboardDB:
         meta_row = conn.execute(
             "SELECT track, group_name, MIN(timestamp) as started_at FROM laps WHERE session_id = ?",
             (session_id,),
+        # Find session info (track, group_name, started_at)
+        s_row = conn.execute(
+            """SELECT track, group_name, MIN(timestamp) as started_at 
+               FROM laps WHERE session_id = ?""", 
+            (session_id,)
         ).fetchone()
-        if not meta_row or not meta_row["track"]:
-            meta_row = conn.execute(
-                "SELECT track, group_name, MIN(timestamp) as started_at FROM session_best WHERE session_id = ?",
-                (session_id,),
-            ).fetchone()
 
-        track = meta_row["track"] if meta_row else None
-        group_name = meta_row["group_name"] if meta_row else None
-        started_at = meta_row["started_at"] if meta_row else None
+        track = s_row["track"] if (s_row and s_row["track"]) else None
+        group_name = s_row["group_name"] if (s_row and s_row["group_name"]) else None
+        started_at = s_row["started_at"] if (s_row and s_row["started_at"]) else None
 
-        # Query all drivers in this session with best lap, total laps, last lap
+        # Query all drivers in this session with best lap and total laps
         query = """
             SELECT 
-                COALESCE(driver_name, rig_id) as driver_key,
-                driver_name,
                 rig_id,
+                driver_name,
                 car,
                 track,
                 group_name,
                 MIN(lap_time_ms) as best_lap_time_ms,
                 MAX(lap) as total_laps,
-                MAX(timestamp) as last_lap_timestamp,
-                (SELECT l2.lap_time_ms FROM laps l2 
-                 WHERE (l2.driver_name = laps.driver_name OR (laps.driver_name IS NULL AND l2.rig_id = laps.rig_id))
-                   AND l2.session_id = laps.session_id 
-                 ORDER BY l2.lap DESC, l2.timestamp DESC LIMIT 1) as last_lap_time_ms
+                MAX(timestamp) as last_lap_timestamp
             FROM laps
             WHERE session_id = ? AND lap_time_ms IS NOT NULL AND lap_time_ms > 0
-            GROUP BY COALESCE(driver_name, rig_id)
+            GROUP BY rig_id
             ORDER BY best_lap_time_ms ASC
         """
         rows = conn.execute(query, (session_id,)).fetchall()
+
+        if not rows:
+            # Fallback: check session_best table for this session
+            rows = conn.execute(
+                """SELECT rig_id, driver_name, car, track, group_name, 
+                          lap_time_ms as best_lap_time_ms, lap as total_laps, timestamp as last_lap_timestamp
+                   FROM session_best
+                   WHERE session_id = ? AND lap_time_ms IS NOT NULL AND lap_time_ms > 0
+                   ORDER BY best_lap_time_ms ASC""",
+                (session_id,),
+            ).fetchall()
+
         conn.close()
 
         if not rows:
@@ -471,14 +478,14 @@ class LeaderboardDB:
                 "best_lap_time_ms": best_ms,
                 "gap_ms": gap_ms,
                 "total_laps": r["total_laps"] or 0,
-                "last_lap_time_ms": r["last_lap_time_ms"],
+                "last_lap_time_ms": best_ms,
                 "timestamp": r["last_lap_timestamp"],
             })
 
         return {
             "session_id": session_id,
-            "track": track,
-            "group_name": group_name,
+            "track": track or (rows[0]["track"] if rows else None),
+            "group_name": group_name or (rows[0]["group_name"] if rows else None),
             "started_at": started_at,
             "drivers": drivers,
         }

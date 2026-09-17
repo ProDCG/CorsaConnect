@@ -165,16 +165,40 @@ def create_router(state: AppState) -> APIRouter:
                         standings["group_name"] = s_info.get("group_name")
                     if not standings.get("track") and s_info.get("track"):
                         standings["track"] = s_info.get("track")
+
+                    # Merge any participating rigs that have not yet set a valid lap
+                    existing_rids = {str(d.get("rig_id")) for d in standings.get("drivers", [])}
+                    session_rig_ids = s_info.get("rig_ids", [])
+                    unranked_drivers = []
+                    for rid in session_rig_ids:
+                        if str(rid) not in existing_rids:
+                            rig_obj = state.get_rig(str(rid))
+                            unranked_drivers.append({
+                                "position": len(standings.get("drivers", [])) + len(unranked_drivers) + 1,
+                                "driver_name": rig_obj.get("driver_name") if rig_obj else None,
+                                "rig_id": str(rid),
+                                "car": rig_obj.get("selected_car") if rig_obj else None,
+                                "track": s_info.get("track"),
+                                "group_name": s_info.get("group_name"),
+                                "best_lap_time_ms": None,
+                                "gap_ms": 0,
+                                "total_laps": 0,
+                                "last_lap_time_ms": None,
+                                "timestamp": None,
+                            })
+                    if unranked_drivers:
+                        standings["drivers"] = list(standings.get("drivers", [])) + unranked_drivers
+
                 sessions_data.append(standings)
             elif s_info:
-                # Active session with 0 completed laps yet — create placeholder cards
+                # Active session with 0 completed laps yet — show participating rigs awaiting laps
                 drivers_placeholder = []
                 for idx, rid in enumerate(s_info.get("rig_ids", [])):
-                    rig_obj = state.get_rig(rid)
+                    rig_obj = state.get_rig(str(rid))
                     drivers_placeholder.append({
                         "position": idx + 1,
                         "driver_name": rig_obj.get("driver_name") if rig_obj else None,
-                        "rig_id": rid,
+                        "rig_id": str(rid),
                         "car": rig_obj.get("selected_car") if rig_obj else None,
                         "track": s_info.get("track"),
                         "group_name": s_info.get("group_name"),
