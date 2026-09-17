@@ -46,11 +46,11 @@ def _sun_angle_to_seconds(angle: float) -> int:
         136: 70200,  # Dusk (19:30)
         163: 79200   # Night (22:00)
     }
-    
+
     # Use exact map if possible
     if angle in time_map:
         return time_map[angle]
-        
+
     # Linear interpolation (0 = 07:30, 16 degrees = 1 hour)
     seconds = int(27000 + (angle / 16.0) * 3600)
     if seconds < 0:
@@ -74,8 +74,8 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             car = str(raw_car)
             logger.info("Player car from command: %s", car)
         elif car_pool:
-            car = random.choice(car_pool)
-            logger.info("Player car randomly assigned from pool: %s", car)
+            car = car_pool[0]
+            logger.info("Player car assigned from pool: %s", car)
         else:
             car = config.default_car
             logger.info("Player car fallback to config default: %s", car)
@@ -296,7 +296,7 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
             w_id = int(weather) if weather != "None" else -1
         except (ValueError, TypeError):
             w_id = 15
-            
+
         lines.append(
             f"\n[LIGHTING]\n"
             f"SPECULAR_MULT=1.0\n"
@@ -312,17 +312,17 @@ def generate_race_ini(config: SledConfig, params: dict[str, object]) -> str | No
         # NOTE: __CM_WEATHER_CONTROLLER and __CM_WEATHER_TYPE are intentionally
         # omitted — the reference Pure race.ini does not include them.  Pure
         # activates via CONTROLLER=pure in [WEATHER] + FILTER=pureHDR in video.ini.
-        
+
         # Calculate time_seconds for GRAPHICS string
         time_seconds = _sun_angle_to_seconds(sun_angle)
 
         # [WEATHER] — expanded for CSP Weather FX
         lines.append(
-            f"\n[WEATHER]\n"
-            f"NAME=sol_42_thunderstorm\n"
-            f"GRAPHICS=sol_42_thunderstorm\n"
-            f"CONTROLLER=pure\n"
-            f"TYPE=1"
+            "\n[WEATHER]\n"
+            "NAME=sol_42_thunderstorm\n"
+            "GRAPHICS=sol_42_thunderstorm\n"
+            "CONTROLLER=pure\n"
+            "TYPE=1"
         )
 
         # [TIME] — seconds from midnight for CSP
@@ -505,7 +505,7 @@ def _ensure_pure_video_ini() -> None:
         return
 
     try:
-        with open(video_ini, "r", encoding="utf-8", errors="replace") as f:
+        with open(video_ini, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
 
         new_lines: list[str] = []

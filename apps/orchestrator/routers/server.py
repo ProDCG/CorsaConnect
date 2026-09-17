@@ -172,13 +172,13 @@ def create_router(state: AppState) -> APIRouter:
             return {"status": "error", "message": "Group not found"}
 
         import os
-        
+
         # Read the direct config from disk if it exists
         repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         cfg_path = os.path.join(repo_root, "data", "servers", group_id, "cfg", "server_cfg.ini")
-        
+
         if os.path.exists(cfg_path):
-            with open(cfg_path, "r", encoding="utf-8") as f:
+            with open(cfg_path, encoding="utf-8") as f:
                 cfg_str = f.read()
         else:
             cfg_str = f"Config file not found at {cfg_path}. Please start the server at least once to generate it."

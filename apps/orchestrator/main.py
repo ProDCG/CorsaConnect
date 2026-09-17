@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import socket
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -101,6 +100,7 @@ async def health_check() -> dict[str, str]:
 # CLI entry point
 # ---------------------------------------------------------------------------
 from shared.utils import get_local_ip
+
 
 def _get_local_ip() -> str:
     """Best-effort local IP discovery."""

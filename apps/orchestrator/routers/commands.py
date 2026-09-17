@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import socket
 import time
 
 from fastapi import APIRouter, BackgroundTasks
@@ -47,11 +46,11 @@ def create_router(state: AppState) -> APIRouter:
         driver_name = rig.get("driver_name")
         if driver_name and str(driver_name).strip():
             payload["driver_name"] = str(driver_name).strip()
-            
+
         # Sled agent Pure weather fallback: if "None", force Clear (15) to prevent rain
         if payload.get("weather") == "None":
             payload["weather"] = "15"
-            
+
         return payload
 
     @router.post("/command")

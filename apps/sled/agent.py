@@ -412,13 +412,12 @@ class RigAgent:
         proc = launch_ac(self.config, params)
         if proc:
             self.current_process = proc
-            
+
             # Start auto-drive keypress thread if enabled
             if self.config.auto_drive_enabled:
                 import threading
                 def auto_press():
                     import time
-                    import ctypes
                     logger.info("Auto-drive armed. Waiting %d seconds before pressing key...", self.config.auto_drive_delay_sec)
                     time.sleep(self.config.auto_drive_delay_sec)
                     if self.status != "idle":
@@ -432,9 +431,9 @@ class RigAgent:
                             logger.error("pydirectinput not installed! Run: pip install pydirectinput")
                         except Exception as e:
                             logger.error("Auto-drive pydirectinput failed: %s", e)
-                
+
                 threading.Thread(target=auto_press, daemon=True).start()
-                
+
         else:
             logger.error("Could not launch AC — check config.json paths")
 
@@ -497,7 +496,7 @@ class RigAgent:
         try:
             import pydirectinput
             # pydirectinput works globally if AC is the foreground window
-            
+
             if action == "NEXT_CAR":
                 pydirectinput.press('pgdn')
             elif action == "PREV_CAR":

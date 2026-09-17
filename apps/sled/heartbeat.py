@@ -18,6 +18,7 @@ logger = logging.getLogger("ridge.heartbeat")
 
 from shared.utils import get_local_ip
 
+
 def _get_local_ip() -> str:
     """Best-effort local IP discovery."""
     return get_local_ip()

@@ -150,9 +150,9 @@ def create_router(state: AppState) -> APIRouter:
                 state.update_rig_field(rig_id, "selected_car", update.selected_car)
                 logger.info("Rig %s car -> %s (explicit selection)", rig_id, update.selected_car)
             else:
-                # Empty string = "Random" — clear the selection
+                # Empty string = clear the selection
                 state.update_rig_field(rig_id, "selected_car", None)
-                logger.info("Rig %s car -> Random (cleared)", rig_id)
+                logger.info("Rig %s car cleared", rig_id)
         if update.cpu_temp:
             state.update_rig_field(rig_id, "cpu_temp", update.cpu_temp)
         if update.telemetry:
@@ -254,11 +254,12 @@ def create_router(state: AppState) -> APIRouter:
         rig = state.get_rig(rig_id)
         if not rig or not rig.get("ip"):
             return {"status": "error", "message": "Rig not found or no IP"}
-        
-        import socket
+
         import json
+        import socket
+
         from shared.constants import COMMAND_PORT
-        
+
         try:
             # Connect to the sled agent's command port
             with socket.create_connection((str(rig.get("ip")), COMMAND_PORT), timeout=2) as s:

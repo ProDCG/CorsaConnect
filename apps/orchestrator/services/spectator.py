@@ -178,7 +178,7 @@ def _write_low_quality_video_ini(ac_folder: str) -> str | None:
         return None
 
     try:
-        with open(video_ini, "r", encoding="utf-8", errors="replace") as f:
+        with open(video_ini, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
 
         # Write a backup if not already done

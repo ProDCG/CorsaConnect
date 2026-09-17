@@ -204,7 +204,7 @@ class ACServerManager:
         )
 
         enable_csp = getattr(self.state.settings, "enable_csp", False)
-        
+
         track_layout = group.track_layout if group else None
 
         self._write_server_cfg(
@@ -449,25 +449,25 @@ class ACServerManager:
         track_parts = track.split("/", 1)
         track_base = track_parts[0]
         src = os.path.join(main_content, "tracks", track_base)
-        
+
         # If CSP is enabled, the acServer will be told to look in csp/<track_base>
         # because of the TRACK=csp/2000/../D/../<track_base> traversal hack.
         if enable_csp:
             dst = os.path.join(server_content, "tracks", "csp", track_base)
         else:
             dst = os.path.join(server_content, "tracks", track_base)
-            
+
         if os.path.isdir(src):
             if not os.path.isdir(dst):
                 try:
                     shutil.copytree(src, dst, dirs_exist_ok=True)
                     logger.info("Synced track to server content: %s (CSP: %s)", track_base, enable_csp)
-                    
+
                     # CSP requires renaming the first SURFACE_0 to CSPFACE_0 in surfaces.ini
                     if enable_csp:
                         surfaces_ini = os.path.join(dst, "data", "surfaces.ini")
                         if os.path.isfile(surfaces_ini):
-                            with open(surfaces_ini, "r", encoding="utf-8", errors="ignore") as f:
+                            with open(surfaces_ini, encoding="utf-8", errors="ignore") as f:
                                 content = f.read()
                             # Only replace the very first occurrence
                             new_content = content.replace("[SURFACE_0]", "[CSPFACE_0]", 1)
@@ -514,14 +514,14 @@ class ACServerManager:
         if not cars:
             return  # Cannot write server config without any cars
         car_str = ";".join(cars)
-        
+
         if enable_csp:
             base_track = f"csp/2000/../D/../{track}"
         else:
             base_track = track
 
         config_track = track_layout if track_layout else ""
-        
+
         # We auto-assign their most common/expected layout if the user didn't specify one
         default_layouts = {
             "ks_nordschleife": "nordschleife",
@@ -532,7 +532,7 @@ class ACServerManager:
             "highlands": "highlands",
             "ks_barcelona": "layout_gp"
         }
-        
+
         if not config_track and track in default_layouts:
             config_track = default_layouts[track]
 
@@ -662,7 +662,7 @@ class ACServerManager:
             )
 
         dyn_track_header = "[__CM_DYNAMIC_TRACK_OFF]" if enable_csp else "[DYNAMIC_TRACK]"
-        
+
         # Fallback if sun_angle is None
         if sun_angle is None:
             sun_angle = 48
@@ -672,12 +672,12 @@ class ACServerManager:
         # Map sun_angle (-80 to 80) to CM_FX_TIME (exact seconds from midnight)
         # In our system, 0 = 01:00 (3600 seconds) to correct the 12-hour offset, and 16 degrees = 1 hour (3600 seconds)
         fx_time = int(3600 + (sun_angle / 16.0) * 3600)
-        
+
         if fx_time < 0:
             fx_time += 86400
         # Ensure it is bounded 0 to 86399
         fx_time = max(0, min(86399, fx_time))
-        
+
         # Map weather ID string to integer
         try:
             w_id = int(weather) if weather != "None" else -1
@@ -731,8 +731,9 @@ class ACServerManager:
             f"REAL_CONDITIONS=0\n"
         )
         if enable_csp:
-            import json, base64
-                
+            import base64
+            import json
+
             # Generate the real conditions JSON and encode it dynamically to ensure time is forced
             rc_dict = {
                 "useRealConditions": False,
@@ -763,14 +764,14 @@ class ACServerManager:
             cfg_path = os.path.join(config_dir, "cfg", "server_cfg.ini")
             welcome_path = os.path.join(config_dir, "cfg", "welcome.txt")
             os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
-            
+
             with open(cfg_path, "w") as f:
                 f.write(cfg)
-                
+
             # Write welcome message required for rain
             with open(welcome_path, "w", encoding="utf-8") as f:
                 f.write("For testing, rain is active with intensity 100%.")
-                
+
             logger.info("Wrote server_cfg.ini and welcome.txt: track=%s cars=%s max_clients=%d port=%d",
                           track, car_str, max_clients, udp_port)
         return cfg
@@ -803,9 +804,8 @@ class ACServerManager:
                 if rc and rc != "None" and rc in cars:
                     rig_car = rc
                 else:
-                    # No car selected — pick a random one from the pool
-                    import random
-                    rig_car = random.choice(cars) if cars else default_car
+                    # No car selected — assign default car from pool
+                    rig_car = cars[0] if cars else default_car
                     logger.info("Rig '%s' has no car selected — auto-assigned '%s'", rig_id, rig_car)
                 dn = rig.get("driver_name")
                 if dn and str(dn).strip():

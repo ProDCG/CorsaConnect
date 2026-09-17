@@ -64,20 +64,21 @@ def create_router(state: AppState) -> APIRouter:
         import random
         import time
         import uuid
+
         from apps.orchestrator.services.content_scanner import scan_cars, scan_tracks
-        
+
         content_folder = state.settings.content_folder
         cars = [c.id for c in scan_cars(content_folder)]
         tracks = [t.id for t in scan_tracks(content_folder)]
-        
+
         if not cars:
             cars = ["ks_ferrari_488_gt3"]
         if not tracks:
             tracks = ["spa"]
-            
+
         car = random.choice(cars)
         track = random.choice(tracks)
-        
+
         entry = LeaderboardEntry(
             rig_id=f"RIG-{random.randint(1, 8):02d}",
             driver_name=random.choice(["Mason", "Alex", "Jordan", "Taylor", "Riley", "Casey", "Morgan", "Drew"]),

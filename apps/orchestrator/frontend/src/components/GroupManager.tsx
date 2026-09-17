@@ -245,6 +245,9 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
     // Preview Config modal state
     const [previewConfig, setPreviewConfig] = useState<string | null>(null)
 
+    // Validation errors (rigs missing car selection)
+    const [invalidCarRigIds, setInvalidCarRigIds] = useState<string[]>([])
+
     // Spectator state
     const [spectatorGroupId, setSpectatorGroupId] = useState<string | null>(null)
     const [spectatorLoading, setSpectatorLoading] = useState(false)
@@ -382,11 +385,15 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
     }
 
     const setRigCar = async (rigId: string, carId: string) => {
+        if (carId) {
+            setInvalidCarRigIds(prev => prev.filter(id => id !== rigId))
+        }
         await fetch(`/api/rigs/${rigId}/status`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ selected_car: carId })
         })
+        fetchGroups()
     }
 
     /* ---- Group commands ---- */
@@ -630,6 +637,16 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                 {/* Single START RACE button — auto-deploys server for multiplayer */}
                                 <button
                                     onClick={async () => {
+                                        const unselectedRigs = selectedGroup.rig_ids.filter(rigId => {
+                                            const r = rigs.find(rig => rig.rig_id === rigId)
+                                            return !r || !r.selected_car || r.selected_car === '' || r.selected_car === 'None'
+                                        })
+                                        if (unselectedRigs.length > 0) {
+                                            setInvalidCarRigIds(unselectedRigs)
+                                            return
+                                        }
+                                        setInvalidCarRigIds([])
+
                                         if (selectedGroup.mode === 'multiplayer' && !isSelectedServerRunning) {
                                             // Deploy server first — abort if it fails
                                             const ok = await startServerForGroup(selectedGroup.id)
@@ -751,8 +768,13 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                             <div className="flex flex-wrap gap-2">
                                 {selectedGroup.rig_ids.map(rigId => {
                                     const rig = rigs.find(r => r.rig_id === rigId)
+                                    const hasCarError = invalidCarRigIds.includes(rigId)
                                     return (
-                                        <div key={rigId} className="bg-black/30 border border-white/5 rounded-xl px-3 py-2.5 flex items-center gap-3 group hover:border-white/15 transition-all">
+                                        <div key={rigId} className={`rounded-xl px-3 py-2.5 flex items-center gap-3 group transition-all ${
+                                            hasCarError
+                                                ? 'bg-red-500/10 border-2 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)] animate-pulse'
+                                                : 'bg-black/30 border border-white/5 hover:border-white/15'
+                                        }`}>
                                             <div className={`w-2 h-2 rounded-full ${rig?.status === 'racing' ? 'bg-ridge-brand animate-pulse' :
                                                     rig?.status === 'ready' ? 'bg-green-500' :
                                                         rig?.status === 'setup' ? 'bg-blue-500 animate-pulse' :
@@ -765,9 +787,15 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                                 <select
                                                     value={rig?.selected_car || ''}
                                                     onChange={e => setRigCar(rigId, e.target.value)}
-                                                    className="bg-white/5 border border-white/10 rounded-lg px-2 py-0.5 text-[10px] font-bold outline-none focus:border-ridge-brand appearance-none max-w-40 cursor-pointer pr-5"
+                                                    className={`rounded-lg px-2 py-0.5 text-[10px] font-bold outline-none appearance-none max-w-40 cursor-pointer pr-5 transition-all ${
+                                                        hasCarError
+                                                            ? 'bg-red-950/80 border border-red-500 text-red-200 focus:border-red-400'
+                                                            : 'bg-white/5 border border-white/10 focus:border-ridge-brand text-white'
+                                                    }`}
                                                 >
-                                                    <option value="">🎲 Random</option>
+                                                    {!rig?.selected_car && (
+                                                        <option value="" disabled>-- Select Car --</option>
+                                                    )}
                                                     {(() => {
                                                         const seen = new Set<string>();
                                                         // Only show cars enabled in the Cars tab
@@ -793,7 +821,20 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                                 <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
                                             </div>
 
-                                            <button onClick={() => sendRigCommand(selectedGroup.id, rigId, 'LAUNCH_RACE')}
+                                            {hasCarError && (
+                                                <span className="text-[9px] font-black uppercase text-red-400 bg-red-500/20 px-1.5 py-0.5 rounded border border-red-500/40">
+                                                    No Car Selected!
+                                                </span>
+                                            )}
+
+                                            <button onClick={() => {
+                                                if (!rig || !rig.selected_car || rig.selected_car === '' || rig.selected_car === 'None') {
+                                                    setInvalidCarRigIds(prev => Array.from(new Set([...prev, rigId])))
+                                                    return
+                                                }
+                                                setInvalidCarRigIds(prev => prev.filter(id => id !== rigId))
+                                                sendRigCommand(selectedGroup.id, rigId, 'LAUNCH_RACE')
+                                            }}
                                                 className="text-white/10 hover:text-green-400 transition-colors opacity-0 group-hover:opacity-100 mr-0.5" title={selectedGroup.mode === 'multiplayer' ? "Join Race" : "Start Race"}>
                                                 <Play size={12} />
                                             </button>

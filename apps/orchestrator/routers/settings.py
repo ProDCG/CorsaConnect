@@ -135,26 +135,28 @@ def create_router(state: AppState) -> APIRouter:
     async def get_track_map(track_id: str, layout_id: str | None = None) -> object:
         """Return the map.png for a given track/layout."""
         import os
+
         from fastapi.responses import FileResponse, Response
+
         from shared.constants import DEFAULT_AC_FOLDER
 
         content_folder = state.settings.content_folder or DEFAULT_AC_FOLDER
-        
+
         candidates = [
             os.path.join(content_folder, "Client", "content", "tracks", track_id),
             os.path.join(content_folder, "content", "tracks", track_id),
             os.path.join(content_folder, "tracks", track_id),
         ]
-        
+
         track_dir = None
         for path in candidates:
             if os.path.isdir(path):
                 track_dir = path
                 break
-                
+
         if not track_dir:
             return Response(status_code=404, content="Track not found")
-            
+
         # 1. User specifically requested layout
         if layout_id:
             # Try ui/layout/map.png
@@ -163,15 +165,15 @@ def create_router(state: AppState) -> APIRouter:
             # Try layout/map.png
             p2 = os.path.join(track_dir, layout_id, "map.png")
             if os.path.isfile(p2): return FileResponse(p2)
-            
+
         # 2. Try the base map.png in track's directory
         p3 = os.path.join(track_dir, "map.png")
         if os.path.isfile(p3): return FileResponse(p3)
-        
+
         # 3. Try the base map.png in ui/ directory
         p4 = os.path.join(track_dir, "ui", "map.png")
         if os.path.isfile(p4): return FileResponse(p4)
-        
+
         # 4. Fallback: find ANY map.png in the track directory (search up to 2 levels deep)
         for root, dirs, files in os.walk(track_dir):
             if "map.png" in files:
@@ -179,7 +181,7 @@ def create_router(state: AppState) -> APIRouter:
             # Stop searching too deep to prevent lag
             if root.count(os.sep) - track_dir.count(os.sep) >= 2:
                 del dirs[:]
-                
+
         return Response(status_code=404, content="Map not found")
 
     @router.post("/update")

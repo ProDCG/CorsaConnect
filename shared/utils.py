@@ -1,5 +1,6 @@
 import socket
 
+
 def get_local_ip() -> str:
     """Best-effort local IP discovery, including when offline.
     Prioritizes the 192.168.10.x subnet for the isolated ethernet network.
@@ -47,5 +48,5 @@ def get_local_ip() -> str:
             return ip
     except Exception:
         pass
-        
+
     return "127.0.0.1"

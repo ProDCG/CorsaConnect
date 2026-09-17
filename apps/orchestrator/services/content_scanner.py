@@ -52,9 +52,14 @@ def scan_cars(content_folder: str) -> list[ScannedCar]:
             cars_dir = path
             break
 
-    if not cars_dir:
-        logger.warning("No cars directory found in content folder: %s", content_folder)
-        return []
+    if not cars_dir or os.environ.get("MOCK_CONTENT") == "1":
+        logger.info("Using mock cars catalog for testing/fallback: %s", content_folder)
+        from shared.constants import CAR_CATALOG
+
+        return [
+            ScannedCar(id=c.id, name=c.name, brand=c.brand, car_class=c.car_class)
+            for c in CAR_CATALOG
+        ]
 
     cars: list[ScannedCar] = []
     try:
@@ -109,9 +114,14 @@ def scan_tracks(content_folder: str) -> list[ScannedTrack]:
             tracks_dir = path
             break
 
-    if not tracks_dir:
-        logger.warning("No tracks directory found in content folder: %s", content_folder)
-        return []
+    if not tracks_dir or os.environ.get("MOCK_CONTENT") == "1":
+        logger.info("Using mock tracks catalog for testing/fallback: %s", content_folder)
+        from shared.constants import TRACK_CATALOG
+
+        return [
+            ScannedTrack(id=t.id, name=t.name, layouts=[])
+            for t in TRACK_CATALOG
+        ]
 
     tracks: list[ScannedTrack] = []
     try:
@@ -133,7 +143,7 @@ def scan_tracks(content_folder: str) -> list[ScannedTrack]:
                     name = data.get("name", entry)
                 except (json.JSONDecodeError, KeyError):
                     pass
-            
+
             # Scan for track config variants inside the ui/ directory
             ui_dir = os.path.join(track_path, "ui")
             if os.path.isdir(ui_dir):
@@ -141,7 +151,7 @@ def scan_tracks(content_folder: str) -> list[ScannedTrack]:
                     sub_ui_dir = os.path.join(ui_dir, sub)
                     if not os.path.isdir(sub_ui_dir):
                         continue
-                        
+
                     sub_ui = os.path.join(sub_ui_dir, "ui_track.json")
                     if os.path.isfile(sub_ui):
                         layout_name = sub

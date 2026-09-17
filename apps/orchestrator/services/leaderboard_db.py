@@ -167,7 +167,7 @@ class LeaderboardDB:
                WHERE lap_time_ms IS NOT NULL AND lap_time_ms > 0
                GROUP BY track, COALESCE(driver_name, rig_id) 
                HAVING lap_time_ms = MIN(lap_time_ms) 
-               ORDER BY timestamp DESC LIMIT ?""", 
+               ORDER BY timestamp DESC LIMIT ?""",
             (limit,)
         ).fetchall()
         conn.close()
@@ -263,20 +263,20 @@ class LeaderboardDB:
         if track:
             query += " AND track = ?"
             params.append(track)
-            
+
         order_dir = "DESC" if sort_desc else "ASC"
         query += f" ORDER BY lap_time_ms {order_dir} LIMIT ?"
         params.append(limit)
-        
+
         rows = conn.execute(query, tuple(params)).fetchall()
         conn.close()
         return self._rows_to_entries(rows)
 
     def get_today_best(self, track: str | None = None, sort_desc: bool = False, limit: int = 100) -> list[LeaderboardEntry]:
         """Get best entries from the current day."""
-        import time
-        from datetime import datetime, time as datetime_time
-        
+        from datetime import datetime
+        from datetime import time as datetime_time
+
         # Get start of today (midnight) as unix timestamp
         today = datetime.combine(datetime.today(), datetime_time.min)
         start_of_today = today.timestamp()
@@ -284,15 +284,15 @@ class LeaderboardDB:
         conn = self._connect()
         query = "SELECT * FROM session_best WHERE timestamp >= ? AND lap_time_ms IS NOT NULL AND lap_time_ms > 0"
         params = [start_of_today]
-        
+
         if track:
             query += " AND track = ?"
             params.append(track)
-            
+
         order_dir = "DESC" if sort_desc else "ASC"
         query += f" ORDER BY lap_time_ms {order_dir} LIMIT ?"
         params.append(limit)
-        
+
         rows = conn.execute(query, tuple(params)).fetchall()
         conn.close()
         return self._rows_to_entries(rows)

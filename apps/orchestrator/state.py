@@ -259,10 +259,10 @@ class AppState:
             if not group:
                 return None
             for field in ("name", "mode", "track", "track_layout", "weather", "car_pool",
-                          "ai_count", "ai_difficulty", 
+                          "ai_count", "ai_difficulty",
                           "practice_enabled", "practice_time",
-                          "qualy_enabled", "qualy_time", 
-                          "race_enabled", "race_laps", 
+                          "qualy_enabled", "qualy_time",
+                          "race_enabled", "race_laps",
                           "penalties_enabled", "unlimited_fuel", "damage_enabled",
                           "allow_wrong_way", "sun_angle",
                           "time_mult", "session_duration_min",
