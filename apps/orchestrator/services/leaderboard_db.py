@@ -193,6 +193,38 @@ class LeaderboardDB:
         conn.commit()
         conn.close()
 
+    def delete_by_match(
+        self,
+        rig_id: str,
+        track: str | None = None,
+        session_id: str | None = None,
+        lap_time_ms: int | None = None,
+    ) -> bool:
+        """Fallback deletion by matching fields if direct ID is unknown."""
+        conn = self._connect()
+        query = "SELECT id FROM laps WHERE (rig_id = ? OR driver_name = ?)"
+        params: list[object] = [rig_id, rig_id]
+        if track:
+            query += " AND track = ?"
+            params.append(track)
+        if session_id:
+            query += " AND session_id = ?"
+            params.append(session_id)
+        if lap_time_ms:
+            query += " AND lap_time_ms = ?"
+            params.append(lap_time_ms)
+        query += " ORDER BY id DESC LIMIT 1"
+        row = conn.execute(query, tuple(params)).fetchone()
+        conn.close()
+        if row:
+            return self.delete_record(row["id"])
+
+        conn = self._connect()
+        conn.execute("DELETE FROM session_best WHERE (rig_id = ? OR driver_name = ?)", (rig_id, rig_id))
+        conn.commit()
+        conn.close()
+        return True
+
     def get_all(self, limit: int = 200) -> list[LeaderboardEntry]:
         """Get all entries, returning only the fastest lap per driver per track."""
         conn = self._connect()
@@ -263,14 +295,19 @@ class LeaderboardDB:
         """Get session-best entries (one per driver, fastest lap only)."""
         conn = self._connect()
         if session_id:
-            rows = conn.execute(
-                """SELECT * FROM session_best
-                   WHERE session_id = ?
-                   ORDER BY CASE WHEN lap_time_ms IS NULL THEN 1 ELSE 0 END,
-                            lap_time_ms ASC
-                   LIMIT ?""",
-                (session_id, limit),
-            ).fetchall()
+            query = """
+                SELECT sb.rig_id, sb.driver_name, sb.car, sb.track, sb.group_name,
+                       sb.lap, sb.lap_time_ms, sb.session_id, sb.timestamp,
+                       (SELECT l.id FROM laps l 
+                        WHERE l.rig_id = sb.rig_id AND l.session_id = sb.session_id AND l.lap_time_ms = sb.lap_time_ms 
+                        ORDER BY l.id DESC LIMIT 1) as id
+                FROM session_best sb
+                WHERE sb.session_id = ?
+                ORDER BY CASE WHEN sb.lap_time_ms IS NULL THEN 1 ELSE 0 END,
+                         sb.lap_time_ms ASC
+                LIMIT ?
+            """
+            rows = conn.execute(query, (session_id, limit)).fetchall()
         else:
             row = conn.execute(
                 "SELECT session_id FROM session_best WHERE session_id IS NOT NULL ORDER BY timestamp DESC LIMIT 1"
@@ -278,30 +315,43 @@ class LeaderboardDB:
             if not row:
                 conn.close()
                 return []
-            rows = conn.execute(
-                """SELECT * FROM session_best
-                   WHERE session_id = ?
-                   ORDER BY CASE WHEN lap_time_ms IS NULL THEN 1 ELSE 0 END,
-                            lap_time_ms ASC
-                   LIMIT ?""",
-                (row["session_id"], limit),
-            ).fetchall()
+            query = """
+                SELECT sb.rig_id, sb.driver_name, sb.car, sb.track, sb.group_name,
+                       sb.lap, sb.lap_time_ms, sb.session_id, sb.timestamp,
+                       (SELECT l.id FROM laps l 
+                        WHERE l.rig_id = sb.rig_id AND l.session_id = sb.session_id AND l.lap_time_ms = sb.lap_time_ms 
+                        ORDER BY l.id DESC LIMIT 1) as id
+                FROM session_best sb
+                WHERE sb.session_id = ?
+                ORDER BY CASE WHEN sb.lap_time_ms IS NULL THEN 1 ELSE 0 END,
+                         sb.lap_time_ms ASC
+                LIMIT ?
+            """
+            rows = conn.execute(query, (row["session_id"], limit)).fetchall()
         conn.close()
         return self._rows_to_entries(rows)
 
     def get_session_best_all(self, track: str | None = None, sort_desc: bool = False, limit: int = 100) -> list[LeaderboardEntry]:
         """Get all session-best entries across all sessions. Supports track filtering and sorting."""
         conn = self._connect()
-        query = "SELECT * FROM session_best WHERE lap_time_ms IS NOT NULL AND lap_time_ms > 0"
-        params = []
+        query = """
+            SELECT sb.rig_id, sb.driver_name, sb.car, sb.track, sb.group_name,
+                   sb.lap, sb.lap_time_ms, sb.session_id, sb.timestamp,
+                   (SELECT l.id FROM laps l 
+                    WHERE l.rig_id = sb.rig_id AND l.session_id = sb.session_id AND l.lap_time_ms = sb.lap_time_ms 
+                    ORDER BY l.id DESC LIMIT 1) as id
+            FROM session_best sb
+            WHERE sb.lap_time_ms IS NOT NULL AND sb.lap_time_ms > 0
+        """
+        params: list[object] = []
         if track:
-            query += " AND track = ?"
+            query += " AND sb.track = ?"
             params.append(track)
-            
+
         order_dir = "DESC" if sort_desc else "ASC"
-        query += f" ORDER BY lap_time_ms {order_dir} LIMIT ?"
+        query += f" ORDER BY sb.lap_time_ms {order_dir} LIMIT ?"
         params.append(limit)
-        
+
         rows = conn.execute(query, tuple(params)).fetchall()
         conn.close()
         return self._rows_to_entries(rows)
@@ -310,23 +360,30 @@ class LeaderboardDB:
         """Get best entries from the current day."""
         import time
         from datetime import datetime, time as datetime_time
-        
-        # Get start of today (midnight) as unix timestamp
+
         today = datetime.combine(datetime.today(), datetime_time.min)
         start_of_today = today.timestamp()
 
         conn = self._connect()
-        query = "SELECT * FROM session_best WHERE timestamp >= ? AND lap_time_ms IS NOT NULL AND lap_time_ms > 0"
-        params = [start_of_today]
-        
+        query = """
+            SELECT sb.rig_id, sb.driver_name, sb.car, sb.track, sb.group_name,
+                   sb.lap, sb.lap_time_ms, sb.session_id, sb.timestamp,
+                   (SELECT l.id FROM laps l 
+                    WHERE l.rig_id = sb.rig_id AND l.session_id = sb.session_id AND l.lap_time_ms = sb.lap_time_ms 
+                    ORDER BY l.id DESC LIMIT 1) as id
+            FROM session_best sb
+            WHERE sb.timestamp >= ? AND sb.lap_time_ms IS NOT NULL AND sb.lap_time_ms > 0
+        """
+        params: list[object] = [start_of_today]
+
         if track:
-            query += " AND track = ?"
+            query += " AND sb.track = ?"
             params.append(track)
-            
+
         order_dir = "DESC" if sort_desc else "ASC"
-        query += f" ORDER BY lap_time_ms {order_dir} LIMIT ?"
+        query += f" ORDER BY sb.lap_time_ms {order_dir} LIMIT ?"
         params.append(limit)
-        
+
         rows = conn.execute(query, tuple(params)).fetchall()
         conn.close()
         return self._rows_to_entries(rows)
