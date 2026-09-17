@@ -64,6 +64,9 @@ def create_router(state: AppState) -> APIRouter:
         new_status = action_status_map.get(command.action)
         if new_status:
             state.update_rig_field(command.rig_id, "status", new_status)
+        if command.action in ("LAUNCH_RACE", "KILL_RACE", "SETUP_MODE"):
+            state.update_rig_field(command.rig_id, "last_lap_count", 0)
+
         if command.action == "KILL_RACE":
             state.update_rig_field(command.rig_id, "kill_requested_at", time.time())
         elif command.action == "LAUNCH_RACE":
@@ -92,6 +95,9 @@ def create_router(state: AppState) -> APIRouter:
 
         for rig in state.get_rigs():
             rig_id = str(rig["rig_id"])
+
+            if command.action in ("LAUNCH_RACE", "KILL_RACE", "SETUP_MODE"):
+                state.update_rig_field(rig_id, "last_lap_count", 0)
 
             if command.action == "SETUP_MODE":
                 state.update_rig_field(rig_id, "selected_car", None)
@@ -157,17 +163,20 @@ def create_router(state: AppState) -> APIRouter:
             for rid in group.rig_ids:
                 state.update_rig_field(rid, "status", "idle")
                 state.update_rig_field(rid, "kill_requested_at", time.time())
+                state.update_rig_field(rid, "last_lap_count", 0)
             logger.info("KILL_RACE: set %d rigs to idle for group '%s'", len(group.rig_ids), group.name)
         elif command.action == "LAUNCH_RACE":
             for rid in group.rig_ids:
                 state.update_rig_field(rid, "kill_requested_at", None)
-            logger.info("LAUNCH_RACE: cleared kill guard for %d rigs in group '%s'", len(group.rig_ids), group.name)
+                state.update_rig_field(rid, "last_lap_count", 0)
+            logger.info("LAUNCH_RACE: cleared kill guard and reset lap counts for %d rigs in group '%s'", len(group.rig_ids), group.name)
 
         for rig in state.get_group_rigs(group_id):
             rig_id = str(rig["rig_id"])
 
             if command.action == "SETUP_MODE":
                 state.update_rig_field(rig_id, "selected_car", None)
+                state.update_rig_field(rig_id, "last_lap_count", 0)
                 state.update_rig_field(rig_id, "status", "setup")
 
             if rig.get("ip") == "web-kiosk":

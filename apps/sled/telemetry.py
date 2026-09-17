@@ -128,9 +128,21 @@ class ACTelemetry:
                 "air_temp": round(new_data.get("AirTemperature", 0), 1),
                 "road_temp": round(new_data.get("RoadTemperature", 0), 1),
                 # Lap times
-                "current_lap_time": str(new_data.get("CurrentLapTime", "00:00:00")),
-                "last_lap_time": str(new_data.get("LastLapTime", "00:00:00")),
-                "best_lap_time": str(new_data.get("BestLapTime", "00:00:00")),
+                "current_lap_time": (
+                    int(new_data["CurrentLapTime"]["TotalMilliseconds"])
+                    if isinstance(new_data.get("CurrentLapTime"), dict) and "TotalMilliseconds" in new_data["CurrentLapTime"]
+                    else (new_data.get("CurrentLapTime") if isinstance(new_data.get("CurrentLapTime"), (int, float)) else str(new_data.get("CurrentLapTime", "00:00:00")))
+                ),
+                "last_lap_time": (
+                    int(new_data["LastLapTime"]["TotalMilliseconds"])
+                    if isinstance(new_data.get("LastLapTime"), dict) and "TotalMilliseconds" in new_data["LastLapTime"]
+                    else (new_data.get("LastLapTime") if isinstance(new_data.get("LastLapTime"), (int, float)) else str(new_data.get("LastLapTime", "00:00:00")))
+                ),
+                "best_lap_time": (
+                    int(new_data["BestLapTime"]["TotalMilliseconds"])
+                    if isinstance(new_data.get("BestLapTime"), dict) and "TotalMilliseconds" in new_data["BestLapTime"]
+                    else (new_data.get("BestLapTime") if isinstance(new_data.get("BestLapTime"), (int, float)) else str(new_data.get("BestLapTime", "00:00:00")))
+                ),
                 # Pit
                 "is_in_pit": int(new_data.get("IsInPit", 0)),
                 "is_in_pit_lane": int(new_data.get("IsInPitLane", 0)),
@@ -144,7 +156,11 @@ class ACTelemetry:
                 "max_speed": round(new_data.get("MaxSpeedKmh", 0), 1),
                 "engine_torque": round(new_data.get("EngineTorque", 0), 1),
                 # Validity
-                "is_lap_valid": bool(new_data.get("IsLapValid", True)),
+                "is_lap_valid": (
+                    bool(new_data.get("IsLapValid"))
+                    if new_data.get("IsLapValid") is not None
+                    else not bool(new_data.get("LapInvalidated", False))
+                ),
             }
             return result
         except Exception as e:
@@ -212,57 +228,40 @@ class ACTelemetry:
 
     def _get_mmap_data(self) -> dict[str, object] | None:
         """Read telemetry from AC shared memory."""
-        import struct
-
         try:
-            if not self.physics_mmap:
+            if not self.physics_mmap or not self.graphics_mmap:
                 if not self._open_mmap():
                     return None
 
-            self.physics_mmap.seek(0)  # type: ignore[union-attr]
-            data = self.physics_mmap.read(80)  # type: ignore[union-attr]
-            if len(data) < 80:
-                return None
+            import ctypes
+            from apps.sled.sidecar import SPageFileGraphic, SPageFilePhysics
 
-            packet_id = struct.unpack("i", data[0:4])[0]
-            gas = struct.unpack("f", data[4:8])[0]
-            brake = struct.unpack("f", data[8:12])[0]
-            gear = struct.unpack("i", data[16:20])[0]
-            rpms = struct.unpack("i", data[20:24])[0]
-            velocity = struct.unpack("3f", data[44:56])
-            gforce = struct.unpack("3f", data[68:80])
+            self.physics_mmap.seek(0)  # type: ignore[union-attr]
+            p = SPageFilePhysics.from_buffer_copy(
+                self.physics_mmap.read(ctypes.sizeof(SPageFilePhysics))  # type: ignore[union-attr]
+            )
 
             self.graphics_mmap.seek(0)  # type: ignore[union-attr]
-            gdata = self.graphics_mmap.read(400)  # type: ignore[union-attr]
-            if len(gdata) < 160:
-                return None
-
-            status = struct.unpack("i", gdata[4:8])[0]
-            try:
-                completed_laps = struct.unpack("i", gdata[132:136])[0]
-                position = struct.unpack("i", gdata[136:140])[0]
-                normalized_pos = struct.unpack("f", gdata[152:156])[0]
-                if completed_laps < 0 or completed_laps > 1000 or normalized_pos < -1 or normalized_pos > 2:
-                    completed_laps = struct.unpack("i", gdata[12:16])[0]
-                    position = struct.unpack("i", gdata[16:20])[0]
-                    normalized_pos = struct.unpack("f", gdata[28:32])[0]
-            except Exception:
-                completed_laps = struct.unpack("i", gdata[12:16])[0]
-                position = struct.unpack("i", gdata[16:20])[0]
-                normalized_pos = struct.unpack("f", gdata[28:32])[0]
+            g = SPageFileGraphic.from_buffer_copy(
+                self.graphics_mmap.read(ctypes.sizeof(SPageFileGraphic))  # type: ignore[union-attr]
+            )
 
             return {
-                "packet_id": packet_id,
-                "gas": round(max(0.0, gas), 2),
-                "brake": round(max(0.0, brake), 2),
-                "gear": gear - 1,
-                "rpms": rpms,
-                "velocity": [round(v * 3.6, 1) for v in velocity],
-                "gforce": [round(g, 2) for g in gforce],
-                "status": status,
-                "completed_laps": completed_laps,
-                "position": position,
-                "normalized_pos": round(max(0.0, min(1.0, normalized_pos)), 4),
+                "packet_id": p.packetId,
+                "gas": round(max(0.0, p.gas), 2),
+                "brake": round(max(0.0, p.brake), 2),
+                "gear": p.gear - 1,
+                "rpms": int(p.rpms),
+                "velocity": [round(p.speedKmh, 1), 0, 0],
+                "gforce": [round(p.accG[0], 2), round(p.accG[1], 2), round(p.accG[2], 2)],
+                "status": g.status,
+                "completed_laps": g.completedLaps,
+                "position": g.position,
+                "normalized_pos": round(max(0.0, min(1.0, g.normalizedCarPosition)), 4),
+                "current_lap_time": g.iCurrentTime if g.iCurrentTime > 0 else (str(g.currentTime).strip() or "00:00:00"),
+                "last_lap_time": g.iLastTime if g.iLastTime > 0 else (str(g.lastTime).strip() or "00:00:00"),
+                "best_lap_time": g.iBestTime if g.iBestTime > 0 else (str(g.bestTime).strip() or "00:00:00"),
+                "is_lap_valid": bool(getattr(g, "isValidLap", 1) != 0),
             }
         except Exception:
             return None
