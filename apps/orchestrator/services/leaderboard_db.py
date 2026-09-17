@@ -413,10 +413,6 @@ class LeaderboardDB:
 
         conn = self._connect()
 
-        # Fetch session metadata
-        meta_row = conn.execute(
-            "SELECT track, group_name, MIN(timestamp) as started_at FROM laps WHERE session_id = ?",
-            (session_id,),
         # Find session info (track, group_name, started_at)
         s_row = conn.execute(
             """SELECT track, group_name, MIN(timestamp) as started_at 
