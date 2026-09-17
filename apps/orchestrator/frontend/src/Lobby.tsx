@@ -94,6 +94,10 @@ export default function Lobby() {
         const fetchLobby = async () => {
             try {
                 const res = await fetch('/api/lobby')
+                if (!res.ok) {
+                    console.warn('Lobby fetch returned non-200 status:', res.status)
+                    return
+                }
                 const json = await res.json()
                 setData(json)
             } catch (err) {
