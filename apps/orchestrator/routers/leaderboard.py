@@ -114,9 +114,16 @@ def create_router(state: AppState) -> APIRouter:
         state.upsert_session_best(entry)
         return {"status": "success"}
 
+    @router.post("/leaderboard/clear_session")
+    async def clear_session(payload: dict[str, object] | None = None) -> dict[str, str]:
+        """Clear active/recent session(s) from display."""
+        sid = str(payload.get("session_id")) if payload and payload.get("session_id") else None
+        state.clear_active_session(session_id=sid)
+        return {"status": "success"}
+
     @router.get("/lobby")
     async def get_lobby() -> dict[str, object]:
-        """Public feed for TV displays — session-best per driver, sorted by fastest lap time."""
+        """Public feed for TV displays — includes active sessions, today's best, and all-time records."""
         top_10_all_time = state.leaderboard_db.get_session_best_all(limit=10)
         top_10_today = state.leaderboard_db.get_today_best(limit=10)
         hall_of_fame = state.leaderboard_db.get_hall_of_fame(limit=10)
@@ -132,6 +139,59 @@ def create_router(state: AppState) -> APIRouter:
             for r in state.get_rigs()
             if r.get("status") == "racing"
         ]
+
+        # Multi-session standings builder
+        all_state_sessions = state.get_all_sessions()
+        state_sids = [str(s["session_id"]) for s in all_state_sessions if s.get("session_id")]
+        db_sids = state.leaderboard_db.get_recent_session_ids(limit=5)
+        
+        # Combine unique session IDs preserving order (state active sessions first, then recent DB sessions)
+        seen_sids: set[str] = set()
+        ordered_sids: list[str] = []
+        for sid in state_sids + db_sids:
+            if sid and sid not in seen_sids:
+                seen_sids.add(sid)
+                ordered_sids.append(sid)
+
+        sessions_data: list[dict[str, object]] = []
+        for sid in ordered_sids:
+            s_info = next((s for s in all_state_sessions if s.get("session_id") == sid), None)
+            standings = state.leaderboard_db.get_session_standings(sid)
+            
+            if standings:
+                standings["status"] = s_info.get("status", "finished") if s_info else "finished"
+                if s_info:
+                    if not standings.get("group_name") and s_info.get("group_name"):
+                        standings["group_name"] = s_info.get("group_name")
+                    if not standings.get("track") and s_info.get("track"):
+                        standings["track"] = s_info.get("track")
+                sessions_data.append(standings)
+            elif s_info:
+                # Active session with 0 completed laps yet — create placeholder cards
+                drivers_placeholder = []
+                for idx, rid in enumerate(s_info.get("rig_ids", [])):
+                    rig_obj = state.get_rig(rid)
+                    drivers_placeholder.append({
+                        "position": idx + 1,
+                        "driver_name": rig_obj.get("driver_name") if rig_obj else None,
+                        "rig_id": rid,
+                        "car": rig_obj.get("selected_car") if rig_obj else None,
+                        "track": s_info.get("track"),
+                        "group_name": s_info.get("group_name"),
+                        "best_lap_time_ms": None,
+                        "gap_ms": 0,
+                        "total_laps": 0,
+                        "last_lap_time_ms": None,
+                        "timestamp": None,
+                    })
+                sessions_data.append({
+                    "session_id": sid,
+                    "track": s_info.get("track"),
+                    "group_name": s_info.get("group_name"),
+                    "started_at": s_info.get("started_at"),
+                    "status": s_info.get("status", "racing"),
+                    "drivers": drivers_placeholder,
+                })
 
         def format_entries(entries: list[LeaderboardEntry]) -> list[dict[str, object]]:
             return [
@@ -154,6 +214,9 @@ def create_router(state: AppState) -> APIRouter:
             "active_rigs": active_rigs,
             "total_rigs": len(state.get_rigs()),
             "server_status": state.server_status,
+            "sessions": sessions_data,
+            "current_session": sessions_data[0] if sessions_data else None,
         }
 
     return router
+

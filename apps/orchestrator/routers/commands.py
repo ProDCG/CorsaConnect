@@ -70,10 +70,16 @@ def create_router(state: AppState) -> APIRouter:
 
         if command.action == "KILL_RACE":
             state.update_rig_field(command.rig_id, "kill_requested_at", time.time())
+            state.finish_race_session(rig_ids=[command.rig_id])
         elif command.action == "LAUNCH_RACE":
             # Clear any previous kill guard so the sled's "racing" heartbeat
             # isn't blocked — we're intentionally starting a new race.
             state.update_rig_field(command.rig_id, "kill_requested_at", None)
+            rig_group = next((g for g in state.get_groups() if command.rig_id in g.rig_ids), None)
+            track = command.track or (rig_group.track if rig_group else "monza")
+            gname = rig_group.name if rig_group else f"Solo ({command.rig_id})"
+            gid = rig_group.id if rig_group else None
+            state.start_race_session(track=track, group_name=gname, group_id=gid, rig_ids=[command.rig_id])
 
         if command.action == "SETUP_MODE":
             state.update_rig_field(command.rig_id, "selected_car", None)
@@ -93,6 +99,13 @@ def create_router(state: AppState) -> APIRouter:
         """Send a command to all registered rigs."""
         responses: list[str] = []
         new_status = action_status_map.get(command.action, "idle")
+
+        if command.action == "LAUNCH_RACE":
+            all_rids = [str(r["rig_id"]) for r in state.get_rigs()]
+            track = command.track or "monza"
+            state.start_race_session(track=track, group_name="Global Race", rig_ids=all_rids)
+        elif command.action == "KILL_RACE":
+            state.finish_race_session()
 
         for rig in state.get_rigs():
             rig_id = str(rig["rig_id"])
@@ -167,13 +180,17 @@ def create_router(state: AppState) -> APIRouter:
                 state.update_rig_field(rid, "kill_requested_at", time.time())
                 state.update_rig_field(rid, "last_lap_count", 0)
                 state.update_rig_field(rid, "race_armed", False)
+            state.finish_race_session(rig_ids=list(group.rig_ids))
             logger.info("KILL_RACE: set %d rigs to idle for group '%s'", len(group.rig_ids), group.name)
         elif command.action == "LAUNCH_RACE":
             for rid in group.rig_ids:
                 state.update_rig_field(rid, "kill_requested_at", None)
                 state.update_rig_field(rid, "last_lap_count", 0)
                 state.update_rig_field(rid, "race_armed", False)
-            logger.info("LAUNCH_RACE: cleared kill guard and reset lap counts for %d rigs in group '%s'", len(group.rig_ids), group.name)
+            track = command.track or group.track or "monza"
+            state.start_race_session(track=track, group_name=group.name, group_id=group.id, rig_ids=list(group.rig_ids))
+            logger.info("LAUNCH_RACE: cleared kill guard, started session, and reset lap counts for %d rigs in group '%s'", len(group.rig_ids), group.name)
+
 
         for rig in state.get_group_rigs(group_id):
             rig_id = str(rig["rig_id"])
