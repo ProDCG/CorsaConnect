@@ -33,6 +33,56 @@ class SPageFilePhysics(ctypes.Structure):
         ("speedKmh", ctypes.c_float),
         ("velocity", ctypes.c_float * 3),
         ("accG", ctypes.c_float * 3),
+        ("wheelSlip", ctypes.c_float * 4),
+        ("wheelLoad", ctypes.c_float * 4),
+        ("wheelsPressure", ctypes.c_float * 4),
+        ("wheelAngularSpeed", ctypes.c_float * 4),
+        ("tyreWear", ctypes.c_float * 4),
+        ("tyreDirtyLevel", ctypes.c_float * 4),
+        ("tyreCoreTemperature", ctypes.c_float * 4),
+        ("camberRAD", ctypes.c_float * 4),
+        ("suspensionTravel", ctypes.c_float * 4),
+        ("drs", ctypes.c_float),
+        ("tc", ctypes.c_float),
+        ("heading", ctypes.c_float),
+        ("pitch", ctypes.c_float),
+        ("roll", ctypes.c_float),
+        ("cgHeight", ctypes.c_float),
+        ("carDamage", ctypes.c_float * 5),
+        ("numberOfTyresOut", ctypes.c_int32),
+        ("pitLimiterOn", ctypes.c_int32),
+        ("abs", ctypes.c_float),
+        ("kersCharge", ctypes.c_float),
+        ("kersInput", ctypes.c_float),
+        ("autoShifterOn", ctypes.c_int32),
+        ("rideHeight", ctypes.c_float * 2),
+        ("turboBoost", ctypes.c_float),
+        ("ballast", ctypes.c_float),
+        ("airDensity", ctypes.c_float),
+        ("airTemp", ctypes.c_float),
+        ("roadTemp", ctypes.c_float),
+        ("localAngularVel", ctypes.c_float * 3),
+        ("finalFF", ctypes.c_float),
+        ("performanceMeter", ctypes.c_float),
+        ("engineBrake", ctypes.c_int32),
+        ("ersRecoveryLevel", ctypes.c_int32),
+        ("ersPowerLevel", ctypes.c_int32),
+        ("ersHeatCharging", ctypes.c_int32),
+        ("ersIsCharging", ctypes.c_int32),
+        ("kersCurrentKJ", ctypes.c_float),
+        ("drsAvailable", ctypes.c_int32),
+        ("drsEnabled", ctypes.c_int32),
+        ("brakeTemp", ctypes.c_float * 4),
+        ("clutch", ctypes.c_float),
+        ("tyreTempI", ctypes.c_float * 4),
+        ("tyreTempM", ctypes.c_float * 4),
+        ("tyreTempO", ctypes.c_float * 4),
+        ("isAIControlled", ctypes.c_int32),
+        ("tyreContactPoint", (ctypes.c_float * 3) * 4),
+        ("tyreContactNormal", (ctypes.c_float * 3) * 4),
+        ("tyreContactHeading", (ctypes.c_float * 3) * 4),
+        ("brakeBias", ctypes.c_float),
+        ("localVelocity", ctypes.c_float * 3),
     ]
 
 
@@ -60,6 +110,22 @@ class SPageFileGraphic(ctypes.Structure):
         ("tyreCompound", ctypes.c_wchar * 33),
         ("replayTimeMultiplier", ctypes.c_float),
         ("normalizedCarPosition", ctypes.c_float),
+        ("activeCars", ctypes.c_int32),
+        ("carCoordinates", (ctypes.c_float * 3) * 60),
+        ("carID", ctypes.c_int32 * 60),
+        ("playerCarID", ctypes.c_int32),
+        ("penaltyTime", ctypes.c_float),
+        ("flag", ctypes.c_int32),
+        ("penalty", ctypes.c_int32),
+        ("idealLineOn", ctypes.c_int32),
+        ("isInPitLane", ctypes.c_int32),
+        ("surfaceGrip", ctypes.c_float),
+        ("mandatoryPitDone", ctypes.c_int32),
+        ("windSpeed", ctypes.c_float),
+        ("windDirection", ctypes.c_float),
+        ("isSetupMenuVisible", ctypes.c_int32),
+        ("mainTrackIndex", ctypes.c_int32),
+        ("isValidLap", ctypes.c_int32),
     ]
 
 
@@ -96,6 +162,14 @@ def run_sidecar(udp_port: int = 9996) -> None:
             graphic_mem.seek(0)
             g = SPageFileGraphic.from_buffer_copy(graphic_mem.read(ctypes.sizeof(SPageFileGraphic)))
 
+            # Check validity
+            is_valid = (
+                bool(getattr(g, "isValidLap", 1) != 0)
+                and (getattr(p, "numberOfTyresOut", 0) < 3)
+                and (getattr(g, "penaltyTime", 0.0) <= 0)
+                and (getattr(g, "penalty", 0) <= 0)
+            )
+
             # Build payload
             payload = {
                 "packet_id": p.packetId,
@@ -112,7 +186,7 @@ def run_sidecar(udp_port: int = 9996) -> None:
                 "current_lap_time": g.iCurrentTime if g.iCurrentTime > 0 else (str(g.currentTime).strip() or "00:00:00"),
                 "last_lap_time": g.iLastTime if g.iLastTime > 0 else (str(g.lastTime).strip() or "00:00:00"),
                 "best_lap_time": g.iBestTime if g.iBestTime > 0 else (str(g.bestTime).strip() or "00:00:00"),
-                "is_lap_valid": bool(getattr(g, "isValidLap", 1) != 0),
+                "is_lap_valid": is_valid,
             }
 
             sock.sendto(json.dumps(payload).encode("utf-8"), (UDP_IP, udp_port))
