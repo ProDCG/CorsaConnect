@@ -54,6 +54,18 @@ def create_router(state: AppState) -> APIRouter:
             
         return payload
 
+    def _check_and_notify_podiums(finished_sids: list[str], bg_tasks: BackgroundTasks) -> None:
+        webhook_url = getattr(state.settings, "discord_webhook_url", None)
+        notify_podiums = getattr(state.settings, "discord_notify_podiums", False)
+        if not webhook_url or not notify_podiums or not finished_sids:
+            return
+
+        from apps.orchestrator.services.discord import notify_session_podium
+        for sid in finished_sids:
+            standings = state.leaderboard_db.get_session_standings(sid)
+            if standings:
+                bg_tasks.add_task(notify_session_podium, str(webhook_url), standings)
+
     @router.post("/command")
     async def send_command(command: Command, background_tasks: BackgroundTasks) -> dict[str, str]:
         """Send a command to a single rig."""
@@ -70,7 +82,8 @@ def create_router(state: AppState) -> APIRouter:
 
         if command.action == "KILL_RACE":
             state.update_rig_field(command.rig_id, "kill_requested_at", time.time())
-            state.finish_race_session(rig_ids=[command.rig_id])
+            finished_sids = state.finish_race_session(rig_ids=[command.rig_id])
+            _check_and_notify_podiums(finished_sids, background_tasks)
         elif command.action == "LAUNCH_RACE":
             # Clear any previous kill guard so the sled's "racing" heartbeat
             # isn't blocked — we're intentionally starting a new race.
@@ -90,7 +103,6 @@ def create_router(state: AppState) -> APIRouter:
             return {"status": "success", "message": f"Web kiosk {command.rig_id} updated"}
 
         payload = _prepare_payload(command, rig)
-
         background_tasks.add_task(dispatch_command, str(rig["ip"]), COMMAND_PORT, payload)
         return {"status": "success", "message": f"Command dispatched to {command.rig_id}"}
 
@@ -105,7 +117,8 @@ def create_router(state: AppState) -> APIRouter:
             track = command.track or "monza"
             state.start_race_session(track=track, group_name="Global Race", rig_ids=all_rids)
         elif command.action == "KILL_RACE":
-            state.finish_race_session()
+            finished_sids = state.finish_race_session()
+            _check_and_notify_podiums(finished_sids, background_tasks)
 
         for rig in state.get_rigs():
             rig_id = str(rig["rig_id"])
@@ -186,7 +199,8 @@ def create_router(state: AppState) -> APIRouter:
                 state.update_rig_field(rid, "kill_requested_at", time.time())
                 state.update_rig_field(rid, "last_lap_count", 0)
                 state.update_rig_field(rid, "race_armed", False)
-            state.finish_race_session(rig_ids=list(group.rig_ids))
+            finished_sids = state.finish_race_session(rig_ids=list(group.rig_ids))
+            _check_and_notify_podiums(finished_sids, background_tasks)
             logger.info("KILL_RACE: set %d rigs to idle for group '%s'", len(group.rig_ids), group.name)
         elif command.action == "LAUNCH_RACE":
             for rid in group.rig_ids:

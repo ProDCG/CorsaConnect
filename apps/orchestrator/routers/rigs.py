@@ -230,11 +230,18 @@ def create_router(state: AppState) -> APIRouter:
                                 lap_time_ms = _parse_lap_time_ms(raw_time)
 
                             if lap_time_ms and lap_time_ms > 0:
+                                track_name = rig_group.track if rig_group else None
+                                prev_best_ms: int | None = None
+                                if track_name:
+                                    existing_bests = state.leaderboard_db.get_by_track(track_name, limit=1)
+                                    if existing_bests and existing_bests[0].lap_time_ms:
+                                        prev_best_ms = existing_bests[0].lap_time_ms
+
                                 entry = LeaderboardEntry(
                                     rig_id=rig_id,
                                     driver_name=str(rig.get("driver_name", "")) or None,
                                     car=str(rig.get("selected_car", "")),
-                                    track=rig_group.track if rig_group else None,
+                                    track=track_name,
                                     group_name=rig_group.name if rig_group else None,
                                     lap=int(completed),
                                     lap_time_ms=lap_time_ms,
@@ -247,6 +254,23 @@ def create_router(state: AppState) -> APIRouter:
                                     "Recorded lap for %s (driver: %s): lap %d, time: %d ms",
                                     rig_id, entry.driver_name, completed, lap_time_ms
                                 )
+
+                                # Check Discord notification for new all-time track record
+                                webhook_url = getattr(state.settings, "discord_webhook_url", None)
+                                notify_records = getattr(state.settings, "discord_notify_records", True)
+                                if webhook_url and notify_records and track_name:
+                                    if prev_best_ms is None or lap_time_ms < prev_best_ms:
+                                        from apps.orchestrator.services.discord import notify_track_record
+                                        background_tasks.add_task(
+                                            notify_track_record,
+                                            str(webhook_url),
+                                            entry.driver_name or "",
+                                            track_name,
+                                            entry.car or "",
+                                            lap_time_ms,
+                                            rig_id,
+                                            prev_best_ms,
+                                        )
 
         # Service connectivity indicators
         if update.simhub_connected is not None:

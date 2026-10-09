@@ -551,32 +551,39 @@ class AppState:
         logger.info("Started new race session: %s (%s @ %s, rigs=%s)", session_id, group_name, track, rig_ids)
         return session_id
 
-    def finish_race_session(self, session_id: str | None = None, rig_ids: list[str] | None = None) -> None:
-        """Mark sessions as finished."""
+    def finish_race_session(self, session_id: str | None = None, rig_ids: list[str] | None = None) -> list[str]:
+        """Mark sessions as finished and return the finished session IDs."""
+        finished_sids: list[str] = []
         with self._lock:
             if not hasattr(self, "_sessions"):
                 self._sessions = {}
             now = time.time()
             if session_id and session_id in self._sessions:
-                self._sessions[session_id]["status"] = "finished"
-                self._sessions[session_id]["finished_at"] = now
-                logger.info("Finished race session: %s", session_id)
+                if self._sessions[session_id].get("status") != "finished":
+                    self._sessions[session_id]["status"] = "finished"
+                    self._sessions[session_id]["finished_at"] = now
+                    finished_sids.append(session_id)
+                    logger.info("Finished race session: %s", session_id)
             elif rig_ids:
                 for sid, sdata in self._sessions.items():
                     s_rids = sdata.get("rig_ids", [])
                     if any(r in s_rids for r in rig_ids):
-                        sdata["status"] = "finished"
-                        sdata["finished_at"] = now
-                        logger.info("Finished race session for rigs %s: %s", rig_ids, sid)
+                        if sdata.get("status") != "finished":
+                            sdata["status"] = "finished"
+                            sdata["finished_at"] = now
+                            finished_sids.append(sid)
+                            logger.info("Finished race session for rigs %s: %s", rig_ids, sid)
             else:
                 for sid, sdata in self._sessions.items():
                     if sdata.get("status") == "racing":
                         sdata["status"] = "finished"
                         sdata["finished_at"] = now
+                        finished_sids.append(sid)
                 if self._active_session:
                     self._active_session["status"] = "finished"
                     self._active_session["finished_at"] = now
-                logger.info("Finished all active race sessions")
+                logger.info("Finished all active race sessions: %s", finished_sids)
+        return finished_sids
 
     def clear_active_session(self, session_id: str | None = None) -> None:
         """Manually clear session(s)."""
