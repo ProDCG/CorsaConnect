@@ -12,7 +12,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from apps.orchestrator.routers import commands, groups, leaderboard, mumble, rigs, server, settings
+from apps.orchestrator.routers import commands, drivers, groups, leaderboard, mumble, rigs, server, settings, stream
 from apps.orchestrator.services.heartbeat import stale_rig_reaper, start_heartbeat_listener
 from apps.orchestrator.services.mumble_service import MumbleService
 from apps.orchestrator.state import AppState
@@ -79,14 +79,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount routers
-app.include_router(rigs.create_router(state))
-app.include_router(commands.create_router(state))
-app.include_router(groups.create_router(state))
-app.include_router(settings.create_router(state))
-app.include_router(server.create_router(state))
-app.include_router(leaderboard.create_router(state))
-app.include_router(mumble.create_router(state, mumble_svc))
+# Mount routers (both at root and with /api prefix for transparent reverse proxy compatibility)
+_routers = [
+    rigs.create_router(state),
+    commands.create_router(state),
+    groups.create_router(state),
+    settings.create_router(state),
+    server.create_router(state),
+    leaderboard.create_router(state),
+    mumble.create_router(state, mumble_svc),
+    drivers.create_router(state),
+    stream.create_router(state),
+]
+for r in _routers:
+    app.include_router(r)
+    app.include_router(r, prefix="/api")
 
 
 # ---------------------------------------------------------------------------

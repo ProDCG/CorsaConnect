@@ -27,6 +27,26 @@ def create_router(state: AppState) -> APIRouter:
         state.settings = update
         return {"status": "success", "settings": update.model_dump()}
 
+    @router.post("/settings/discord/test")
+    async def test_discord_webhook(payload: dict[str, str] | None = None) -> dict[str, object]:
+        url = (payload.get("webhook_url") if payload else None) or getattr(state.settings, "discord_webhook_url", None)
+        if not url:
+            return {"status": "error", "message": "No webhook URL provided or configured"}
+        from apps.orchestrator.services.discord import send_discord_webhook
+        try:
+            send_discord_webhook(
+                str(url),
+                title="🏁 Ridge-Link Discord Integration Test",
+                description="Your Discord webhook integration is functioning properly!",
+                fields=[
+                    {"name": "Status", "value": "Online", "inline": True},
+                    {"name": "Server", "value": "CorsaConnect Orchestrator", "inline": True},
+                ],
+            )
+            return {"status": "success", "message": "Test notification dispatched"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     @router.get("/carpool")
     async def get_carpool() -> list[str]:
         return state.car_pool
@@ -73,10 +93,25 @@ def create_router(state: AppState) -> APIRouter:
         return {"status": "success"}
 
     @router.post("/sync")
-    async def sync_all_rigs(background_tasks: BackgroundTasks) -> dict[str, object]:
-        """Trigger a SYNC_MODS command on every connected rig."""
+    async def sync_all_rigs(
+        background_tasks: BackgroundTasks,
+        payload_data: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        """Trigger a safe SYNC_MODS command on every connected rig."""
         responses: list[str] = []
-        content_folder = state.settings.content_folder
+        sync_source = (
+            (str(payload_data.get("sync_source_path")) if payload_data and payload_data.get("sync_source_path") else None)
+            or getattr(state.settings, "sync_source_path", None)
+            or state.settings.content_folder
+        )
+        sync_target = (
+            (str(payload_data.get("sync_target_path")) if payload_data and payload_data.get("sync_target_path") else None)
+            or getattr(state.settings, "sync_target_path", None)
+            or r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa"
+        )
+        sync_cars = bool(payload_data.get("sync_cars", True)) if payload_data and "sync_cars" in payload_data else True
+        sync_tracks = bool(payload_data.get("sync_tracks", True)) if payload_data and "sync_tracks" in payload_data else True
+
         for rig in state.get_rigs():
             rig_id = str(rig["rig_id"])
             ip = str(rig.get("ip", ""))
@@ -84,11 +119,21 @@ def create_router(state: AppState) -> APIRouter:
                 payload = {
                     "rig_id": rig_id,
                     "action": "SYNC_MODS",
-                    "content_folder": content_folder,
+                    "sync_source_path": sync_source,
+                    "sync_target_path": sync_target,
+                    "sync_cars": sync_cars,
+                    "sync_tracks": sync_tracks,
                 }
                 background_tasks.add_task(dispatch_command, ip, COMMAND_PORT, payload)
                 responses.append(rig_id)
-        return {"status": "success", "synced_rigs": responses, "content_folder": content_folder}
+        return {
+            "status": "success",
+            "synced_rigs": responses,
+            "sync_source_path": sync_source,
+            "sync_target_path": sync_target,
+            "sync_cars": sync_cars,
+            "sync_tracks": sync_tracks,
+        }
 
     @router.get("/catalogs")
     async def get_catalogs() -> dict[str, object]:

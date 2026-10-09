@@ -91,11 +91,12 @@ export default function Lobby() {
     const ROTATION_INTERVAL = 15 // seconds
 
     useEffect(() => {
+        let es: EventSource | null = null
+
         const fetchLobby = async () => {
             try {
                 const res = await fetch('/api/lobby')
                 if (!res.ok) {
-                    console.warn('Lobby fetch returned non-200 status:', res.status)
                     return
                 }
                 const json = await res.json()
@@ -104,9 +105,25 @@ export default function Lobby() {
                 console.error('Lobby fetch failed:', err)
             }
         }
+
         fetchLobby()
-        const interval = setInterval(fetchLobby, 1000)
-        return () => clearInterval(interval)
+
+        // Connect to SSE stream for instantaneous push notifications
+        try {
+            es = new EventSource('/stream/live')
+            es.addEventListener('state_update', () => {
+                fetchLobby()
+            })
+        } catch (e) {
+            // SSE connection fallback
+        }
+
+        // Relaxed 5-second polling loop as safety fallback
+        const interval = setInterval(fetchLobby, 5000)
+        return () => {
+            clearInterval(interval)
+            es?.close()
+        }
     }, [])
 
     // Auto-rotation timer

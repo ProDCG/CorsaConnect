@@ -113,8 +113,17 @@ class CommandHandler:
             self.agent.status = "syncing"
             try:
                 from apps.sled.launcher import sync_mods
-                content_folder = str(payload.get("content_folder", self.config.admin_shared_folder))
-                sync_mods(self.config, source_override=content_folder)
+                source_folder = str(payload.get("sync_source_path") or payload.get("content_folder") or self.config.admin_shared_folder)
+                target_folder = str(payload.get("sync_target_path") or self.config.local_ac_folder)
+                sync_cars = bool(payload.get("sync_cars", True))
+                sync_tracks = bool(payload.get("sync_tracks", True))
+                sync_mods(
+                    self.config,
+                    source_override=source_folder,
+                    target_override=target_folder,
+                    sync_cars=sync_cars,
+                    sync_tracks=sync_tracks,
+                )
                 self.agent.status = "idle"
                 logger.info("Mod sync complete")
             except Exception as e:

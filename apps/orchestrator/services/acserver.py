@@ -803,9 +803,8 @@ class ACServerManager:
                 if rc and rc != "None" and rc in cars:
                     rig_car = rc
                 else:
-                    # No car selected — pick a random one from the pool
-                    import random
-                    rig_car = random.choice(cars) if cars else default_car
+                    # No car selected — assign default car from the pool
+                    rig_car = default_car
                     logger.info("Rig '%s' has no car selected — auto-assigned '%s'", rig_id, rig_car)
                 dn = rig.get("driver_name")
                 if dn and str(dn).strip():

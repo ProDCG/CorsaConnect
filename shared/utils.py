@@ -14,31 +14,33 @@ def get_local_ip() -> str:
         pass
 
     # 2. Fall back to standard route detection
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        # Try a public IP first (works if default route exists)
-        s.connect(("8.8.8.8", 80))
-        resolved_ip = str(s.getsockname()[0])
-        # If this resolved to a different adapter, but we have a 192.168.10.x, we still want that
-        return resolved_ip
-    except Exception:
-        pass
-
-    try:
-        # Try local broadcast - this often works offline to find the primary interface
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        s.connect(("<broadcast>", 0))
-        return str(s.getsockname()[0])
-    except Exception:
-        pass
-
-    # Try some common private network gateways as a fallback
-    for ip in ["192.168.10.1", "192.168.1.1", "10.0.0.1", "172.16.0.1", "192.168.0.1", "192.168.9.1"]:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            s.connect((ip, 80))
+            # Try a public IP first (works if default route exists)
+            s.connect(("8.8.8.8", 80))
             return str(s.getsockname()[0])
         except Exception:
             pass
+
+        try:
+            # Try local broadcast - this often works offline to find the primary interface
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            s.connect(("<broadcast>", 0))
+            return str(s.getsockname()[0])
+        except Exception:
+            pass
+
+        # Try some common private network gateways as a fallback
+        for ip in ["192.168.10.1", "192.168.1.1", "10.0.0.1", "172.16.0.1", "192.168.0.1", "192.168.9.1"]:
+            try:
+                s.connect((ip, 80))
+                return str(s.getsockname()[0])
+            except Exception:
+                pass
+        s.close()
+    except Exception:
+        pass
 
     # Fallback to hostname resolution
     try:
@@ -47,5 +49,5 @@ def get_local_ip() -> str:
             return ip
     except Exception:
         pass
-        
+
     return "127.0.0.1"

@@ -24,7 +24,14 @@ CREATE TABLE IF NOT EXISTS laps (
     lap           INTEGER NOT NULL DEFAULT 0,
     lap_time_ms   INTEGER,
     session_id    TEXT,
-    timestamp     REAL NOT NULL
+    timestamp     REAL NOT NULL,
+    driver_email  TEXT,
+    driver_phone  TEXT,
+    driver_uuid   TEXT,
+    weather       TEXT,
+    session_type  TEXT,
+    notification_pending BOOLEAN DEFAULT 0,
+    is_valid      BOOLEAN DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS idx_laps_track ON laps(track);
 CREATE INDEX IF NOT EXISTS idx_laps_session ON laps(session_id);
@@ -42,6 +49,15 @@ CREATE TABLE IF NOT EXISTS session_best (
     timestamp     REAL NOT NULL,
     PRIMARY KEY (rig_id, session_id)
 );
+
+CREATE TABLE IF NOT EXISTS drivers (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    driver_uuid   TEXT NOT NULL UNIQUE,
+    display_name  TEXT NOT NULL,
+    email         TEXT UNIQUE,
+    phone         TEXT,
+    created_at    REAL NOT NULL
+);
 """
 
 
@@ -57,6 +73,21 @@ class LeaderboardDB:
         with self._lock:
             conn = sqlite3.connect(self._db_path)
             conn.executescript(_SCHEMA)
+            # Run column migrations if laps existed before newer columns
+            for col, col_type in [
+                ("driver_email", "TEXT"),
+                ("driver_phone", "TEXT"),
+                ("driver_uuid", "TEXT"),
+                ("weather", "TEXT"),
+                ("session_type", "TEXT"),
+                ("notification_pending", "BOOLEAN DEFAULT 0"),
+                ("is_valid", "BOOLEAN DEFAULT 1"),
+            ]:
+                try:
+                    conn.execute(f"ALTER TABLE laps ADD COLUMN {col} {col_type}")
+                except sqlite3.OperationalError:
+                    pass
+            conn.commit()
             conn.close()
 
     def _connect(self) -> sqlite3.Connection:
@@ -69,8 +100,9 @@ class LeaderboardDB:
         with self._lock:
             conn = self._connect()
             conn.execute(
-                """INSERT INTO laps (rig_id, driver_name, car, track, group_name, lap, lap_time_ms, session_id, timestamp)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO laps (rig_id, driver_name, car, track, group_name, lap, lap_time_ms, session_id, timestamp,
+                                     driver_email, driver_phone, driver_uuid, weather, session_type, notification_pending, is_valid)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     entry.rig_id,
                     entry.driver_name,
@@ -81,6 +113,13 @@ class LeaderboardDB:
                     entry.lap_time_ms,
                     entry.session_id,
                     entry.timestamp,
+                    entry.driver_email,
+                    entry.driver_phone,
+                    entry.driver_uuid,
+                    entry.weather,
+                    entry.session_type,
+                    1 if entry.notification_pending else 0,
+                    1 if entry.is_valid else 0,
                 ),
             )
             conn.commit()
@@ -132,13 +171,20 @@ class LeaderboardDB:
                 id=dict(r).get("id"),
                 rig_id=r["rig_id"],
                 driver_name=r["driver_name"],
+                driver_email=dict(r).get("driver_email"),
+                driver_phone=dict(r).get("driver_phone"),
+                driver_uuid=dict(r).get("driver_uuid"),
                 car=r["car"],
                 track=r["track"],
+                weather=dict(r).get("weather"),
                 group_name=r["group_name"],
+                session_type=dict(r).get("session_type"),
                 lap=r["lap"],
                 lap_time_ms=r["lap_time_ms"],
                 session_id=r["session_id"],
                 timestamp=r["timestamp"],
+                notification_pending=bool(dict(r).get("notification_pending", 0)),
+                is_valid=bool(dict(r).get("is_valid", 1) if dict(r).get("is_valid") is not None else True),
             )
             for r in rows
         ]
@@ -503,4 +549,138 @@ class LeaderboardDB:
         ).fetchall()
         conn.close()
         return [r["session_id"] for r in rows if r["session_id"]]
+
+    def get_filtered_leaderboard(
+        self,
+        track: str | None = None,
+        car: str | None = None,
+        weather: str | None = None,
+        time_window: str | None = None,
+        limit: int = 100,
+    ) -> list[LeaderboardEntry]:
+        """Query leaderboard with multi-parameter filtering and time windows."""
+        from datetime import datetime, timedelta
+
+        conn = self._connect()
+        query = "SELECT * FROM laps WHERE lap_time_ms IS NOT NULL AND lap_time_ms > 0"
+        params: list[object] = []
+
+        if track:
+            query += " AND track = ?"
+            params.append(track)
+        if car:
+            query += " AND car = ?"
+            params.append(car)
+        if weather:
+            query += " AND weather = ?"
+            params.append(weather)
+
+        if time_window and time_window != "all_time":
+            now = datetime.now()
+            threshold = None
+            if time_window == "day":
+                threshold = now - timedelta(days=1)
+            elif time_window == "week":
+                threshold = now - timedelta(weeks=1)
+            elif time_window == "month":
+                threshold = now - timedelta(days=30)
+            elif time_window == "year":
+                threshold = now - timedelta(days=365)
+
+            if threshold:
+                query += " AND timestamp >= ?"
+                params.append(threshold.timestamp())
+
+        query += " ORDER BY lap_time_ms ASC LIMIT ?"
+        params.append(limit)
+
+        rows = conn.execute(query, tuple(params)).fetchall()
+        conn.close()
+        return self._rows_to_entries(rows)
+
+    def get_drivers(self) -> list[dict[str, object]]:
+        """Return all registered drivers."""
+        conn = self._connect()
+        rows = conn.execute("SELECT * FROM drivers ORDER BY display_name ASC").fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+    def upsert_driver(
+        self,
+        display_name: str,
+        email: str | None = None,
+        phone: str | None = None,
+        driver_uuid: str | None = None,
+    ) -> dict[str, object]:
+        """Insert or update a registered driver."""
+        import uuid as _uuid
+        conn = self._connect()
+        uuid_val = driver_uuid or f"drv_{_uuid.uuid4().hex[:8]}"
+        now = time.time()
+        conn.execute(
+            """INSERT INTO drivers (driver_uuid, display_name, email, phone, created_at)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(driver_uuid) DO UPDATE SET
+                   display_name = excluded.display_name,
+                   email = excluded.email,
+                   phone = excluded.phone""",
+            (uuid_val, display_name, email, phone, now),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM drivers WHERE driver_uuid = ?", (uuid_val,)).fetchone()
+        conn.close()
+        return dict(row) if row else {"driver_uuid": uuid_val, "display_name": display_name}
+
+    def delete_driver(self, driver_uuid: str) -> bool:
+        """Delete a registered driver by UUID."""
+        conn = self._connect()
+        conn.execute("DELETE FROM drivers WHERE driver_uuid = ?", (driver_uuid,))
+        conn.commit()
+        conn.close()
+        return True
+
+    def get_raw_laps(
+        self,
+        track: str | None = None,
+        car: str | None = None,
+        driver_name: str | None = None,
+        is_valid: bool | None = None,
+        limit: int = 150,
+        offset: int = 0,
+    ) -> list[LeaderboardEntry]:
+        """Fetch raw lap entries with optional filtering, search, and pagination."""
+        conn = self._connect()
+        query = "SELECT * FROM laps WHERE 1=1"
+        params: list[object] = []
+        if track:
+            query += " AND track = ?"
+            params.append(track)
+        if car:
+            query += " AND car = ?"
+            params.append(car)
+        if driver_name:
+            query += " AND (driver_name LIKE ? OR rig_id LIKE ?)"
+            params.append(f"%{driver_name}%")
+            params.append(f"%{driver_name}%")
+        if is_valid is not None:
+            query += " AND is_valid = ?"
+            params.append(1 if is_valid else 0)
+        query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        rows = conn.execute(query, tuple(params)).fetchall()
+        conn.close()
+        return self._rows_to_entries(rows)
+
+    def toggle_lap_validity(self, lap_id: int) -> bool:
+        """Toggle the is_valid status of a specific lap record."""
+        conn = self._connect()
+        row = conn.execute("SELECT is_valid FROM laps WHERE id = ?", (lap_id,)).fetchone()
+        if not row:
+            conn.close()
+            return False
+        new_val = 0 if row["is_valid"] else 1
+        conn.execute("UPDATE laps SET is_valid = ? WHERE id = ?", (new_val, lap_id))
+        conn.commit()
+        conn.close()
+        return True
 

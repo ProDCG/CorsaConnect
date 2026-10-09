@@ -20,19 +20,27 @@ def create_router(state: AppState) -> APIRouter:
     @router.get("/leaderboard")
     async def get_leaderboard(
         track: str | None = Query(None),
+        car: str | None = Query(None),
+        weather: str | None = Query(None),
+        time_window: str | None = Query(None),
         session_id: str | None = Query(None),
         group: str | None = Query(None),
-        view: str | None = Query(None),  # "recent", "session_best", "all_best", "today"
+        view: str | None = Query(None),  # "recent", "session_best", "all_best", "today", "filtered"
         sort_desc: bool = Query(False),
     ) -> list[LeaderboardEntry]:
         """Full leaderboard data for the admin dashboard.
 
-        Supports filtering by track, session_id, group, or view modes:
+        Supports filtering by track, car, weather, time_window, session_id, group, or view modes:
           - "today"        → best laps from today
           - "recent"       → most recent session's raw laps
           - "session_best" → peak performance per driver (current session)
           - "all_best"     → peak performance per driver (all sessions)
+          - "filtered"     → multi-parameter filter (track, car, weather, time_window)
         """
+        if view == "filtered" or car or weather or time_window:
+            return state.leaderboard_db.get_filtered_leaderboard(
+                track=track, car=car, weather=weather, time_window=time_window
+            )
         if view == "today":
             return state.leaderboard_db.get_today_best(track=track, sort_desc=sort_desc)
         if view == "session_best":
@@ -46,6 +54,28 @@ def create_router(state: AppState) -> APIRouter:
         if track:
             return state.leaderboard_db.get_by_track(track)
         return state.leaderboard
+
+    @router.get("/leaderboard/laps")
+    async def get_raw_laps(
+        track: str | None = Query(None),
+        car: str | None = Query(None),
+        driver_name: str | None = Query(None),
+        is_valid: bool | None = Query(None),
+        limit: int = Query(150),
+        offset: int = Query(0),
+    ) -> list[LeaderboardEntry]:
+        """Return list of all recorded laps with telemetry details."""
+        return state.leaderboard_db.get_raw_laps(
+            track=track, car=car, driver_name=driver_name, is_valid=is_valid, limit=limit, offset=offset
+        )
+
+    @router.post("/leaderboard/laps/{record_id}/toggle_valid")
+    async def toggle_lap_valid(record_id: int) -> dict[str, object]:
+        """Toggle lap validity (e.g. invalidate track-limit violations or restore)."""
+        success = state.leaderboard_db.toggle_lap_validity(record_id)
+        if success:
+            return {"status": "success", "record_id": record_id}
+        return {"status": "error", "message": "Record not found"}
 
     @router.delete("/leaderboard")
     async def clear_leaderboard() -> dict[str, str]:
