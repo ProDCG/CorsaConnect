@@ -66,13 +66,13 @@ export const Sidebar: React.FC<{
         >
             {/* Top Branding & Collapse Button */}
             <div>
-                <div className="p-4 border-b border-white/10 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-600/30">
-                            <Zap className="w-5 h-5 text-white" />
-                        </div>
-                        {!isCollapsed && (
-                            <div className="overflow-hidden">
+                <div className={`p-4 border-b border-white/10 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between gap-2'}`}>
+                    {!isCollapsed && (
+                        <div className="flex items-center gap-3 overflow-hidden min-w-0">
+                            <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-600/30">
+                                <Zap className="w-5 h-5 text-white" />
+                            </div>
+                            <div className="overflow-hidden min-w-0">
                                 <div className="text-sm font-black tracking-wider uppercase text-white truncate">
                                     CorsaConnect
                                 </div>
@@ -80,15 +80,15 @@ export const Sidebar: React.FC<{
                                     Ridge-Link Fleet
                                 </div>
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
 
                     <button
                         onClick={() => setIsCollapsed(!isCollapsed)}
-                        className="p-1.5 text-white/40 hover:text-white hover:bg-white/5 rounded-lg transition-colors shrink-0"
+                        className="p-2 text-white/40 hover:text-white hover:bg-white/5 rounded-lg transition-colors shrink-0"
                         title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                     >
-                        {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+                        {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={16} />}
                     </button>
                 </div>
 

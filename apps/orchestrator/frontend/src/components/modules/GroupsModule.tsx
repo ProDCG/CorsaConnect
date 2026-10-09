@@ -14,49 +14,10 @@ interface QuickPreset {
     car: string
 }
 
-const POPULAR_PRESETS: QuickPreset[] = [
-    {
-        id: 'gt3_spa',
-        title: 'GT3 Sprint at Spa',
-        track: 'spa',
-        carClass: 'GT3 Class',
-        laps: 8,
-        desc: 'High speed competitive racing through Eau Rouge and Blanchimont.',
-        car: 'ks_ferrari_488_gt3',
-    },
-    {
-        id: 'monza_shootout',
-        title: 'Monza Temple of Speed',
-        track: 'monza',
-        carClass: 'Supercars',
-        laps: 5,
-        desc: 'Maximum top-speed braking battles into the Prima Variante.',
-        car: 'ks_porsche_911_gt3_rs',
-    },
-    {
-        id: 'nordschleife_hotlap',
-        title: 'Nordschleife Hotlap',
-        track: 'nurburgring',
-        carClass: 'Hypercars',
-        laps: 1,
-        desc: 'The Green Hell. 20.8 km of pure adrenaline and technical precision.',
-        car: 'ks_ferrari_488_gt3',
-    },
-    {
-        id: 'silverstone_drift',
-        title: 'Silverstone Grand Prix',
-        track: 'silverstone',
-        carClass: 'Open GT',
-        laps: 6,
-        desc: 'Historic sweeping corners: Copse, Maggotts, and Becketts.',
-        car: 'ks_mercedes_amg_gt3',
-    },
-]
-
 export const GroupsModule: React.FC<{
     catalogCars?: any[]
     catalogTracks?: any[]
-    onQuickLaunchGroup?: (preset: QuickPreset) => void
+    onQuickLaunchGroup?: (preset: any) => void
 }> = () => {
     const { groups, rigs, refresh } = useLiveStream()
     const [launchingPreset, setLaunchingPreset] = useState<string | null>(null)
@@ -237,73 +198,17 @@ export const GroupsModule: React.FC<{
                 </div>
             )}
 
-            {/* Quick Starts UI Header */}
-            <div className="bg-ridge-panel border border-white/10 rounded-2xl p-5">
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                        <Sparkles size={18} className="text-ridge-brand" />
-                        <h3 className="text-sm font-black text-white uppercase tracking-wider">Quick Starts</h3>
-                    </div>
-                    <span className="text-xs text-white/40">Select a pre-configured battle to arm rigs</span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {POPULAR_PRESETS.map(preset => {
-                        const isApplying = launchingPreset === preset.id
-
-                        return (
-                            <div
-                                key={preset.id}
-                                className="bg-[#181818] border border-white/10 hover:border-ridge-brand/50 rounded-xl p-4 flex flex-col justify-between transition-all group"
-                            >
-                                <div>
-                                    <div className="flex items-center justify-between text-xs mb-2">
-                                        <span className="px-2 py-0.5 rounded bg-ridge-brand/20 text-ridge-brand text-[10px] font-black uppercase tracking-wider">
-                                            {preset.carClass}
-                                        </span>
-                                        <span className="text-white/40 font-mono text-[11px]">{preset.laps} Laps</span>
-                                    </div>
-                                    <h4 className="font-bold text-white text-sm mb-1 group-hover:text-ridge-brand transition-colors">
-                                        {preset.title}
-                                    </h4>
-                                    <p className="text-[11px] text-white/50 leading-relaxed mb-4">
-                                        {preset.desc}
-                                    </p>
-                                </div>
-
-                                <button
-                                    disabled={isApplying}
-                                    onClick={() => handleApplyPreset(preset)}
-                                    className={`w-full py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
-                                        isApplying
-                                            ? 'bg-emerald-500 text-white'
-                                            : 'bg-white/10 hover:bg-ridge-brand text-white'
-                                    }`}
-                                >
-                                    {isApplying ? (
-                                        <>
-                                            <Check size={14} /> Armed to Group!
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Zap size={14} /> Arm Preset
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                        )
-                    })}
-                </div>
-            </div>
-
-            {/* Saved Lineups & Group Presets Section */}
+            {/* Quick Starts & Saved Lineups Section */}
             <div className="bg-ridge-panel border border-white/10 rounded-2xl p-5 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                        <ShieldCheck size={18} className="text-emerald-400" />
-                        <h3 className="text-sm font-black text-white uppercase tracking-wider">
-                            Saved Lineups & Group Presets
-                        </h3>
+                        <Sparkles size={18} className="text-ridge-brand" />
+                        <div>
+                            <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                                Quick Starts & Saved Lineups
+                            </h3>
+                            <p className="text-xs text-white/40">1-click arm saved presets to active racing groups</p>
+                        </div>
                     </div>
                     <button
                         onClick={() => setShowSaveLineupModal(true)}
@@ -314,8 +219,10 @@ export const GroupsModule: React.FC<{
                 </div>
 
                 {savedLineups.length === 0 ? (
-                    <div className="py-8 text-center text-white/40 border border-dashed border-white/10 rounded-xl text-xs">
-                        No saved lineups found. Configure a group below and click "Save Current Lineup As Preset".
+                    <div className="py-8 px-4 text-center bg-black/20 border border-dashed border-white/10 rounded-xl">
+                        <Sparkles className="w-6 h-6 text-white/20 mx-auto mb-2" />
+                        <p className="text-xs text-white/50 font-bold uppercase tracking-wider">No presets saved</p>
+                        <p className="text-[11px] text-white/30 mt-1">Configure a group below and click "Save Current Lineup As Preset" to create your first quick-start preset.</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

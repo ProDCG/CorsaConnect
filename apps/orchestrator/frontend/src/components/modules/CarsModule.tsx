@@ -26,30 +26,8 @@ export const CarsModule: React.FC = () => {
     const [isLoading, setIsLoading] = useState<boolean>(true)
     const [statusMsg, setStatusMsg] = useState<string | null>(null)
 
-    // Car Subtype Presets
-    const [presets, setPresets] = useState<CarPreset[]>([
-        {
-            id: 'gt3_pack',
-            name: 'GT3 Competition Pack',
-            car_ids: ['ks_ferrari_488_gt3', 'ks_porsche_911_gt3_rs', 'ks_mercedes_amg_gt3', 'ks_audi_r8_lms', 'ks_mclaren_650s_gt3', 'ks_lamborghini_huracan_gt3', 'ks_bmw_m6_gt3', 'ks_nissan_gt_r_gt3'],
-            description: 'Balanced FIA GT3 homologated machinery for competitive grid racing.',
-            isBuiltIn: true,
-        },
-        {
-            id: 'hypercar_pack',
-            name: 'Hypercar & Prototype Pack',
-            car_ids: ['ks_ferrari_488_gte', 'ks_corvette_c7_r', 'ks_porsche_911_gt3_rs'],
-            description: 'Ultimate downforce, extreme horsepower, and prototype endurance racers.',
-            isBuiltIn: true,
-        },
-        {
-            id: 'open_wheel_pack',
-            name: 'Formula & Open Wheel',
-            car_ids: ['tatuusfa1', 'ks_lotus_exos_125'],
-            description: 'Lightweight high-downforce single seaters for pure open-wheel precision.',
-            isBuiltIn: true,
-        },
-    ])
+    // Car Subtype Presets (empty by default)
+    const [presets, setPresets] = useState<CarPreset[]>([])
 
     const [showNewPresetModal, setShowNewPresetModal] = useState<boolean>(false)
     const [newPresetName, setNewPresetName] = useState<string>('')
@@ -77,16 +55,13 @@ export const CarsModule: React.FC = () => {
                 }
             }
 
-            // Load saved custom presets from localStorage if available
+            // Load saved presets from localStorage if available
             const savedCustom = localStorage.getItem('corsa_car_presets')
             if (savedCustom) {
                 try {
                     const parsed = JSON.parse(savedCustom)
                     if (Array.isArray(parsed)) {
-                        setPresets(prev => [
-                            ...prev.filter(p => p.isBuiltIn),
-                            ...parsed,
-                        ])
+                        setPresets(parsed)
                     }
                 } catch {}
             }
@@ -156,22 +131,19 @@ export const CarsModule: React.FC = () => {
 
         const updated = [...presets, newPreset]
         setPresets(updated)
-        // Persist custom presets
-        const customOnly = updated.filter(p => !p.isBuiltIn)
-        localStorage.setItem('corsa_car_presets', JSON.stringify(customOnly))
+        localStorage.setItem('corsa_car_presets', JSON.stringify(updated))
 
         setNewPresetName('')
         setNewPresetDesc('')
         setShowNewPresetModal(false)
-        setStatusMsg(`Saved custom preset: "${newPreset.name}"`)
+        setStatusMsg(`Saved preset: "${newPreset.name}"`)
         setTimeout(() => setStatusMsg(null), 3000)
     }
 
     const handleDeletePreset = (id: string) => {
         const updated = presets.filter(p => p.id !== id)
         setPresets(updated)
-        const customOnly = updated.filter(p => !p.isBuiltIn)
-        localStorage.setItem('corsa_car_presets', JSON.stringify(customOnly))
+        localStorage.setItem('corsa_car_presets', JSON.stringify(updated))
     }
 
     // Filter cars
@@ -254,44 +226,50 @@ export const CarsModule: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {presets.map(preset => (
-                        <div
-                            key={preset.id}
-                            className="bg-[#181818] border border-white/10 hover:border-white/20 rounded-xl p-4 flex flex-col justify-between transition-all group"
-                        >
-                            <div>
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <h4 className="font-black text-white text-sm group-hover:text-ridge-brand transition-colors">
-                                        {preset.name}
-                                    </h4>
-                                    {!preset.isBuiltIn && (
+                    {presets.length === 0 ? (
+                        <div className="col-span-full py-8 px-4 text-center bg-black/20 rounded-xl border border-dashed border-white/10">
+                            <Sparkles className="w-6 h-6 text-white/20 mx-auto mb-2" />
+                            <p className="text-xs text-white/50 font-bold uppercase tracking-wider">No car presets created</p>
+                            <p className="text-[11px] text-white/30 mt-1">Select cars from the catalog below and click "Save Selection as Preset" to add your first preset.</p>
+                        </div>
+                    ) : (
+                        presets.map(preset => (
+                            <div
+                                key={preset.id}
+                                className="bg-[#181818] border border-white/10 hover:border-white/20 rounded-xl p-4 flex flex-col justify-between transition-all group"
+                            >
+                                <div>
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <h4 className="font-black text-white text-sm group-hover:text-ridge-brand transition-colors">
+                                            {preset.name}
+                                        </h4>
                                         <button
                                             onClick={() => handleDeletePreset(preset.id)}
                                             className="text-white/30 hover:text-red-400 p-1 rounded transition-colors"
-                                            title="Delete custom preset"
+                                            title="Delete preset"
                                         >
                                             <Trash2 size={13} />
                                         </button>
-                                    )}
+                                    </div>
+                                    <p className="text-[11px] text-white/50 leading-relaxed mb-3">
+                                        {preset.description || `${preset.car_ids.length} cars configured.`}
+                                    </p>
                                 </div>
-                                <p className="text-[11px] text-white/50 leading-relaxed mb-3">
-                                    {preset.description || `${preset.car_ids.length} cars configured.`}
-                                </p>
-                            </div>
 
-                            <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                                <span className="text-[10px] font-mono text-white/40 font-bold">
-                                    {preset.car_ids.length} Cars
-                                </span>
-                                <button
-                                    onClick={() => handleApplyPreset(preset)}
-                                    className="px-3 py-1.5 bg-white/10 hover:bg-ridge-brand text-white text-xs font-bold uppercase tracking-wider rounded-lg flex items-center gap-1.5 transition-all"
-                                >
-                                    <Zap size={13} /> Activate Preset
-                                </button>
+                                <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                                    <span className="text-[10px] font-mono text-white/40 font-bold">
+                                        {preset.car_ids.length} Cars
+                                    </span>
+                                    <button
+                                        onClick={() => handleApplyPreset(preset)}
+                                        className="px-3 py-1.5 bg-white/10 hover:bg-ridge-brand text-white text-xs font-bold uppercase tracking-wider rounded-lg flex items-center gap-1.5 transition-all"
+                                    >
+                                        <Zap size={13} /> Activate Preset
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        ))
+                    )}
                 </div>
             </div>
 
