@@ -606,6 +606,10 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ rig_id: rigId })
         })
+        const group = groups.find(g => g.id === groupId)
+        if (group?.voice_channel) {
+            setRigVoice(rigId, group.voice_channel)
+        }
         fetchGroups()
     }
 
@@ -1136,25 +1140,6 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                                 onToggleOpen={() => setOpenPickerRigId(prev => prev === rigId ? null : rigId)}
                                                 onClose={() => setOpenPickerRigId(null)}
                                             />
-
-                                            {/* Per-rig Voice Room Selector */}
-                                            <div className="flex items-center gap-1 bg-black/40 rounded-lg px-2 py-1 border border-white/5 text-[9px] shrink-0" title="Rig Voice Room">
-                                                <Volume2 size={10} className={rig?.mumble_channel ? 'text-indigo-400' : 'text-white/20'} />
-                                                <select
-                                                    value={rig?.mumble_channel || ''}
-                                                    onChange={(e) => setRigVoice(rigId, e.target.value)}
-                                                    className={`bg-transparent text-[9px] font-mono font-bold outline-none cursor-pointer hover:text-white transition-colors ${
-                                                        rig?.mumble_channel ? 'text-indigo-300' : 'text-white/30'
-                                                    }`}
-                                                >
-                                                    <option value="" className="bg-[#121212] text-white/50">None</option>
-                                                    {VOICE_ROOMS.map(room => (
-                                                        <option key={room} value={room} className="bg-[#121212] text-white">
-                                                            {room}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
 
                                             <button
                                                 onClick={() => {
