@@ -28,7 +28,7 @@ export const ReportsModule: React.FC = () => {
         setIsLoading(true)
         try {
             const [lobbyRes, driversRes, lapsRes] = await Promise.all([
-                fetch('/lobby'),
+                fetch('/api/lobby'),
                 fetch('/drivers'),
                 fetch('/leaderboard/laps?limit=300'),
             ])
