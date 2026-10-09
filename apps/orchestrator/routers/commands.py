@@ -137,6 +137,12 @@ def create_router(state: AppState) -> APIRouter:
 
         return {"status": "success", "rigs_notified": responses}
 
+    @router.post("/command/kill_all")
+    async def kill_all_sessions(background_tasks: BackgroundTasks) -> dict[str, object]:
+        """Global Panic Kill Switch: immediately aborts all races across all rigs."""
+        cmd = Command(rig_id="ALL", action="KILL_RACE")
+        return await send_global_command(cmd, background_tasks)
+
     @router.post("/command/group/{group_id}")
     async def send_group_command(
         group_id: str, command: Command, background_tasks: BackgroundTasks

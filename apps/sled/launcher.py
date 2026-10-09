@@ -637,26 +637,75 @@ def launch_ac(config: SledConfig, params: dict[str, object]) -> subprocess.Popen
         return None
 
 
-def sync_mods(config: SledConfig, source_override: str | None = None) -> bool:
-    """Use Robocopy to sync car/track content from the admin share."""
+def sync_mods(
+    config: SledConfig,
+    source_override: str | None = None,
+    target_override: str | None = None,
+    sync_cars: bool = True,
+    sync_tracks: bool = True,
+) -> bool:
+    """Safely sync car/track content from the admin share using Robocopy.
+    
+    Uses /E instead of /MIR to prevent accidental asset destruction if
+    a folder is empty or unmounted. Validates source directories before copying.
+    """
     if not IS_WINDOWS:
         logger.info("Skipping robocopy on non-Windows system")
         return True
 
     source = source_override or config.admin_shared_folder
-    car_source = os.path.join(source, "cars")
-    car_target = os.path.join(config.local_ac_folder, "content", "cars")
-    track_source = os.path.join(source, "tracks")
-    track_target = os.path.join(config.local_ac_folder, "content", "tracks")
+    target = target_override or config.local_ac_folder
 
-    try:
-        logger.info("Syncing CARS from %s to %s", car_source, car_target)
-        subprocess.run(["robocopy", car_source, car_target, "/MIR", "/MT:8", "/Z"], check=False)
-
-        logger.info("Syncing TRACKS from %s to %s", track_source, track_target)
-        subprocess.run(["robocopy", track_source, track_target, "/MIR", "/MT:8", "/Z"], check=False)
-
-        return True
-    except Exception as e:
-        logger.error("Sync failed: %s", e)
+    if not source or not os.path.exists(source):
+        logger.error("Robocopy source folder does not exist: %s", source)
         return False
+
+    success = True
+
+    if sync_cars:
+        car_source = os.path.join(source, "cars")
+        car_target = os.path.join(target, "content", "cars")
+        if not os.path.isdir(car_source):
+            logger.warning("CARS source directory does not exist: %s — skipping", car_source)
+        elif not os.listdir(car_source):
+            logger.warning("CARS source directory is empty: %s — skipping to prevent wiping target", car_source)
+        else:
+            try:
+                logger.info("Syncing CARS from %s to %s", car_source, car_target)
+                os.makedirs(car_target, exist_ok=True)
+                # /E = copy subdirectories including empty ones (safe alternative to /MIR)
+                # /MT:8 = 8 worker threads, /Z = restartable, /R:2 /W:2 = 2 retries waiting 2s
+                res = subprocess.run(
+                    ["robocopy", car_source, car_target, "/E", "/MT:8", "/Z", "/R:2", "/W:2"],
+                    check=False,
+                )
+                if res.returncode >= 8:
+                    logger.error("Robocopy CARS failed with code %d", res.returncode)
+                    success = False
+            except Exception as e:
+                logger.error("Robocopy CARS failed: %s", e)
+                success = False
+
+    if sync_tracks:
+        track_source = os.path.join(source, "tracks")
+        track_target = os.path.join(target, "content", "tracks")
+        if not os.path.isdir(track_source):
+            logger.warning("TRACKS source directory does not exist: %s — skipping", track_source)
+        elif not os.listdir(track_source):
+            logger.warning("TRACKS source directory is empty: %s — skipping to prevent wiping target", track_source)
+        else:
+            try:
+                logger.info("Syncing TRACKS from %s to %s", track_source, track_target)
+                os.makedirs(track_target, exist_ok=True)
+                res = subprocess.run(
+                    ["robocopy", track_source, track_target, "/E", "/MT:8", "/Z", "/R:2", "/W:2"],
+                    check=False,
+                )
+                if res.returncode >= 8:
+                    logger.error("Robocopy TRACKS failed with code %d", res.returncode)
+                    success = False
+            except Exception as e:
+                logger.error("Robocopy TRACKS failed: %s", e)
+                success = False
+
+    return success

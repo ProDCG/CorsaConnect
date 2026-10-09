@@ -149,37 +149,45 @@ class AppState:
             except Exception:
                 logger.warning("Could not load mumble assignments, starting empty")
 
+    def _atomic_save_json(self, filepath: str, data: object) -> None:
+        """Atomically persist JSON data by writing to a .tmp file and renaming."""
+        tmp_path = f"{filepath}.tmp"
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp_path, filepath)
+        except Exception as e:
+            logger.error("Failed to atomically save %s: %s", filepath, e)
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+            raise
+
     def _save_presets(self) -> None:
-        with open(self._presets_file, "w") as f:
-            json.dump([p.model_dump() for p in self._presets], f, indent=2)
+        self._atomic_save_json(self._presets_file, [p.model_dump() for p in self._presets])
 
     def _save_telem_config(self) -> None:
-        with open(self._telem_config_file, "w") as f:
-            json.dump(self._telem_config.model_dump(), f, indent=2)
+        self._atomic_save_json(self._telem_config_file, self._telem_config.model_dump())
 
     def _save_groups(self) -> None:
-        with open(self._groups_file, "w") as f:
-            json.dump([g.model_dump() for g in self._groups.values()], f, indent=2)
+        self._atomic_save_json(self._groups_file, [g.model_dump() for g in self._groups.values()])
 
     def _save_car_pool(self) -> None:
-        with open(self._car_pool_file, "w") as f:
-            json.dump(self._car_pool, f, indent=2)
+        self._atomic_save_json(self._car_pool_file, self._car_pool)
 
     def _save_map_pool(self) -> None:
-        with open(self._map_pool_file, "w") as f:
-            json.dump(self._map_pool, f, indent=2)
+        self._atomic_save_json(self._map_pool_file, self._map_pool)
 
     def _save_settings(self) -> None:
-        with open(self._settings_file, "w") as f:
-            json.dump(self._settings.model_dump(), f, indent=2)
+        self._atomic_save_json(self._settings_file, self._settings.model_dump())
 
     def _save_branding(self) -> None:
-        with open(self._branding_file, "w") as f:
-            json.dump(self._branding.model_dump(), f, indent=2)
+        self._atomic_save_json(self._branding_file, self._branding.model_dump())
 
     def _save_mumble_assignments(self) -> None:
-        with open(self._mumble_assignments_file, "w") as f:
-            json.dump(self._mumble_assignments, f, indent=2)
+        self._atomic_save_json(self._mumble_assignments_file, self._mumble_assignments)
 
     # ------------------------------------------------------------------
     # Rig operations

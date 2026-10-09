@@ -53,8 +53,9 @@ def scan_cars(content_folder: str) -> list[ScannedCar]:
             break
 
     if not cars_dir:
-        logger.warning("No cars directory found in content folder: %s", content_folder)
-        return []
+        logger.warning("No cars directory found in content folder: %s — falling back to default catalog", content_folder)
+        from shared.constants import CAR_CATALOG
+        return [ScannedCar(id=c.id, name=c.name, brand=c.brand, car_class=c.car_class) for c in CAR_CATALOG]
 
     cars: list[ScannedCar] = []
     try:
@@ -110,8 +111,16 @@ def scan_tracks(content_folder: str) -> list[ScannedTrack]:
             break
 
     if not tracks_dir:
-        logger.warning("No tracks directory found in content folder: %s", content_folder)
-        return []
+        logger.warning("No tracks directory found in content folder: %s — falling back to default tracks", content_folder)
+        return [
+            ScannedTrack(id="monza", name="Monza"),
+            ScannedTrack(id="spa", name="Spa Francorchamps"),
+            ScannedTrack(id="nurburgring", name="Nürburgring"),
+            ScannedTrack(id="silverstone", name="Silverstone"),
+            ScannedTrack(id="imola", name="Imola"),
+            ScannedTrack(id="mugello", name="Mugello"),
+            ScannedTrack(id="brands_hatch", name="Brands Hatch"),
+        ]
 
     tracks: list[ScannedTrack] = []
     try:

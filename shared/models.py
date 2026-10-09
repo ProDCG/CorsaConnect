@@ -139,6 +139,10 @@ class Command(BaseModel):
     ai_count: int = 0
     ai_difficulty: int = 80
     car_pool: list[str] = Field(default_factory=list)
+    sync_source_path: str | None = None
+    sync_target_path: str | None = None
+    sync_cars: bool = True
+    sync_tracks: bool = True
 
 
 # --- Settings Models ---
@@ -155,7 +159,13 @@ class GlobalSettings(BaseModel):
     selected_track: str = "monza"
     selected_weather: str = "15"
     content_folder: str = r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa"
+    sync_source_path: str = r"\\ADMIN-PC\RidgeContent"
+    sync_target_path: str = r"C:\Program Files (x86)\Steam\steamapps\common\assettocorsa"
     enable_csp: bool = False
+    discord_webhook_url: str | None = None
+    discord_channel_name: str | None = "#track-records"
+    discord_notify_records: bool = True
+    discord_notify_podiums: bool = False
 
 
 class Branding(BaseModel):
@@ -213,13 +223,31 @@ class LeaderboardEntry(BaseModel):
     id: int | None = None
     rig_id: str
     driver_name: str | None = None
+    driver_email: str | None = None
+    driver_phone: str | None = None
+    driver_uuid: str | None = None
     car: str | None = None
     track: str | None = None
+    weather: str | None = None
     group_name: str | None = None
+    session_type: str | None = None  # race, qualify, practice
     lap: int = 0
     lap_time_ms: int | None = None  # Per-lap time in milliseconds
     session_id: str | None = None
     timestamp: float = Field(default_factory=time.time)
+    notification_pending: bool = False
+    is_valid: bool = True
+
+
+class Driver(BaseModel):
+    """A registered driver in the facility."""
+
+    id: int | None = None
+    driver_uuid: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
+    display_name: str
+    email: str | None = None
+    phone: str | None = None
+    created_at: float = Field(default_factory=time.time)
 
 
 # --- Heartbeat Models ---

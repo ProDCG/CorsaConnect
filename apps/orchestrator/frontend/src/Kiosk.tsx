@@ -75,12 +75,28 @@ export default function Kiosk() {
             } catch (err) { console.error("Initial registration failed", err) }
         }
 
-        const fetchData = async () => {
+        // Fetch static configuration once
+        const fetchStaticConfig = async () => {
             try {
-                const brandRes = await fetch('/api/branding')
-                const brandData = await brandRes.json()
-                setBranding(brandData)
+                const [brandRes, poolRes] = await Promise.all([
+                    fetch('/api/branding'),
+                    fetch('/api/carpool'),
+                ])
+                if (brandRes.ok) {
+                    const brandData = await brandRes.json()
+                    setBranding(brandData)
+                }
+                if (poolRes.ok) {
+                    const poolData = await poolRes.json()
+                    if (Array.isArray(poolData)) setCarPool(poolData)
+                }
+            } catch (err) {
+                console.error("Kiosk config fetch error:", err)
+            }
+        }
 
+        const fetchRigStatus = async () => {
+            try {
                 const rigRes = await fetch('/api/rigs')
                 const rigs = await rigRes.json()
                 if (Array.isArray(rigs)) {
@@ -92,20 +108,43 @@ export default function Kiosk() {
                         }
                     }
                 }
-
-                const poolRes = await fetch('/api/carpool')
-                const poolData = await poolRes.json()
-                if (Array.isArray(poolData)) {
-                    setCarPool(poolData)
-                }
             } catch (err) {
-                console.error("Kiosk sync failed:", err)
+                console.error("Kiosk rig status fetch error:", err)
             }
         }
 
-        registerKiosk().then(fetchData)
-        const interval = setInterval(fetchData, 2000)
-        return () => clearInterval(interval)
+        let es: EventSource | null = null
+        registerKiosk().then(() => {
+            fetchStaticConfig()
+            fetchRigStatus()
+        })
+
+        try {
+            es = new EventSource('/stream/live')
+            es.addEventListener('state_update', (e) => {
+                try {
+                    const snapshot = JSON.parse(e.data)
+                    if (snapshot && Array.isArray(snapshot.rigs)) {
+                        const myRig = snapshot.rigs.find((r: Rig) => r && r.rig_id === id)
+                        if (myRig) {
+                            setStatus(myRig.status || 'idle')
+                            if (myRig.status === 'idle') setReady(false)
+                        }
+                    }
+                } catch {
+                    fetchRigStatus()
+                }
+            })
+        } catch {
+            // fallback
+        }
+
+        // Relaxed 5-second polling fallback
+        const interval = setInterval(fetchRigStatus, 5000)
+        return () => {
+            clearInterval(interval)
+            es?.close()
+        }
     }, [])
 
     const syncKioskState = async (newStatus: string, newCar?: string) => {
