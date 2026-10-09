@@ -322,16 +322,26 @@ export const CarsModule: React.FC = () => {
                             <button
                                 key={car.id}
                                 onClick={() => toggleCar(car.id)}
-                                className={`text-left p-4 rounded-2xl border transition-all relative overflow-hidden flex flex-col justify-between h-36 ${
+                                className={`text-left p-4 rounded-2xl border transition-all relative overflow-hidden flex flex-col justify-between group ${
                                     isAuthorized
                                         ? 'bg-ridge-brand/10 border-ridge-brand/50 text-white shadow-lg shadow-ridge-brand/10'
                                         : 'bg-[#141414] border-white/5 text-white/30 hover:border-white/20 hover:text-white/60'
                                 }`}
                             >
-                                <div className="flex justify-between items-start w-full">
-                                    <Car size={28} className={isAuthorized ? 'text-ridge-brand' : 'opacity-20'} />
+                                <div className="flex justify-between items-start w-full z-10">
+                                    <div className="w-12 h-12 rounded-xl bg-black/40 border border-white/10 overflow-hidden flex items-center justify-center shrink-0 relative">
+                                        <Car size={24} className={`absolute ${isAuthorized ? 'text-ridge-brand' : 'opacity-20'}`} />
+                                        <img
+                                            src={`/cars/${car.id}/preview`}
+                                            alt={car.name}
+                                            className="w-full h-full object-cover relative z-10 opacity-90 group-hover:scale-105 transition-transform duration-200"
+                                            onError={(e) => {
+                                                (e.currentTarget as HTMLImageElement).style.display = 'none'
+                                            }}
+                                        />
+                                    </div>
                                     <div
-                                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-all shrink-0 ${
                                             isAuthorized ? 'bg-ridge-brand text-white' : 'bg-white/5 border border-white/10 text-transparent'
                                         }`}
                                     >
@@ -339,7 +349,7 @@ export const CarsModule: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <div className="w-full">
+                                <div className="w-full mt-3 z-10">
                                     {car.brand && (
                                         <span className="text-[9px] font-bold uppercase tracking-wider text-white/40 block">
                                             {car.brand}

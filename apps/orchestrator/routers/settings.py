@@ -236,6 +236,42 @@ def create_router(state: AppState) -> APIRouter:
                 
         return Response(status_code=404, content="Map not found")
 
+    @router.get("/cars/{car_id}/preview")
+    async def get_car_preview(car_id: str) -> object:
+        """Return preview.jpg for a given car from skins/X/preview.jpg."""
+        import os
+        from fastapi.responses import FileResponse, Response
+        from shared.constants import DEFAULT_AC_FOLDER
+
+        content_folder = state.settings.content_folder or DEFAULT_AC_FOLDER
+
+        candidates = [
+            os.path.join(content_folder, "Client", "content", "cars", car_id),
+            os.path.join(content_folder, "content", "cars", car_id),
+            os.path.join(content_folder, "cars", car_id),
+        ]
+
+        car_dir = None
+        for path in candidates:
+            if os.path.isdir(path):
+                car_dir = path
+                break
+
+        if not car_dir:
+            return Response(status_code=404, content="Car not found")
+
+        skins_dir = os.path.join(car_dir, "skins")
+        if os.path.isdir(skins_dir):
+            try:
+                for skin_folder in sorted(os.listdir(skins_dir)):
+                    preview_path = os.path.join(skins_dir, skin_folder, "preview.jpg")
+                    if os.path.isfile(preview_path):
+                        return FileResponse(preview_path, media_type="image/jpeg")
+            except OSError:
+                pass
+
+        return Response(status_code=404, content="Preview not found")
+
     @router.post("/update")
     async def full_system_update(background_tasks: BackgroundTasks) -> dict[str, object]:
         """Full system update: stop everything, update all rigs, update admin.
