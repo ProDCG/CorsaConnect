@@ -39,6 +39,7 @@ class AppState:
         self._settings: GlobalSettings = GlobalSettings()
         self._leaderboard: list[LeaderboardEntry] = []
         self._presets: list[Preset] = []
+        self._car_presets: list[dict[str, object]] = []
         self._telem_config: TelemetryConfig = TelemetryConfig()
         self._server_status: str = "offline"
         self._mumble_assignments: dict[str, str] = {}  # rig_id -> channel name
@@ -52,6 +53,7 @@ class AppState:
         os.makedirs(self._data_dir, exist_ok=True)
         logger.info("Data directory resolved to: %s (exists=%s)", self._data_dir, os.path.isdir(self._data_dir))
         self._presets_file = os.path.join(self._data_dir, "presets.json")
+        self._car_presets_file = os.path.join(self._data_dir, "car_presets.json")
         self._telem_config_file = os.path.join(self._data_dir, "telem_config.json")
         self._groups_file = os.path.join(self._data_dir, "groups.json")
         self._car_pool_file = os.path.join(self._data_dir, "car_pool.json")
@@ -78,6 +80,15 @@ class AppState:
                 self._presets = [Preset(**p) for p in raw]
             except Exception:
                 logger.warning("Could not load presets file, starting fresh")
+
+        if os.path.exists(self._car_presets_file):
+            try:
+                with open(self._car_presets_file) as f:
+                    raw_car_presets = json.load(f)
+                if isinstance(raw_car_presets, list):
+                    self._car_presets = raw_car_presets
+            except Exception:
+                logger.warning("Could not load car presets file, starting empty")
 
         if os.path.exists(self._telem_config_file):
             try:
@@ -167,6 +178,9 @@ class AppState:
 
     def _save_presets(self) -> None:
         self._atomic_save_json(self._presets_file, [p.model_dump() for p in self._presets])
+
+    def _save_car_presets(self) -> None:
+        self._atomic_save_json(self._car_presets_file, self._car_presets)
 
     def _save_telem_config(self) -> None:
         self._atomic_save_json(self._telem_config_file, self._telem_config.model_dump())
@@ -420,6 +434,21 @@ class AppState:
         with self._lock:
             self._presets = list(value)
             self._save_presets()
+
+    # ------------------------------------------------------------------
+    # Car Presets (subtypes)
+    # ------------------------------------------------------------------
+
+    @property
+    def car_presets(self) -> list[dict[str, object]]:
+        with self._lock:
+            return list(self._car_presets)
+
+    @car_presets.setter
+    def car_presets(self, value: list[dict[str, object]]) -> None:
+        with self._lock:
+            self._car_presets = list(value)
+            self._save_car_presets()
 
     # ------------------------------------------------------------------
     # Telemetry config

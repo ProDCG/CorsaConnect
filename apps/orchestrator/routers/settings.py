@@ -83,6 +83,15 @@ def create_router(state: AppState) -> APIRouter:
         state.presets = presets
         return {"status": "success"}
 
+    @router.get("/car_presets")
+    async def get_car_presets() -> list[dict[str, object]]:
+        return state.car_presets
+
+    @router.post("/car_presets")
+    async def save_car_presets(presets: list[dict[str, object]]) -> dict[str, str]:
+        state.car_presets = presets
+        return {"status": "success"}
+
     @router.get("/telem_config")
     async def get_telem_config() -> TelemetryConfig:
         return state.telem_config

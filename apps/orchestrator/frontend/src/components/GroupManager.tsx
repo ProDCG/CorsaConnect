@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap, Filter, X, Download, RefreshCw, Eye } from 'lucide-react'
+import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap, Filter, X, Download, RefreshCw, Eye, Search } from 'lucide-react'
+
+interface CarPreset {
+    id: string
+    name: string
+    car_ids: string[]
+    description?: string
+}
 
 
 /* ------------------------------------------------------------------ */
@@ -238,9 +245,10 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
     const [tracks, setTracks] = useState<CatalogTrack[]>([])
     const [weather, setWeather] = useState<CatalogWeather[]>([])
 
-    // Car filters (category + brand)
-    const [filterCategory, setFilterCategory] = useState('All')
-    const [filterBrand, setFilterBrand] = useState('All')
+    // Car filters (preset category + search)
+    const [carPresets, setCarPresets] = useState<CarPreset[]>([])
+    const [filterPreset, setFilterPreset] = useState<string>('All')
+    const [filterSearch, setFilterSearch] = useState<string>('')
 
     // Preview Config modal state
     const [previewConfig, setPreviewConfig] = useState<string | null>(null)
@@ -278,6 +286,34 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
         } catch { /* offline */ }
     }, [])
 
+    const fetchCarPresets = useCallback(async () => {
+        let loaded: CarPreset[] = []
+        try {
+            const res = await fetch('/api/car_presets')
+            if (res.ok) {
+                const data = await res.json()
+                if (Array.isArray(data) && data.length > 0) {
+                    loaded = data.map((p: any) => ({
+                        id: p.id,
+                        name: p.name,
+                        car_ids: p.car_ids || p.cars || [],
+                        description: p.description || '',
+                    }))
+                }
+            }
+        } catch { /* offline */ }
+        if (loaded.length === 0) {
+            const saved = localStorage.getItem('corsa_car_presets')
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved)
+                    if (Array.isArray(parsed)) loaded = parsed
+                } catch {}
+            }
+        }
+        setCarPresets(loaded)
+    }, [])
+
     const fetchCatalogs = useCallback(async () => {
         try {
             const res = await fetch('/api/catalogs')
@@ -289,10 +325,10 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
     }, [])
 
     useEffect(() => {
-        fetchGroups(); fetchServers(); fetchCatalogs()
+        fetchGroups(); fetchServers(); fetchCatalogs(); fetchCarPresets()
         const interval = setInterval(() => { fetchGroups(); fetchServers() }, 3000)
         return () => clearInterval(interval)
-    }, [fetchGroups, fetchServers, fetchCatalogs])
+    }, [fetchGroups, fetchServers, fetchCatalogs, fetchCarPresets])
 
     /* ---- Spectator ---- */
 
@@ -719,30 +755,123 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
 
                         {/* ---- Rig Assignment Row ---- */}
                         <div className="glass rounded-2xl p-5 border border-white/10">
-                            <h3 className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-3 flex items-center gap-1.5">
-                                <Users size={10} /> Assigned Rigs ({selectedGroup.rig_ids.length})
-                            </h3>
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-[9px] font-black uppercase tracking-widest text-white/50 flex items-center gap-1.5">
+                                    <Users size={10} /> Assigned Rigs ({selectedGroup.rig_ids.length})
+                                </h3>
+                                {filterPreset !== 'All' && (
+                                    <span className="text-[10px] font-bold text-ridge-brand bg-ridge-brand/10 border border-ridge-brand/30 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                        <Zap size={10} /> Preset Active: {carPresets.find(p => p.id === filterPreset)?.name}
+                                    </span>
+                                )}
+                            </div>
 
-                            {/* Car Filters */}
+                            {/* Car Preset Category & Search Filter */}
                             {(() => {
-                                const enabledCars = activeCarPool.length > 0
+                                const baseCars = activeCarPool.length > 0
                                     ? cars.filter(c => activeCarPool.includes(c.id))
                                     : cars;
-                                const categories = ['All', ...Array.from(new Set(enabledCars.map(c => c.car_class).filter(Boolean))).sort()]
-                                const brands = ['All', ...Array.from(new Set(enabledCars.map(c => c.brand).filter(Boolean))).sort()]
+
                                 return (
-                                    <div className="flex gap-3 mb-3">
-                                        <div className="flex-1">
-                                            <label className="flex items-center gap-1 text-[8px] uppercase font-black text-white/40 tracking-widest mb-1">Category</label>
-                                            <Select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
-                                                {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                                            </Select>
+                                    <div className="space-y-2 mb-4 bg-black/20 p-3 rounded-xl border border-white/5">
+                                        <div className="flex flex-col sm:flex-row gap-3">
+                                            {/* Category / Preset Dropdown */}
+                                            <div className="flex-1">
+                                                <label className="flex items-center gap-1 text-[8px] uppercase font-black text-white/40 tracking-widest mb-1">
+                                                    <Car size={9} /> Category / Preset
+                                                </label>
+                                                <Select
+                                                    value={filterPreset}
+                                                    onChange={e => {
+                                                        const val = e.target.value
+                                                        setFilterPreset(val)
+                                                        if (val !== 'All') {
+                                                            const p = carPresets.find(x => x.id === val)
+                                                            if (p && p.car_ids.length > 0) {
+                                                                updateGroup(selectedGroup.id, { car_pool: p.car_ids })
+                                                            }
+                                                        } else {
+                                                            updateGroup(selectedGroup.id, { car_pool: activeCarPool })
+                                                        }
+                                                    }}
+                                                >
+                                                    <option value="All">All ({baseCars.length} fleet cars)</option>
+                                                    {carPresets.map(p => (
+                                                        <option key={p.id} value={p.id}>
+                                                            {p.name} ({p.car_ids.length} cars)
+                                                        </option>
+                                                    ))}
+                                                </Select>
+                                            </div>
+
+                                            {/* Search / Type-in Car */}
+                                            <div className="flex-1">
+                                                <label className="flex items-center gap-1 text-[8px] uppercase font-black text-white/40 tracking-widest mb-1">
+                                                    <Search size={9} /> Search / Type Car Name
+                                                </label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={filterSearch}
+                                                        onChange={e => setFilterSearch(e.target.value)}
+                                                        placeholder="Type car name or model..."
+                                                        className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/30 outline-none focus:border-ridge-brand transition-colors"
+                                                    />
+                                                    {filterSearch && (
+                                                        <button
+                                                            onClick={() => setFilterSearch('')}
+                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white text-xs px-1"
+                                                            title="Clear search"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="flex-1">
-                                            <label className="flex items-center gap-1 text-[8px] uppercase font-black text-white/40 tracking-widest mb-1">Brand</label>
-                                            <Select value={filterBrand} onChange={e => setFilterBrand(e.target.value)}>
-                                                {brands.map(b => <option key={b} value={b}>{b}</option>)}
-                                            </Select>
+
+                                        {/* Clickable Preset Quick-Pills */}
+                                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                            <span className="text-[9px] uppercase font-bold text-white/30 mr-1">Presets:</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setFilterPreset('All')
+                                                    updateGroup(selectedGroup.id, { car_pool: activeCarPool })
+                                                }}
+                                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${
+                                                    filterPreset === 'All'
+                                                        ? 'bg-ridge-brand text-white shadow-sm'
+                                                        : 'bg-white/5 text-white/50 hover:text-white hover:bg-white/10'
+                                                }`}
+                                            >
+                                                All ({baseCars.length})
+                                            </button>
+                                            {carPresets.map(p => (
+                                                <button
+                                                    key={p.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFilterPreset(p.id)
+                                                        if (p.car_ids.length > 0) {
+                                                            updateGroup(selectedGroup.id, { car_pool: p.car_ids })
+                                                        }
+                                                    }}
+                                                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 ${
+                                                        filterPreset === p.id
+                                                            ? 'bg-ridge-brand text-white shadow-sm'
+                                                            : 'bg-white/5 text-white/50 hover:text-white hover:bg-white/10'
+                                                    }`}
+                                                >
+                                                    <span>{p.name}</span>
+                                                    <span className="opacity-50 text-[9px]">({p.car_ids.length})</span>
+                                                </button>
+                                            ))}
+                                            {carPresets.length === 0 && (
+                                                <span className="text-[10px] text-white/30 italic">
+                                                    (No presets saved yet. Create presets in Fleet & Cars)
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 )
@@ -765,23 +894,39 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                                 <select
                                                     value={rig?.selected_car || ''}
                                                     onChange={e => setRigCar(rigId, e.target.value)}
-                                                    className="bg-white/5 border border-white/10 rounded-lg px-2 py-0.5 text-[10px] font-bold outline-none focus:border-ridge-brand appearance-none max-w-40 cursor-pointer pr-5"
+                                                    className="bg-white/5 border border-white/10 rounded-lg px-2 py-0.5 text-[10px] font-bold outline-none focus:border-ridge-brand appearance-none max-w-44 cursor-pointer pr-5"
                                                 >
                                                     <option value="">🎲 Random</option>
                                                     {(() => {
                                                         const seen = new Set<string>();
-                                                        // Only show cars enabled in the Cars tab
                                                         let enabledCars = activeCarPool.length > 0
                                                             ? cars.filter(c => activeCarPool.includes(c.id))
                                                             : cars;
-                                                        // Apply category filter
-                                                        if (filterCategory !== 'All') {
-                                                            enabledCars = enabledCars.filter(c => c.car_class === filterCategory)
+
+                                                        // Apply car preset filter
+                                                        if (filterPreset !== 'All') {
+                                                            const p = carPresets.find(x => x.id === filterPreset);
+                                                            if (p) {
+                                                                enabledCars = enabledCars.filter(c => p.car_ids.includes(c.id));
+                                                            }
                                                         }
-                                                        // Apply brand filter
-                                                        if (filterBrand !== 'All') {
-                                                            enabledCars = enabledCars.filter(c => c.brand === filterBrand)
+
+                                                        // Apply search query
+                                                        if (filterSearch.trim()) {
+                                                            const q = filterSearch.trim().toLowerCase();
+                                                            enabledCars = enabledCars.filter(c =>
+                                                                displayName(c.id).toLowerCase().includes(q) ||
+                                                                c.id.toLowerCase().includes(q) ||
+                                                                (c.brand && c.brand.toLowerCase().includes(q))
+                                                            );
                                                         }
+
+                                                        // Ensure rig's current car is in the list
+                                                        if (rig?.selected_car && !enabledCars.some(c => c.id === rig.selected_car)) {
+                                                            const currentCarObj = cars.find(c => c.id === rig.selected_car) || { id: rig.selected_car, name: rig.selected_car };
+                                                            enabledCars = [currentCarObj as any, ...enabledCars];
+                                                        }
+
                                                         return enabledCars
                                                             .filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; })
                                                             .sort((a, b) => displayName(a.id).localeCompare(displayName(b.id)))

@@ -36,9 +36,10 @@ export const CarsModule: React.FC = () => {
     const fetchData = async () => {
         setIsLoading(true)
         try {
-            const [catRes, poolRes] = await Promise.all([
+            const [catRes, poolRes, presetsRes] = await Promise.all([
                 fetch('/catalogs'),
                 fetch('/carpool'),
+                fetch('/car_presets'),
             ])
 
             if (catRes.ok) {
@@ -55,15 +56,31 @@ export const CarsModule: React.FC = () => {
                 }
             }
 
-            // Load saved presets from localStorage if available
-            const savedCustom = localStorage.getItem('corsa_car_presets')
-            if (savedCustom) {
-                try {
-                    const parsed = JSON.parse(savedCustom)
-                    if (Array.isArray(parsed)) {
-                        setPresets(parsed)
-                    }
-                } catch {}
+            // Load saved presets from backend or localStorage
+            let loadedPresets: CarPreset[] = []
+            if (presetsRes.ok) {
+                const presetsData = await presetsRes.json()
+                if (Array.isArray(presetsData) && presetsData.length > 0) {
+                    loadedPresets = presetsData.map((p: any) => ({
+                        id: p.id,
+                        name: p.name,
+                        car_ids: p.car_ids || p.cars || [],
+                        description: p.description || '',
+                    }))
+                }
+            }
+            if (loadedPresets.length === 0) {
+                const savedCustom = localStorage.getItem('corsa_car_presets')
+                if (savedCustom) {
+                    try {
+                        const parsed = JSON.parse(savedCustom)
+                        if (Array.isArray(parsed)) loadedPresets = parsed
+                    } catch {}
+                }
+            }
+            setPresets(loadedPresets)
+            if (loadedPresets.length > 0) {
+                localStorage.setItem('corsa_car_presets', JSON.stringify(loadedPresets))
             }
         } catch (e) {
             console.error('Failed to load fleet data:', e)
@@ -132,6 +149,11 @@ export const CarsModule: React.FC = () => {
         const updated = [...presets, newPreset]
         setPresets(updated)
         localStorage.setItem('corsa_car_presets', JSON.stringify(updated))
+        fetch('/car_presets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updated),
+        }).catch(err => console.error('Failed to sync car preset to backend:', err))
 
         setNewPresetName('')
         setNewPresetDesc('')
@@ -144,6 +166,11 @@ export const CarsModule: React.FC = () => {
         const updated = presets.filter(p => p.id !== id)
         setPresets(updated)
         localStorage.setItem('corsa_car_presets', JSON.stringify(updated))
+        fetch('/car_presets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updated),
+        }).catch(err => console.error('Failed to delete car preset from backend:', err))
     }
 
     // Filter cars
