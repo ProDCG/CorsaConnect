@@ -291,7 +291,7 @@ export const LauncherModule: React.FC<{
                                     <div className="flex items-center justify-between text-white/80">
                                         <span className="text-white/40 text-[11px]">Assigned Car:</span>
                                         <span className="font-medium truncate max-w-[140px] text-[11px] text-white/90">
-                                            {rig.selected_car || 'Default (GT3)'}
+                                            {rig.selected_car || 'None'}
                                         </span>
                                     </div>
                                     <div className="flex items-center justify-between text-white/80">

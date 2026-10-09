@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap, Filter, X, Download, RefreshCw, Eye, Search } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap, Filter, X, Download, RefreshCw, Eye, Search, AlertTriangle, Check } from 'lucide-react'
 
 interface CarPreset {
     id: string
@@ -182,6 +182,183 @@ function Select({ value, onChange, children, className = '' }: {
     )
 }
 
+interface RigCarSearchPickerProps {
+    rigId: string
+    selectedCar?: string | null
+    availableCars: { id: string; name?: string; brand?: string }[]
+    onSelectCar: (carId: string) => void
+    hasError?: boolean
+}
+
+function RigCarSearchPicker({
+    selectedCar,
+    availableCars,
+    onSelectCar,
+    hasError = false,
+}: RigCarSearchPickerProps) {
+    const [isOpen, setIsOpen] = useState(false)
+    const [query, setQuery] = useState('')
+    const containerRef = useRef<HTMLDivElement>(null)
+    const inputRef = useRef<HTMLInputElement>(null)
+
+    // Close when clicking outside or pressing Escape
+    useEffect(() => {
+        if (!isOpen) return
+        const handleClickOutside = (e: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setIsOpen(false)
+            }
+        }
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setIsOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        document.addEventListener('keydown', handleKeyDown)
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside)
+            document.removeEventListener('keydown', handleKeyDown)
+        }
+    }, [isOpen])
+
+    // Focus input on open and reset search query
+    useEffect(() => {
+        if (isOpen) {
+            setQuery('')
+            setTimeout(() => inputRef.current?.focus(), 50)
+        }
+    }, [isOpen])
+
+    const isCarSelected = Boolean(selectedCar && selectedCar !== '' && selectedCar !== 'None')
+    const currentDisplayName = isCarSelected ? displayName(selectedCar!) : 'None'
+
+    // Filter available cars based on search query
+    const filteredCars = availableCars.filter(car => {
+        if (!query.trim()) return true
+        const q = query.trim().toLowerCase()
+        return (
+            displayName(car.id).toLowerCase().includes(q) ||
+            car.id.toLowerCase().includes(q) ||
+            (car.name && car.name.toLowerCase().includes(q)) ||
+            (car.brand && car.brand.toLowerCase().includes(q))
+        )
+    })
+
+    return (
+        <div className="relative" ref={containerRef}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(prev => !prev)}
+                className={`flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all max-w-48 cursor-pointer select-none ${
+                    hasError
+                        ? 'bg-red-500/20 border border-red-500 text-red-300 ring-2 ring-red-500/40 animate-pulse'
+                        : isCarSelected
+                            ? 'bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white'
+                            : 'bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 italic'
+                }`}
+                title={isCarSelected ? currentDisplayName : 'No car selected'}
+            >
+                <span className="truncate">
+                    {hasError && !isCarSelected ? 'None (Required)' : currentDisplayName}
+                </span>
+                <ChevronDown size={10} className={`text-white/40 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isOpen && (
+                <div
+                    className="absolute left-0 top-full mt-1.5 w-64 bg-[#14151b] border border-white/20 rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden backdrop-blur-xl"
+                    style={{ minWidth: '16rem' }}
+                >
+                    {/* Search input field */}
+                    <div className="p-2 border-b border-white/10 flex items-center gap-2 bg-black/40">
+                        <Search size={12} className="text-white/40 shrink-0" />
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            value={query}
+                            onChange={e => setQuery(e.target.value)}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                    if (filteredCars.length > 0) {
+                                        onSelectCar(filteredCars[0].id)
+                                        setIsOpen(false)
+                                    } else if (!query.trim() || 'none'.includes(query.toLowerCase())) {
+                                        onSelectCar('')
+                                        setIsOpen(false)
+                                    }
+                                }
+                            }}
+                            placeholder="Type car name..."
+                            className="bg-transparent text-xs text-white placeholder-white/30 outline-none w-full"
+                        />
+                        {query && (
+                            <button
+                                type="button"
+                                onClick={() => setQuery('')}
+                                className="text-white/40 hover:text-white text-xs px-1"
+                            >
+                                <X size={12} />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Results list */}
+                    <div className="max-h-56 overflow-y-auto divide-y divide-white/5">
+                        {/* None option */}
+                        {(!query.trim() || 'none'.includes(query.toLowerCase())) && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onSelectCar('')
+                                    setIsOpen(false)
+                                }}
+                                className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between transition-colors ${
+                                    !isCarSelected
+                                        ? 'bg-ridge-brand/20 text-ridge-brand font-bold'
+                                        : 'text-white/40 hover:bg-white/10 hover:text-white'
+                                }`}
+                            >
+                                <span className="italic">None (No car assigned)</span>
+                                {!isCarSelected && <Check size={12} className="text-ridge-brand" />}
+                            </button>
+                        )}
+
+                        {filteredCars.map(car => {
+                            const isSelected = selectedCar === car.id
+                            return (
+                                <button
+                                    key={car.id}
+                                    type="button"
+                                    onClick={() => {
+                                        onSelectCar(car.id)
+                                        setIsOpen(false)
+                                    }}
+                                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between transition-colors ${
+                                        isSelected
+                                            ? 'bg-ridge-brand text-white font-bold'
+                                            : 'text-white/80 hover:bg-white/10 hover:text-white'
+                                    }`}
+                                    title={displayName(car.id)}
+                                >
+                                    <span className="truncate pr-2">{displayName(car.id)}</span>
+                                    {isSelected && <Check size={12} className="shrink-0" />}
+                                </button>
+                            )
+                        })}
+
+                        {filteredCars.length === 0 && (!query.trim() || !'none'.includes(query.toLowerCase())) && (
+                            <div className="p-3 text-center text-xs text-white/30">
+                                No matching cars found
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
 /* Reusable slider row with min/max/label and editable value */
 function SliderRow({ label, icon: Icon, value, min, max, step, unit, onChange }: {
     label: string, icon: any, value: number, min: number, max: number, step?: number, unit: string,
@@ -245,10 +422,11 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
     const [tracks, setTracks] = useState<CatalogTrack[]>([])
     const [weather, setWeather] = useState<CatalogWeather[]>([])
 
-    // Car filters (preset category + search)
+    // Car filters (preset category)
     const [carPresets, setCarPresets] = useState<CarPreset[]>([])
     const [filterPreset, setFilterPreset] = useState<string>('All')
-    const [filterSearch, setFilterSearch] = useState<string>('')
+    const [unassignedRigErrors, setUnassignedRigErrors] = useState<string[]>([])
+    const [rigCarOverrides, setRigCarOverrides] = useState<Record<string, string>>({})
 
     // Preview Config modal state
     const [previewConfig, setPreviewConfig] = useState<string | null>(null)
@@ -256,6 +434,10 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
     // Spectator state
     const [spectatorGroupId, setSpectatorGroupId] = useState<string | null>(null)
     const [spectatorLoading, setSpectatorLoading] = useState(false)
+
+    useEffect(() => {
+        setUnassignedRigErrors([])
+    }, [selectedGroupId])
 
 
     /* ---- Data fetching ---- */
@@ -417,12 +599,29 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
         fetchGroups()
     }
 
+    const getRigCar = (rigId: string): string => {
+        if (rigId in rigCarOverrides) {
+            return rigCarOverrides[rigId]
+        }
+        const rig = rigs.find(r => r.rig_id === rigId)
+        return rig?.selected_car || ''
+    }
+
     const setRigCar = async (rigId: string, carId: string) => {
-        await fetch(`/api/rigs/${rigId}/status`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ selected_car: carId })
-        })
+        const normalizedCar = carId === 'None' ? '' : carId
+        setRigCarOverrides(prev => ({ ...prev, [rigId]: normalizedCar }))
+        if (normalizedCar) {
+            setUnassignedRigErrors(prev => prev.filter(id => id !== rigId))
+        }
+        try {
+            await fetch(`/api/rigs/${rigId}/status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ selected_car: normalizedCar })
+            })
+        } catch (e) {
+            console.error(e)
+        }
     }
 
     /* ---- Group commands ---- */
@@ -666,6 +865,17 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                 {/* Single START RACE button — auto-deploys server for multiplayer */}
                                 <button
                                     onClick={async () => {
+                                        // Validate that all assigned rigs have a car selected
+                                        const unassigned = selectedGroup.rig_ids.filter(rigId => {
+                                            const c = getRigCar(rigId)
+                                            return !c || c === '' || c === 'None'
+                                        })
+                                        if (unassigned.length > 0) {
+                                            setUnassignedRigErrors(unassigned)
+                                            return
+                                        }
+                                        setUnassignedRigErrors([])
+
                                         if (selectedGroup.mode === 'multiplayer' && !isSelectedServerRunning) {
                                             // Deploy server first — abort if it fails
                                             const ok = await startServerForGroup(selectedGroup.id)
@@ -766,112 +976,50 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                 )}
                             </div>
 
-                            {/* Car Preset Category & Search Filter */}
+                            {/* Validation warning banner if any rigs have no car selected */}
+                            {unassignedRigErrors.length > 0 && (
+                                <div className="mb-4 px-3.5 py-2.5 bg-red-500/15 border border-red-500/50 rounded-xl text-red-200 text-xs font-semibold flex items-center gap-2 animate-pulse">
+                                    <AlertTriangle size={15} className="text-red-400 shrink-0" />
+                                    <span>
+                                        Please select a car for highlighted rigs ({unassignedRigErrors.join(', ')}) before starting the race.
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Car Preset Category Filter Dropdown */}
                             {(() => {
                                 const baseCars = activeCarPool.length > 0
                                     ? cars.filter(c => activeCarPool.includes(c.id))
                                     : cars;
 
                                 return (
-                                    <div className="space-y-2 mb-4 bg-black/20 p-3 rounded-xl border border-white/5">
-                                        <div className="flex flex-col sm:flex-row gap-3">
-                                            {/* Category / Preset Dropdown */}
-                                            <div className="flex-1">
-                                                <label className="flex items-center gap-1 text-[8px] uppercase font-black text-white/40 tracking-widest mb-1">
-                                                    <Car size={9} /> Category / Preset
-                                                </label>
-                                                <Select
-                                                    value={filterPreset}
-                                                    onChange={e => {
-                                                        const val = e.target.value
-                                                        setFilterPreset(val)
-                                                        if (val !== 'All') {
-                                                            const p = carPresets.find(x => x.id === val)
-                                                            if (p && p.car_ids.length > 0) {
-                                                                updateGroup(selectedGroup.id, { car_pool: p.car_ids })
-                                                            }
-                                                        } else {
-                                                            updateGroup(selectedGroup.id, { car_pool: activeCarPool })
-                                                        }
-                                                    }}
-                                                >
-                                                    <option value="All">All ({baseCars.length} fleet cars)</option>
-                                                    {carPresets.map(p => (
-                                                        <option key={p.id} value={p.id}>
-                                                            {p.name} ({p.car_ids.length} cars)
-                                                        </option>
-                                                    ))}
-                                                </Select>
-                                            </div>
-
-                                            {/* Search / Type-in Car */}
-                                            <div className="flex-1">
-                                                <label className="flex items-center gap-1 text-[8px] uppercase font-black text-white/40 tracking-widest mb-1">
-                                                    <Search size={9} /> Search / Type Car Name
-                                                </label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={filterSearch}
-                                                        onChange={e => setFilterSearch(e.target.value)}
-                                                        placeholder="Type car name or model..."
-                                                        className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/30 outline-none focus:border-ridge-brand transition-colors"
-                                                    />
-                                                    {filterSearch && (
-                                                        <button
-                                                            onClick={() => setFilterSearch('')}
-                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white text-xs px-1"
-                                                            title="Clear search"
-                                                        >
-                                                            ×
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Clickable Preset Quick-Pills */}
-                                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                                            <span className="text-[9px] uppercase font-bold text-white/30 mr-1">Presets:</span>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setFilterPreset('All')
-                                                    updateGroup(selectedGroup.id, { car_pool: activeCarPool })
-                                                }}
-                                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${
-                                                    filterPreset === 'All'
-                                                        ? 'bg-ridge-brand text-white shadow-sm'
-                                                        : 'bg-white/5 text-white/50 hover:text-white hover:bg-white/10'
-                                                }`}
-                                            >
-                                                All ({baseCars.length})
-                                            </button>
-                                            {carPresets.map(p => (
-                                                <button
-                                                    key={p.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setFilterPreset(p.id)
-                                                        if (p.car_ids.length > 0) {
+                                    <div className="mb-4 bg-black/20 p-3 rounded-xl border border-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                        <div className="w-full sm:max-w-xs">
+                                            <label className="flex items-center gap-1 text-[8px] uppercase font-black text-white/40 tracking-widest mb-1">
+                                                <Car size={9} /> Category / Preset
+                                            </label>
+                                            <Select
+                                                value={filterPreset}
+                                                onChange={e => {
+                                                    const val = e.target.value
+                                                    setFilterPreset(val)
+                                                    if (val !== 'All') {
+                                                        const p = carPresets.find(x => x.id === val)
+                                                        if (p && p.car_ids.length > 0) {
                                                             updateGroup(selectedGroup.id, { car_pool: p.car_ids })
                                                         }
-                                                    }}
-                                                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 ${
-                                                        filterPreset === p.id
-                                                            ? 'bg-ridge-brand text-white shadow-sm'
-                                                            : 'bg-white/5 text-white/50 hover:text-white hover:bg-white/10'
-                                                    }`}
-                                                >
-                                                    <span>{p.name}</span>
-                                                    <span className="opacity-50 text-[9px]">({p.car_ids.length})</span>
-                                                </button>
-                                            ))}
-                                            {carPresets.length === 0 && (
-                                                <span className="text-[10px] text-white/30 italic">
-                                                    (No presets saved yet. Create presets in Fleet & Cars)
-                                                </span>
-                                            )}
+                                                    } else {
+                                                        updateGroup(selectedGroup.id, { car_pool: activeCarPool })
+                                                    }
+                                                }}
+                                            >
+                                                <option value="All">All ({baseCars.length} fleet cars)</option>
+                                                {carPresets.map(p => (
+                                                    <option key={p.id} value={p.id}>
+                                                        {p.name} ({p.car_ids.length} cars)
+                                                    </option>
+                                                ))}
+                                            </Select>
                                         </div>
                                     </div>
                                 )
@@ -880,70 +1028,80 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                             <div className="flex flex-wrap gap-2">
                                 {selectedGroup.rig_ids.map(rigId => {
                                     const rig = rigs.find(r => r.rig_id === rigId)
+                                    const currentCar = getRigCar(rigId)
+                                    const hasCarError = unassignedRigErrors.includes(rigId)
+
+                                    const seen = new Set<string>()
+                                    let enabledCars = activeCarPool.length > 0
+                                        ? cars.filter(c => activeCarPool.includes(c.id))
+                                        : cars
+
+                                    // Apply car preset filter
+                                    if (filterPreset !== 'All') {
+                                        const p = carPresets.find(x => x.id === filterPreset)
+                                        if (p) {
+                                            enabledCars = enabledCars.filter(c => p.car_ids.includes(c.id))
+                                        }
+                                    }
+
+                                    // Ensure rig's current car is in the list
+                                    if (currentCar && currentCar !== 'None' && !enabledCars.some(c => c.id === currentCar)) {
+                                        const currentCarObj = cars.find(c => c.id === currentCar) || { id: currentCar, name: currentCar, brand: '', car_class: '' }
+                                        enabledCars = [currentCarObj as any, ...enabledCars]
+                                    }
+
+                                    const filteredList = enabledCars
+                                        .filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true })
+                                        .sort((a, b) => displayName(a.id).localeCompare(displayName(b.id)))
+
                                     return (
-                                        <div key={rigId} className="bg-black/30 border border-white/5 rounded-xl px-3 py-2.5 flex items-center gap-3 group hover:border-white/15 transition-all">
-                                            <div className={`w-2 h-2 rounded-full ${rig?.status === 'racing' ? 'bg-ridge-brand animate-pulse' :
-                                                    rig?.status === 'ready' ? 'bg-green-500' :
-                                                        rig?.status === 'setup' ? 'bg-blue-500 animate-pulse' :
-                                                            rig ? 'bg-white/20' : 'bg-red-500'
-                                                }`} />
-                                            <span className="font-black italic text-xs">{rigId}</span>
+                                        <div
+                                            key={rigId}
+                                            className={`rounded-xl px-3 py-2.5 flex items-center gap-3 group transition-all ${
+                                                hasCarError
+                                                    ? 'bg-red-500/10 border-2 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
+                                                    : 'bg-black/30 border border-white/5 hover:border-white/15'
+                                            }`}
+                                        >
+                                            <div className={`w-2 h-2 rounded-full ${
+                                                rig?.status === 'racing' ? 'bg-ridge-brand animate-pulse' :
+                                                rig?.status === 'ready' ? 'bg-green-500' :
+                                                rig?.status === 'setup' ? 'bg-blue-500 animate-pulse' :
+                                                rig ? 'bg-white/20' : 'bg-red-500'
+                                            }`} />
+                                            <span className={`font-black italic text-xs ${hasCarError ? 'text-red-300' : 'text-white'}`}>{rigId}</span>
 
-                                            {/* Per-rig car selector (filtered) */}
-                                            <div className="relative">
-                                                <select
-                                                    value={rig?.selected_car || ''}
-                                                    onChange={e => setRigCar(rigId, e.target.value)}
-                                                    className="bg-white/5 border border-white/10 rounded-lg px-2 py-0.5 text-[10px] font-bold outline-none focus:border-ridge-brand appearance-none max-w-44 cursor-pointer pr-5"
-                                                >
-                                                    <option value="">🎲 Random</option>
-                                                    {(() => {
-                                                        const seen = new Set<string>();
-                                                        let enabledCars = activeCarPool.length > 0
-                                                            ? cars.filter(c => activeCarPool.includes(c.id))
-                                                            : cars;
+                                            {/* Per-rig searchable car picker */}
+                                            <RigCarSearchPicker
+                                                rigId={rigId}
+                                                selectedCar={currentCar}
+                                                availableCars={filteredList}
+                                                onSelectCar={carId => setRigCar(rigId, carId)}
+                                                hasError={hasCarError}
+                                            />
 
-                                                        // Apply car preset filter
-                                                        if (filterPreset !== 'All') {
-                                                            const p = carPresets.find(x => x.id === filterPreset);
-                                                            if (p) {
-                                                                enabledCars = enabledCars.filter(c => p.car_ids.includes(c.id));
-                                                            }
-                                                        }
-
-                                                        // Apply search query
-                                                        if (filterSearch.trim()) {
-                                                            const q = filterSearch.trim().toLowerCase();
-                                                            enabledCars = enabledCars.filter(c =>
-                                                                displayName(c.id).toLowerCase().includes(q) ||
-                                                                c.id.toLowerCase().includes(q) ||
-                                                                (c.brand && c.brand.toLowerCase().includes(q))
-                                                            );
-                                                        }
-
-                                                        // Ensure rig's current car is in the list
-                                                        if (rig?.selected_car && !enabledCars.some(c => c.id === rig.selected_car)) {
-                                                            const currentCarObj = cars.find(c => c.id === rig.selected_car) || { id: rig.selected_car, name: rig.selected_car };
-                                                            enabledCars = [currentCarObj as any, ...enabledCars];
-                                                        }
-
-                                                        return enabledCars
-                                                            .filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; })
-                                                            .sort((a, b) => displayName(a.id).localeCompare(displayName(b.id)))
-                                                            .map(car => (
-                                                                <option key={car.id} value={car.id}>{displayName(car.id)}</option>
-                                                            ));
-                                                    })()}
-                                                </select>
-                                                <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-                                            </div>
-
-                                            <button onClick={() => sendRigCommand(selectedGroup.id, rigId, 'LAUNCH_RACE')}
-                                                className="text-white/10 hover:text-green-400 transition-colors opacity-0 group-hover:opacity-100 mr-0.5" title={selectedGroup.mode === 'multiplayer' ? "Join Race" : "Start Race"}>
+                                            <button
+                                                onClick={() => {
+                                                    if (!currentCar || currentCar === 'None') {
+                                                        setUnassignedRigErrors(prev => Array.from(new Set([...prev, rigId])))
+                                                        return
+                                                    }
+                                                    sendRigCommand(selectedGroup.id, rigId, 'LAUNCH_RACE')
+                                                }}
+                                                className="text-white/10 hover:text-green-400 transition-colors opacity-0 group-hover:opacity-100 mr-0.5"
+                                                title={selectedGroup.mode === 'multiplayer' ? "Join Race" : "Start Race"}
+                                            >
                                                 <Play size={12} />
                                             </button>
-                                            <button onClick={async () => { await sendRigCommand(selectedGroup.id, rigId, 'KILL_RACE'); removeRigFromGroup(selectedGroup.id, rigId) }}
-                                                className="text-white/10 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100" title="Stop Race">
+                                            <button
+                                                onClick={async () => {
+                                                    await sendRigCommand(selectedGroup.id, rigId, 'KILL_RACE')
+                                                    setUnassignedRigErrors(prev => prev.filter(id => id !== rigId))
+                                                    removeRigFromGroup(selectedGroup.id, rigId)
+                                                }}
+                                                className="text-white/10 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                                                title="Stop Race"
+                                            >
                                                 <UserMinus size={12} />
                                             </button>
                                         </div>
