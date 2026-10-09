@@ -16,12 +16,9 @@ interface CarPreset {
     isBuiltIn?: boolean
 }
 
-const DEFAULT_CAR_CLASSES = ['All', 'GT3', 'Hypercar', 'Supercar', 'GTE', 'Formula']
-
 export const CarsModule: React.FC = () => {
     const [cars, setCars] = useState<CatalogCar[]>([])
     const [activePool, setActivePool] = useState<string[]>([])
-    const [selectedClass, setSelectedClass] = useState<string>('All')
     const [searchQuery, setSearchQuery] = useState<string>('')
     const [isLoading, setIsLoading] = useState<boolean>(true)
     const [statusMsg, setStatusMsg] = useState<string | null>(null)
@@ -175,19 +172,11 @@ export const CarsModule: React.FC = () => {
 
     // Filter cars
     const filteredCars = cars.filter(car => {
-        const matchesSearch =
+        return (
             car.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             car.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (car.brand && car.brand.toLowerCase().includes(searchQuery.toLowerCase()))
-
-        let matchesClass = true
-        if (selectedClass !== 'All') {
-            const cls = (car.car_class || '').toLowerCase()
-            const target = selectedClass.toLowerCase()
-            matchesClass = cls.includes(target) || car.name.toLowerCase().includes(target) || car.id.toLowerCase().includes(target)
-        }
-
-        return matchesSearch && matchesClass
+        )
     })
 
     return (
@@ -300,10 +289,10 @@ export const CarsModule: React.FC = () => {
                 </div>
             </div>
 
-            {/* 2. Filter & Search Toolbar */}
-            <div className="bg-ridge-panel border border-white/10 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
+            {/* 2. Search Toolbar */}
+            <div className="bg-ridge-panel border border-white/10 rounded-2xl p-4">
                 {/* Search Bar */}
-                <div className="relative flex-1 min-w-[240px] max-w-md">
+                <div className="relative w-full max-w-md">
                     <Search size={16} className="absolute left-3.5 top-3 text-white/40 pointer-events-none" />
                     <input
                         type="text"
@@ -312,23 +301,6 @@ export const CarsModule: React.FC = () => {
                         placeholder="Search cars by name, brand, or ID..."
                         className="w-full bg-[#181818] border border-white/20 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-ridge-brand transition-colors"
                     />
-                </div>
-
-                {/* Class Filters */}
-                <div className="flex items-center gap-1 bg-[#181818] p-1 rounded-xl border border-white/10 flex-wrap">
-                    {DEFAULT_CAR_CLASSES.map(cls => (
-                        <button
-                            key={cls}
-                            onClick={() => setSelectedClass(cls)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-wider ${
-                                selectedClass === cls
-                                    ? 'bg-ridge-brand text-white'
-                                    : 'text-white/60 hover:text-white'
-                            }`}
-                        >
-                            {cls}
-                        </button>
-                    ))}
                 </div>
             </div>
 
