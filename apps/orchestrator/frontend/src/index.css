@@ -69,3 +69,28 @@ input:-webkit-autofill:focus {
   -webkit-box-shadow: 0 0 0px 1000px #1a1a1a inset !important;
   transition: background-color 5000s ease-in-out 0s;
 }
+
+/* Sleek Dark Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0d0e12;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #232530;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #353846;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #232530 #0d0e12;
+}

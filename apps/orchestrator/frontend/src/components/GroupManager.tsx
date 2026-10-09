@@ -188,6 +188,9 @@ interface RigCarSearchPickerProps {
     availableCars: { id: string; name?: string; brand?: string }[]
     onSelectCar: (carId: string) => void
     hasError?: boolean
+    isOpen: boolean
+    onToggleOpen: () => void
+    onClose: () => void
 }
 
 function RigCarSearchPicker({
@@ -195,8 +198,10 @@ function RigCarSearchPicker({
     availableCars,
     onSelectCar,
     hasError = false,
+    isOpen,
+    onToggleOpen,
+    onClose,
 }: RigCarSearchPickerProps) {
-    const [isOpen, setIsOpen] = useState(false)
     const [query, setQuery] = useState('')
     const containerRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
@@ -206,12 +211,12 @@ function RigCarSearchPicker({
         if (!isOpen) return
         const handleClickOutside = (e: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-                setIsOpen(false)
+                onClose()
             }
         }
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                setIsOpen(false)
+                onClose()
             }
         }
         document.addEventListener('mousedown', handleClickOutside)
@@ -220,7 +225,7 @@ function RigCarSearchPicker({
             document.removeEventListener('mousedown', handleClickOutside)
             document.removeEventListener('keydown', handleKeyDown)
         }
-    }, [isOpen])
+    }, [isOpen, onClose])
 
     // Focus input on open and reset search query
     useEffect(() => {
@@ -246,10 +251,10 @@ function RigCarSearchPicker({
     })
 
     return (
-        <div className="relative" ref={containerRef}>
+        <div className={`relative ${isOpen ? 'z-50' : 'z-10'}`} ref={containerRef}>
             <button
                 type="button"
-                onClick={() => setIsOpen(prev => !prev)}
+                onClick={onToggleOpen}
                 className={`flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all max-w-48 cursor-pointer select-none ${
                     hasError
                         ? 'bg-red-500/20 border border-red-500 text-red-300 ring-2 ring-red-500/40 animate-pulse'
@@ -282,10 +287,10 @@ function RigCarSearchPicker({
                                 if (e.key === 'Enter') {
                                     if (filteredCars.length > 0) {
                                         onSelectCar(filteredCars[0].id)
-                                        setIsOpen(false)
+                                        onClose()
                                     } else if (!query.trim() || 'none'.includes(query.toLowerCase())) {
                                         onSelectCar('')
-                                        setIsOpen(false)
+                                        onClose()
                                     }
                                 }
                             }}
@@ -304,14 +309,14 @@ function RigCarSearchPicker({
                     </div>
 
                     {/* Results list */}
-                    <div className="max-h-56 overflow-y-auto divide-y divide-white/5">
+                    <div className="max-h-56 overflow-y-auto divide-y divide-white/5 custom-scrollbar">
                         {/* None option */}
                         {(!query.trim() || 'none'.includes(query.toLowerCase())) && (
                             <button
                                 type="button"
                                 onClick={() => {
                                     onSelectCar('')
-                                    setIsOpen(false)
+                                    onClose()
                                 }}
                                 className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between transition-colors ${
                                     !isCarSelected
@@ -332,7 +337,7 @@ function RigCarSearchPicker({
                                     type="button"
                                     onClick={() => {
                                         onSelectCar(car.id)
-                                        setIsOpen(false)
+                                        onClose()
                                     }}
                                     className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between transition-colors ${
                                         isSelected
@@ -427,6 +432,7 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
     const [filterPreset, setFilterPreset] = useState<string>('All')
     const [unassignedRigErrors, setUnassignedRigErrors] = useState<string[]>([])
     const [rigCarOverrides, setRigCarOverrides] = useState<Record<string, string>>({})
+    const [openPickerRigId, setOpenPickerRigId] = useState<string | null>(null)
 
     // Preview Config modal state
     const [previewConfig, setPreviewConfig] = useState<string | null>(null)
@@ -437,6 +443,7 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
 
     useEffect(() => {
         setUnassignedRigErrors([])
+        setOpenPickerRigId(null)
     }, [selectedGroupId])
 
 
@@ -842,7 +849,7 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
             </div>
 
             {/* ===== RIGHT PANEL — Selected Group Detail ===== */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {selectedGroup ? (
                     <div className="p-6 space-y-6 max-w-5xl">
                         {/* Group Header + Actions */}
@@ -964,7 +971,7 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                         </div>
 
                         {/* ---- Rig Assignment Row ---- */}
-                        <div className="glass rounded-2xl p-5 border border-white/10">
+                        <div className="glass rounded-2xl p-5 border border-white/10 relative z-30">
                             <div className="flex items-center justify-between mb-3">
                                 <h3 className="text-[9px] font-black uppercase tracking-widest text-white/50 flex items-center gap-1.5">
                                     <Users size={10} /> Assigned Rigs ({selectedGroup.rig_ids.length})
@@ -1030,6 +1037,7 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                     const rig = rigs.find(r => r.rig_id === rigId)
                                     const currentCar = getRigCar(rigId)
                                     const hasCarError = unassignedRigErrors.includes(rigId)
+                                    const isPickerOpen = openPickerRigId === rigId
 
                                     const seen = new Set<string>()
                                     let enabledCars = activeCarPool.length > 0
@@ -1057,7 +1065,9 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                     return (
                                         <div
                                             key={rigId}
-                                            className={`rounded-xl px-3 py-2.5 flex items-center gap-3 group transition-all ${
+                                            className={`rounded-xl px-3 py-2.5 flex items-center gap-3 group transition-all relative ${
+                                                isPickerOpen ? 'z-40' : 'z-10'
+                                            } ${
                                                 hasCarError
                                                     ? 'bg-red-500/10 border-2 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
                                                     : 'bg-black/30 border border-white/5 hover:border-white/15'
@@ -1078,6 +1088,9 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                                 availableCars={filteredList}
                                                 onSelectCar={carId => setRigCar(rigId, carId)}
                                                 hasError={hasCarError}
+                                                isOpen={isPickerOpen}
+                                                onToggleOpen={() => setOpenPickerRigId(prev => prev === rigId ? null : rigId)}
+                                                onClose={() => setOpenPickerRigId(null)}
                                             />
 
                                             <button
@@ -1137,7 +1150,7 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                         </div>
 
                         {/* ---- ENVIRONMENT ---- */}
-                        <div className="glass rounded-2xl p-5 border border-white/10 space-y-3">
+                        <div className="glass rounded-2xl p-5 border border-white/10 space-y-3 relative z-10">
                             <h4 className="text-[9px] uppercase font-black text-white/50 tracking-[0.3em] mb-1">Environment</h4>
 
                             {/* Track + Weather + Time dropdowns row */}
