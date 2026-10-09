@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Timer, Search, Trash2, CheckCircle2, XCircle, RefreshCw, Plus, Filter, ShieldAlert } from 'lucide-react'
+import { Timer, Search, Trash2, CheckCircle2, XCircle, RefreshCw, Plus, Filter, ShieldAlert, ArrowUpDown } from 'lucide-react'
 import { LeaderboardEntry } from '../../types'
 
 export const LapsModule: React.FC = () => {
@@ -8,6 +8,7 @@ export const LapsModule: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('')
     const [filterTrack, setFilterTrack] = useState('all')
     const [filterValidity, setFilterValidity] = useState<'all' | 'valid' | 'invalid'>('all')
+    const [sortBy, setSortBy] = useState<'fastest' | 'recent' | 'oldest' | 'slowest'>('fastest')
     const [tracksList, setTracksList] = useState<string[]>([])
     const [actionMsg, setActionMsg] = useState<string | null>(null)
 
@@ -84,21 +85,43 @@ export const LapsModule: React.FC = () => {
         }
     }
 
-    // Filter laps
-    const filteredLaps = laps.filter(lap => {
-        const matchesSearch =
-            (lap.driver_name && lap.driver_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-            (lap.rig_id && lap.rig_id.toLowerCase().includes(searchTerm.toLowerCase())) ||
-            (lap.car && lap.car.toLowerCase().includes(searchTerm.toLowerCase()))
-        const matchesTrack = filterTrack === 'all' || lap.track === filterTrack
-        const isValid = lap.is_valid !== false
-        const matchesValidity =
-            filterValidity === 'all' ||
-            (filterValidity === 'valid' && isValid) ||
-            (filterValidity === 'invalid' && !isValid)
+    // Filter and Sort laps
+    const processedLaps = laps
+        .filter(lap => {
+            const matchesSearch =
+                (lap.driver_name && lap.driver_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (lap.rig_id && lap.rig_id.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (lap.car && lap.car.toLowerCase().includes(searchTerm.toLowerCase()))
+            const matchesTrack = filterTrack === 'all' || lap.track === filterTrack
+            const isValid = lap.is_valid !== false
+            const matchesValidity =
+                filterValidity === 'all' ||
+                (filterValidity === 'valid' && isValid) ||
+                (filterValidity === 'invalid' && !isValid)
 
-        return matchesSearch && matchesTrack && matchesValidity
-    })
+            return matchesSearch && matchesTrack && matchesValidity
+        })
+        .sort((a, b) => {
+            if (sortBy === 'fastest') {
+                const timeA = a.lap_time_ms && a.lap_time_ms > 0 ? a.lap_time_ms : Infinity
+                const timeB = b.lap_time_ms && b.lap_time_ms > 0 ? b.lap_time_ms : Infinity
+                if (timeA !== timeB) return timeA - timeB
+                return (b.timestamp || 0) - (a.timestamp || 0)
+            }
+            if (sortBy === 'slowest') {
+                const timeA = a.lap_time_ms && a.lap_time_ms > 0 ? a.lap_time_ms : -Infinity
+                const timeB = b.lap_time_ms && b.lap_time_ms > 0 ? b.lap_time_ms : -Infinity
+                if (timeA !== timeB) return timeB - timeA
+                return (b.timestamp || 0) - (a.timestamp || 0)
+            }
+            if (sortBy === 'recent') {
+                return (b.timestamp || 0) - (a.timestamp || 0)
+            }
+            if (sortBy === 'oldest') {
+                return (a.timestamp || 0) - (b.timestamp || 0)
+            }
+            return 0
+        })
 
     return (
         <div className="space-y-6">
@@ -156,6 +179,20 @@ export const LapsModule: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2">
+                        <ArrowUpDown className="w-3.5 h-3.5 text-white/40" />
+                        <select
+                            value={sortBy}
+                            onChange={e => setSortBy(e.target.value as any)}
+                            className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
+                        >
+                            <option value="fastest">Fastest Lap Time</option>
+                            <option value="recent">Most Recent</option>
+                            <option value="oldest">Oldest First</option>
+                            <option value="slowest">Slowest Lap Time</option>
+                        </select>
+                    </div>
+
                     <div className="flex items-center gap-2">
                         <Filter className="w-3.5 h-3.5 text-white/40" />
                         <select
@@ -224,14 +261,14 @@ export const LapsModule: React.FC = () => {
                                         Loading recorded laps...
                                     </td>
                                 </tr>
-                            ) : filteredLaps.length === 0 ? (
+                            ) : processedLaps.length === 0 ? (
                                 <tr>
                                     <td colSpan={9} className="text-center py-12 text-white/40">
                                         No telemetry laps found matching current filter criteria.
                                     </td>
                                 </tr>
                             ) : (
-                                filteredLaps.map(lap => {
+                                processedLaps.map(lap => {
                                     const isValid = lap.is_valid !== false
                                     const dateStr = lap.timestamp
                                         ? new Date(lap.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
