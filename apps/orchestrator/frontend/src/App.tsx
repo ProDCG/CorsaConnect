@@ -2,14 +2,17 @@ import React from 'react'
 import Kiosk from './Kiosk'
 import Lobby from './Lobby'
 import { LiveStreamProvider, useLiveStream } from './context/LiveStreamContext'
-import { Router, useLocation, useNavigate, Routes, Route } from './components/navigation/Router'
+import { Router, useLocation, useNavigate } from './components/navigation/Router'
 import { Sidebar } from './components/navigation/Sidebar'
+import { RightRigDrawer } from './components/navigation/RightRigDrawer'
 import SessionTimerBar from './components/SessionTimerBar'
 
-// 10 Modular Components
+// Modular Components
 import { DashboardModule } from './components/modules/DashboardModule'
 import { LauncherModule } from './components/modules/LauncherModule'
 import { GroupsModule } from './components/modules/GroupsModule'
+import { CarsModule } from './components/modules/CarsModule'
+import { MonitorModule } from './components/modules/MonitorModule'
 import { LeaderboardModule } from './components/modules/LeaderboardModule'
 import { DriversModule } from './components/modules/DriversModule'
 import { ContentSyncModule } from './components/modules/ContentSyncModule'
@@ -21,7 +24,7 @@ import { SettingsModule } from './components/modules/SettingsModule'
 const AdminLayout: React.FC = () => {
     const { pathname } = useLocation()
     const navigate = useNavigate()
-    const { isConnected, serverStatus, rigs, groups } = useLiveStream()
+    const { isConnected, serverStatus, rigs } = useLiveStream()
     const activeRigs = rigs.filter(r => r.status === 'racing')
 
     const getModuleTitle = () => {
@@ -33,6 +36,10 @@ const AdminLayout: React.FC = () => {
                 return 'Sim Rig Launcher & Fleet Control'
             case '/groups':
                 return 'Race Groups & Lineup Manager'
+            case '/cars':
+                return 'Fleet Authorization & Car Subtype Presets'
+            case '/monitor':
+                return 'Live Telemetry Feed & Monitoring'
             case '/leaderboard':
                 return 'Live Leaderboard & Display Appearance'
             case '/drivers':
@@ -48,16 +55,16 @@ const AdminLayout: React.FC = () => {
             case '/settings':
                 return 'Settings & Physical Infrastructure'
             default:
-                return 'CorsaConnect Orchestrator'
+                return 'CorsaConnect Fleet Manager'
         }
     }
 
     return (
-        <div className="flex h-screen w-screen overflow-hidden bg-ridge-dark text-white font-sans">
-            {/* Global Session Timer Bar for active races */}
+        <div className="flex h-screen w-screen overflow-hidden bg-ridge-dark text-white font-sans relative">
+            {/* Global Session Timer floating top overlay (non-intrusive) */}
             <SessionTimerBar />
 
-            {/* Sidebar Navigation (10 Modules) */}
+            {/* Sidebar Navigation */}
             <Sidebar currentPath={pathname} onNavigate={navigate} />
 
             {/* Main Application Container */}
@@ -100,6 +107,10 @@ const AdminLayout: React.FC = () => {
                             <LauncherModule />
                         ) : pathname === '/groups' ? (
                             <GroupsModule />
+                        ) : pathname === '/cars' ? (
+                            <CarsModule />
+                        ) : pathname === '/monitor' ? (
+                            <MonitorModule />
                         ) : pathname === '/leaderboard' ? (
                             <LeaderboardModule />
                         ) : pathname === '/drivers' ? (
@@ -120,6 +131,9 @@ const AdminLayout: React.FC = () => {
                     </div>
                 </main>
             </div>
+
+            {/* Right Connected Rigs Drawer with account binding */}
+            <RightRigDrawer />
         </div>
     )
 }

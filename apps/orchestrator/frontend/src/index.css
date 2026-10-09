@@ -43,3 +43,29 @@ select option {
 select option:checked {
   background-color: #333333;
 }
+
+/* Ensure all text inputs have dark background and crisp white visible text */
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="password"],
+input[type="search"],
+input[type="number"],
+textarea {
+  background-color: rgba(20, 20, 20, 0.95);
+  color: #ffffff !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Fix browser autofill turning white */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ffffff !important;
+  -webkit-box-shadow: 0 0 0px 1000px #1a1a1a inset !important;
+  transition: background-color 5000s ease-in-out 0s;
+}

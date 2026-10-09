@@ -80,13 +80,13 @@ export const LeaderboardModule: React.FC<{
             {/* Filter Bar */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="relative">
-                    <Search size={16} className="absolute left-3.5 top-3.5 text-white/40" />
+                    <Search size={16} className="absolute left-3.5 top-3.5 text-white/40 pointer-events-none" />
                     <input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search by driver, car, or rig ID..."
-                        className="w-full bg-ridge-panel/60 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-ridge-brand"
+                        className="w-full bg-[#181818] border border-white/20 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-ridge-brand transition-colors"
                     />
                 </div>
 
@@ -95,7 +95,7 @@ export const LeaderboardModule: React.FC<{
                     <select
                         value={selectedTrack}
                         onChange={(e) => setSelectedTrack(e.target.value)}
-                        className="w-full bg-ridge-panel/60 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-ridge-brand"
+                        className="w-full bg-[#181818] border border-white/20 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-ridge-brand transition-colors"
                     >
                         <option value="all">All Tracks ({uniqueTracks.length})</option>
                         {uniqueTracks.map(t => (

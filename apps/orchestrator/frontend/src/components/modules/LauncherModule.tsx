@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
-import { Play, Square, Wrench, ShieldAlert, Tv, RotateCcw, Monitor, CheckCircle, AlertCircle, Fuel, Gauge, Thermometer, UserCheck } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Play, Square, Wrench, ShieldAlert, Tv, RotateCcw, Monitor, CheckCircle, AlertCircle, Fuel, Gauge, Thermometer, UserCheck, User, Search, X, UserMinus } from 'lucide-react'
 import { useLiveStream } from '../../context/LiveStreamContext'
-import { Rig } from '../../types'
+import { Rig, Driver } from '../../types'
 
 export const LauncherModule: React.FC<{
     onAssignDriver?: (rigId: string) => void
@@ -11,6 +11,102 @@ export const LauncherModule: React.FC<{
     const [showPanicModal, setShowPanicModal] = useState<boolean>(false)
     const [isKilling, setIsKilling] = useState<boolean>(false)
     const [spectatorStatus, setSpectatorStatus] = useState<'idle' | 'auto' | 'rig'>('idle')
+
+    // Account Search & Binding State
+    const [selectedRigForDriver, setSelectedRigForDriver] = useState<Rig | null>(null)
+    const [driversList, setDriversList] = useState<Driver[]>([])
+    const [driverSearch, setDriverSearch] = useState<string>('')
+    const [manualDriverName, setManualDriverName] = useState<string>('')
+    const [isSubmittingDriver, setIsSubmittingDriver] = useState<boolean>(false)
+
+    const fetchDrivers = async () => {
+        try {
+            const res = await fetch('/drivers')
+            if (res.ok) {
+                const data = await res.json()
+                if (Array.isArray(data)) setDriversList(data)
+            }
+        } catch (e) {
+            console.error('Failed to load drivers:', e)
+        }
+    }
+
+    React.useEffect(() => {
+        if (selectedRigForDriver) {
+            fetchDrivers()
+            setDriverSearch('')
+            setManualDriverName(selectedRigForDriver.driver_name || '')
+        }
+    }, [selectedRigForDriver])
+
+    const handleAssignDriver = async (driver: Driver) => {
+        if (!selectedRigForDriver) return
+        setIsSubmittingDriver(true)
+        try {
+            await fetch('/drivers/assign', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    rig_id: selectedRigForDriver.rig_id,
+                    driver_name: driver.display_name,
+                    driver_email: driver.email || null,
+                    driver_uuid: driver.driver_uuid,
+                }),
+            })
+            setSelectedRigForDriver(null)
+            refresh()
+        } catch (e) {
+            console.error('Failed to assign driver:', e)
+        } finally {
+            setIsSubmittingDriver(false)
+        }
+    }
+
+    const handleAssignManualName = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!selectedRigForDriver) return
+        setIsSubmittingDriver(true)
+        try {
+            await fetch(`/rigs/${selectedRigForDriver.rig_id}/driver_name`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ driver_name: manualDriverName.trim() }),
+            })
+            setSelectedRigForDriver(null)
+            refresh()
+        } catch (e) {
+            console.error('Failed to set manual driver name:', e)
+        } finally {
+            setIsSubmittingDriver(false)
+        }
+    }
+
+    const handleUnbindDriver = async (rigId: string) => {
+        setIsSubmittingDriver(true)
+        try {
+            await fetch(`/rigs/${rigId}/driver_name`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ driver_name: '' }),
+            })
+            setSelectedRigForDriver(null)
+            refresh()
+        } catch (e) {
+            console.error('Failed to unbind driver:', e)
+        } finally {
+            setIsSubmittingDriver(false)
+        }
+    }
+
+    const filteredDrivers = driversList.filter(d => {
+        if (!driverSearch.trim()) return true
+        const q = driverSearch.toLowerCase()
+        return (
+            d.display_name.toLowerCase().includes(q) ||
+            (d.email && d.email.toLowerCase().includes(q)) ||
+            (d.phone && d.phone.includes(q))
+        )
+    })
 
     // Categorized lists
     const categorizedRigs = {
@@ -183,9 +279,14 @@ export const LauncherModule: React.FC<{
                                 <div className="space-y-1.5 mb-4 text-xs">
                                     <div className="flex items-center justify-between text-white/80">
                                         <span className="text-white/40 text-[11px]">Driver:</span>
-                                        <span className="font-bold flex items-center gap-1">
-                                            {rig.driver_name || <span className="text-white/30 italic">None</span>}
-                                        </span>
+                                        <button
+                                            onClick={() => setSelectedRigForDriver(rig)}
+                                            className="font-bold flex items-center gap-1.5 hover:text-ridge-brand transition-colors text-right"
+                                            title="Click to search accounts or change driver"
+                                        >
+                                            <span>{rig.driver_name || <span className="text-white/30 italic">Click to bind</span>}</span>
+                                            <User size={12} className={rig.driver_name ? 'text-ridge-brand' : 'text-white/30'} />
+                                        </button>
                                     </div>
                                     <div className="flex items-center justify-between text-white/80">
                                         <span className="text-white/40 text-[11px]">Assigned Car:</span>
@@ -285,6 +386,115 @@ export const LauncherModule: React.FC<{
                                 {isKilling ? 'Aborting...' : 'Yes, End All Sessions'}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Account Binding Modal */}
+            {selectedRigForDriver && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+                    <div className="bg-ridge-panel border border-white/20 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+                        <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                            <div>
+                                <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                                    Bind Driver to {selectedRigForDriver.rig_id}
+                                </h3>
+                                <p className="text-[11px] text-white/50">
+                                    Search registered account or manually enter a custom racer name.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setSelectedRigForDriver(null)}
+                                className="text-white/40 hover:text-white p-1 rounded"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        {/* Search Accounts DB */}
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-white/40 block">
+                                1. Search Accounts Database
+                            </label>
+                            <div className="relative">
+                                <Search size={14} className="absolute left-3 top-2.5 text-white/40 pointer-events-none" />
+                                <input
+                                    type="text"
+                                    value={driverSearch}
+                                    onChange={e => setDriverSearch(e.target.value)}
+                                    placeholder="Search driver accounts by name, email, phone..."
+                                    className="w-full bg-[#181818] border border-white/20 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-ridge-brand transition-colors"
+                                />
+                            </div>
+
+                            {/* Driver results */}
+                            <div className="max-h-40 overflow-y-auto space-y-1 bg-black/30 p-2 rounded-xl border border-white/5">
+                                {filteredDrivers.length === 0 ? (
+                                    <div className="text-center py-4 text-[11px] text-white/30">
+                                        No registered accounts found
+                                    </div>
+                                ) : (
+                                    filteredDrivers.slice(0, 8).map(d => (
+                                        <button
+                                            key={d.driver_uuid}
+                                            disabled={isSubmittingDriver}
+                                            onClick={() => handleAssignDriver(d)}
+                                            className="w-full text-left p-2 rounded-lg bg-white/5 hover:bg-ridge-brand/20 border border-transparent hover:border-ridge-brand/40 flex items-center justify-between transition-colors group"
+                                        >
+                                            <div className="truncate">
+                                                <div className="text-xs font-bold text-white group-hover:text-ridge-brand transition-colors">
+                                                    {d.display_name}
+                                                </div>
+                                                <div className="text-[10px] text-white/40 font-mono truncate">
+                                                    {d.email || d.phone || d.driver_uuid}
+                                                </div>
+                                            </div>
+                                            <span className="text-[10px] font-bold text-ridge-brand opacity-0 group-hover:opacity-100 transition-opacity">
+                                                Select
+                                            </span>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Manual Name Input */}
+                        <form onSubmit={handleAssignManualName} className="space-y-2 pt-2 border-t border-white/10">
+                            <label className="text-[10px] font-black uppercase text-white/40 block">
+                                2. Or Manually Enter Guest Name
+                            </label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    value={manualDriverName}
+                                    onChange={e => setManualDriverName(e.target.value)}
+                                    placeholder="e.g. Mason (Guest)"
+                                    className="flex-1 bg-[#181818] border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-ridge-brand transition-colors"
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={isSubmittingDriver || !manualDriverName.trim()}
+                                    className="px-4 py-2 bg-white/10 hover:bg-ridge-brand text-white text-xs font-bold uppercase rounded-xl transition-all"
+                                >
+                                    Set Name
+                                </button>
+                            </div>
+                        </form>
+
+                        {/* Unbind button */}
+                        {selectedRigForDriver.driver_name && (
+                            <div className="pt-2 border-t border-white/10 flex justify-between items-center">
+                                <span className="text-[10px] text-white/40">
+                                    Current: <strong className="text-white">{selectedRigForDriver.driver_name}</strong>
+                                </span>
+                                <button
+                                    onClick={() => handleUnbindDriver(selectedRigForDriver.rig_id)}
+                                    className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-xs font-bold transition-colors"
+                                >
+                                    Remove Account
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

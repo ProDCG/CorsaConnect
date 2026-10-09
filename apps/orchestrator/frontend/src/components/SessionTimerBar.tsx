@@ -199,24 +199,28 @@ export default function SessionTimerBar() {
     if (activeTimers.length === 0) return null
 
     return (
-        <div ref={timerRef} className="bg-black/40 border-b border-white/5 px-8 py-2 flex items-center gap-6">
-            <div className="flex items-center gap-1.5 text-[9px] text-white/30 font-black uppercase tracking-widest">
-                <Clock size={10} /> Active Sessions
+        <div
+            ref={timerRef}
+            className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-black/90 border border-emerald-500/30 rounded-full px-4 py-1.5 shadow-2xl backdrop-blur-md transition-all animate-in fade-in"
+        >
+            <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-black uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Racing</span>
             </div>
             {activeTimers.map(timer => (
-                <div key={timer.groupId} className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-1.5">
-                    <Users size={10} className="text-white/30" />
-                    <span className="text-[10px] font-black uppercase text-white/50">{timer.groupName}</span>
+                <div key={timer.groupId} className="flex items-center gap-2 bg-white/10 rounded-full px-3 py-0.5">
+                    <span className="text-[11px] font-bold text-white/90">{timer.groupName}</span>
                     {timer.freeplay && (
-                        <span className="text-[7px] font-black uppercase text-amber-400/60 tracking-widest">FREE</span>
+                        <span className="text-[8px] font-black uppercase text-amber-400 tracking-wider">FREE</span>
                     )}
-                    <span data-timer-id={timer.groupId} className="text-sm font-black tabular-nums text-white">--:--</span>
+                    <span data-timer-id={timer.groupId} className="text-xs font-black font-mono tabular-nums text-white">--:--</span>
                     {!timer.freeplay && (
                         <>
                             <span data-expired-id={timer.groupId} style={{ display: 'none' }}
-                                className="text-[8px] font-black uppercase text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">EXPIRED</span>
+                                className="text-[8px] font-black uppercase text-red-400 bg-red-500/20 px-1.5 py-0.2 rounded-full">EXPIRED</span>
                             <button onClick={() => addTime(timer.groupId, timer.durationMin, 5)}
-                                className="ml-1 text-[9px] font-black text-white/40 hover:text-ridge-brand bg-white/5 hover:bg-ridge-brand/20 px-1.5 py-0.5 rounded transition-all">
+                                className="ml-1 text-[9px] font-black text-white/60 hover:text-white bg-white/10 hover:bg-emerald-500/30 px-1.5 py-0.5 rounded-full transition-all"
+                                title="Add 5 minutes to race session">
                                 +5m
                             </button>
                         </>

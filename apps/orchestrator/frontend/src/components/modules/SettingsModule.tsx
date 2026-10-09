@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Settings, Save, HardDrive, Shield, Video, Image, CheckCircle2, AlertTriangle, RefreshCw, Send, Trash2 } from 'lucide-react'
+import { Settings, Save, HardDrive, Shield, Video, Image, CheckCircle2, AlertTriangle, RefreshCw, Send, Trash2, RotateCcw } from 'lucide-react'
 import { GlobalSettings, Branding } from '../../types'
 
 export const SettingsModule: React.FC = () => {
@@ -371,6 +371,36 @@ export const SettingsModule: React.FC = () => {
                             Clear Data
                         </button>
                     </div>
+                </div>
+            </div>
+
+            {/* Full System Update */}
+            <div className="bg-ridge-panel/80 border border-red-500/20 bg-red-500/[0.02] rounded-2xl p-6 backdrop-blur-md">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-red-400 flex items-center gap-2 mb-2">
+                    <RotateCcw className="w-4 h-4 text-red-400" /> Full System Update
+                </h3>
+                <p className="text-xs text-white/50 mb-4 leading-relaxed">
+                    Stops all active races and servers, pulls the latest code on all rigs and the admin PC,
+                    then restarts everything. All console windows will be closed and reopened.
+                </p>
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={async () => {
+                            if (!confirm('⚠️ FULL SYSTEM UPDATE\n\nThis will:\n• Stop ALL active races\n• Stop ALL servers\n• Pull latest code on ALL rigs\n• Pull latest code on this admin PC\n• Restart the entire system\n\nAll players will be disconnected.\n\nContinue?')) return
+                            try {
+                                const res = await fetch('/api/update', { method: 'POST' })
+                                const data = await res.json()
+                                alert(`Update initiated!\n\n${data.message || 'System will restart shortly.'}\n\nThe dashboard will go offline briefly while the system restarts.`)
+                            } catch (err) {
+                                alert('Failed to initiate update. Check the console.')
+                                console.error(err)
+                            }
+                        }}
+                        className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 hover:border-red-500/50 px-6 py-2.5 rounded-xl font-bold uppercase tracking-wider text-xs transition-all shadow-lg shadow-red-500/10"
+                    >
+                        Deploy Full Update
+                    </button>
+                    <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider">Requires network access to Git</span>
                 </div>
             </div>
 

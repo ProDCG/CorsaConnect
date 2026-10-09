@@ -304,9 +304,12 @@ def create_router(state: AppState) -> APIRouter:
             else:
                 # Linux/dev: git pull + exit
                 try:
-                    _sp.run(["git", "pull"], cwd=str(repo_root), timeout=30)
-                    logger.info("Git pull complete — exiting for restart")
-                    os._exit(0)
+                    if "PYTEST_CURRENT_TEST" not in os.environ:
+                        _sp.run(["git", "pull"], cwd=str(repo_root), timeout=30)
+                        logger.info("Git pull complete — exiting for restart")
+                        os._exit(0)
+                    else:
+                        logger.info("Running under pytest — skipping actual git pull and os._exit")
                 except Exception as e:
                     logger.error("Admin update failed: %s", e)
 

@@ -131,13 +131,13 @@ export const DriversModule: React.FC = () => {
 
             {/* Search Bar */}
             <div className="relative">
-                <Search size={16} className="absolute left-3.5 top-3.5 text-white/40" />
+                <Search size={16} className="absolute left-3.5 top-3.5 text-white/40 pointer-events-none" />
                 <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search by driver name, email, or phone number..."
-                    className="w-full bg-ridge-panel/60 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-ridge-brand"
+                    className="w-full bg-[#181818] border border-white/20 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-ridge-brand transition-colors"
                 />
             </div>
 
@@ -249,7 +249,7 @@ export const DriversModule: React.FC = () => {
                                     value={formName}
                                     onChange={(e) => setFormName(e.target.value)}
                                     placeholder="e.g. Mason Stuart"
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-ridge-brand"
+                                    className="w-full bg-[#181818] border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-ridge-brand transition-colors"
                                 />
                             </div>
 
@@ -262,7 +262,7 @@ export const DriversModule: React.FC = () => {
                                     value={formEmail}
                                     onChange={(e) => setFormEmail(e.target.value)}
                                     placeholder="e.g. mason@example.com"
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-ridge-brand"
+                                    className="w-full bg-[#181818] border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-ridge-brand transition-colors"
                                 />
                             </div>
 
@@ -275,7 +275,7 @@ export const DriversModule: React.FC = () => {
                                     value={formPhone}
                                     onChange={(e) => setFormPhone(e.target.value)}
                                     placeholder="e.g. 555-123-4567"
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-ridge-brand"
+                                    className="w-full bg-[#181818] border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-ridge-brand transition-colors"
                                 />
                             </div>
 
