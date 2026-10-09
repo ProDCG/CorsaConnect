@@ -38,6 +38,8 @@ class Rig(BaseModel):
     telemetry: dict[str, object] | None = None
     last_lap_count: int = 0
     group_id: str | None = None
+    mumble_channel: str | None = None
+    mumble_connected: bool | None = None
 
 
 # --- Rig Group Models ---
@@ -73,6 +75,7 @@ class RigGroup(BaseModel):
     ambient_temp: int = 26  # Ambient temperature °C
     track_grip: int = 100  # Track grip 0-100%
     freeplay: bool = False  # When true, session timer is disabled
+    voice_channel: str | None = None
 
 
 class RigGroupCreate(BaseModel):
@@ -80,6 +83,7 @@ class RigGroupCreate(BaseModel):
 
     name: str
     mode: str = "multiplayer"
+    voice_channel: str | None = None
 
 
 class RigGroupUpdate(BaseModel):
@@ -109,6 +113,7 @@ class RigGroupUpdate(BaseModel):
     ambient_temp: int | None = None
     track_grip: int | None = None
     freeplay: bool | None = None
+    voice_channel: str | None = None
 
 
 class RigGroupAddRig(BaseModel):

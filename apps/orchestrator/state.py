@@ -209,11 +209,21 @@ class AppState:
 
     def get_rigs(self) -> list[dict[str, object]]:
         with self._lock:
-            return list(self._rigs.values())
+            result = []
+            for r in self._rigs.values():
+                d = dict(r)
+                d["mumble_channel"] = self._mumble_assignments.get(str(r.get("rig_id")))
+                result.append(d)
+            return result
 
     def get_rig(self, rig_id: str) -> dict[str, object] | None:
         with self._lock:
-            return self._rigs.get(rig_id)
+            r = self._rigs.get(rig_id)
+            if not r:
+                return None
+            d = dict(r)
+            d["mumble_channel"] = self._mumble_assignments.get(rig_id)
+            return d
 
     def upsert_rig(self, rig_id: str, data: dict[str, object]) -> dict[str, object]:
         with self._lock:
@@ -228,12 +238,15 @@ class AppState:
                     "telemetry": None,
                     "last_lap_count": 0,
                     "group_id": None,
+                    "mumble_channel": self._mumble_assignments.get(rig_id),
                     **data,
                 }
                 logger.info("New rig discovered: %s", rig_id)
             else:
                 self._rigs[rig_id].update(data)
                 self._rigs[rig_id]["last_seen"] = time.time()
+                if "mumble_channel" not in self._rigs[rig_id]:
+                    self._rigs[rig_id]["mumble_channel"] = self._mumble_assignments.get(rig_id)
             return self._rigs[rig_id]
 
     def update_rig_field(self, rig_id: str, field: str, value: object) -> None:
@@ -270,8 +283,8 @@ class AppState:
         with self._lock:
             return self._groups.get(group_id)
 
-    def create_group(self, name: str, mode: str = "multiplayer") -> RigGroup:
-        group = RigGroup(name=name, mode=mode)
+    def create_group(self, name: str, mode: str = "multiplayer", voice_channel: str | None = None) -> RigGroup:
+        group = RigGroup(name=name, mode=mode, voice_channel=voice_channel)
         with self._lock:
             self._groups[group.id] = group
             self._save_groups()
@@ -290,10 +303,11 @@ class AppState:
                           "penalties_enabled", "unlimited_fuel", "damage_enabled",
                           "allow_wrong_way", "sun_angle",
                           "time_mult", "session_duration_min",
-                          "ambient_temp", "track_grip", "freeplay"):
+                          "ambient_temp", "track_grip", "freeplay", "voice_channel"):
                 value = kwargs.get(field)
                 if value is not None:
-                    setattr(group, field, value)
+                    # Allow empty string to clear voice_channel
+                    setattr(group, field, None if (field == "voice_channel" and value == "") else value)
             self._save_groups()
             return group
 
@@ -480,11 +494,15 @@ class AppState:
     def set_mumble_assignment(self, rig_id: str, channel: str) -> None:
         with self._lock:
             self._mumble_assignments[rig_id] = channel
+            if rig_id in self._rigs:
+                self._rigs[rig_id]["mumble_channel"] = channel
             self._save_mumble_assignments()
 
     def clear_mumble_assignment(self, rig_id: str) -> None:
         with self._lock:
             self._mumble_assignments.pop(rig_id, None)
+            if rig_id in self._rigs:
+                self._rigs[rig_id]["mumble_channel"] = None
             self._save_mumble_assignments()
 
     # ------------------------------------------------------------------

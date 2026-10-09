@@ -83,7 +83,7 @@ app.add_middleware(
 _routers = [
     rigs.create_router(state),
     commands.create_router(state),
-    groups.create_router(state),
+    groups.create_router(state, mumble_svc),
     settings.create_router(state),
     server.create_router(state),
     leaderboard.create_router(state),

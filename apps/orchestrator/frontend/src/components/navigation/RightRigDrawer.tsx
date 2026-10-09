@@ -13,9 +13,12 @@ import {
     Check,
     Cpu,
     Zap,
+    Volume2,
 } from 'lucide-react'
 import { useLiveStream } from '../../context/LiveStreamContext'
 import { Rig, Driver } from '../../types'
+
+const VOICE_ROOMS = ['Room 1', 'Room 2', 'Room 3', 'Room 4', 'Room 5', 'Room 6']
 
 export const RightRigDrawer: React.FC = () => {
     const { rigs, refresh } = useLiveStream()
@@ -119,6 +122,27 @@ export const RightRigDrawer: React.FC = () => {
             console.error('Failed to unbind driver:', e)
         } finally {
             setIsSubmitting(false)
+        }
+    }
+
+    const handleAssignVoice = async (rigId: string, channel: string) => {
+        try {
+            if (!channel || channel === 'none') {
+                await fetch('/api/mumble/unassign', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rig_id: rigId }),
+                })
+            } else {
+                await fetch('/api/mumble/assign', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rig_id: rigId, channel }),
+                })
+            }
+            refresh()
+        } catch (e) {
+            console.error('Failed to assign voice room:', e)
         }
     }
 
@@ -242,6 +266,28 @@ export const RightRigDrawer: React.FC = () => {
                                                     <UserMinus size={12} />
                                                 </button>
                                             )}
+                                        </div>
+
+                                        {/* Rig Row 3: Voice Room Selector */}
+                                        <div className="mt-1.5 flex items-center justify-between gap-1.5 bg-black/20 rounded-lg px-2 py-1 border border-white/5 text-[10px]">
+                                            <div className="flex items-center gap-1.5 text-white/40 shrink-0">
+                                                <Volume2 size={11} className={rig.mumble_channel ? 'text-indigo-400' : 'text-white/30'} />
+                                                <span className="font-semibold text-[9px] uppercase tracking-wider">Voice</span>
+                                            </div>
+                                            <select
+                                                value={rig.mumble_channel || ''}
+                                                onChange={(e) => handleAssignVoice(rig.rig_id, e.target.value)}
+                                                className={`bg-transparent text-right font-mono text-[10px] font-bold outline-none cursor-pointer hover:text-white transition-colors ${
+                                                    rig.mumble_channel ? 'text-indigo-300 font-bold' : 'text-white/30'
+                                                }`}
+                                            >
+                                                <option value="" className="bg-[#121212] text-white/50">Lobby (None)</option>
+                                                {VOICE_ROOMS.map(room => (
+                                                    <option key={room} value={room} className="bg-[#121212] text-white">
+                                                        {room}
+                                                    </option>
+                                                ))}
+                                            </select>
                                         </div>
 
                                         {/* Telemetry snippet */}

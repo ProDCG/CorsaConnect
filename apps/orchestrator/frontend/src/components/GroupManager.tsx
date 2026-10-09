@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap, Filter, X, Download, RefreshCw, Eye, Search, AlertTriangle, Check } from 'lucide-react'
+import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap, Filter, X, Download, RefreshCw, Eye, Search, AlertTriangle, Check, Volume2 } from 'lucide-react'
+
+const VOICE_ROOMS = ['Room 1', 'Room 2', 'Room 3', 'Room 4', 'Room 5', 'Room 6']
 
 interface CarPreset {
     id: string
@@ -40,6 +42,7 @@ interface RigGroup {
     ambient_temp: number
     track_grip: number
     freeplay: boolean
+    voice_channel?: string | null
 }
 
 const AI_STEPS = [
@@ -72,6 +75,7 @@ interface Rig {
     selected_car?: string | null
     group_id?: string | null
     mode?: string
+    mumble_channel?: string | null
 }
 
 /* ------------------------------------------------------------------ */
@@ -631,6 +635,26 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
         }
     }
 
+    const setRigVoice = async (rigId: string, channel: string) => {
+        try {
+            if (!channel || channel === 'none') {
+                await fetch('/api/mumble/unassign', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rig_id: rigId }),
+                })
+            } else {
+                await fetch('/api/mumble/assign', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rig_id: rigId, channel }),
+                })
+            }
+        } catch (e) {
+            console.error('Failed to assign voice room:', e)
+        }
+    }
+
     /* ---- Group commands ---- */
 
     const sendGroupCommand = async (groupId: string, action: string) => {
@@ -854,7 +878,7 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                     <div className="p-6 space-y-6 max-w-5xl">
                         {/* Group Header + Actions */}
                         <div className="flex items-center justify-between">
-                            <div>
+                            <div className="flex items-center gap-4 flex-wrap">
                                 <h2 className="text-2xl font-black italic uppercase tracking-tighter flex items-center gap-3">
                                     {selectedGroup.name}
                                     <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${selectedGroup.mode === 'multiplayer'
@@ -867,6 +891,27 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                         </span>
                                     )}
                                 </h2>
+
+                                {/* Group Voice Channel Selector */}
+                                <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-xl px-2.5 py-1 text-xs">
+                                    <Volume2 size={13} className={selectedGroup.voice_channel ? 'text-indigo-400' : 'text-white/30'} />
+                                    <span className="text-[10px] uppercase font-bold text-white/50 tracking-wider">Voice Room:</span>
+                                    <select
+                                        value={selectedGroup.voice_channel || ''}
+                                        onChange={(e) => {
+                                            const val = e.target.value || null
+                                            updateGroup(selectedGroup.id, { voice_channel: val })
+                                        }}
+                                        className="bg-transparent text-[11px] font-bold text-white outline-none cursor-pointer hover:text-indigo-300 transition-colors"
+                                    >
+                                        <option value="" className="bg-[#121212] text-white/50">None (Unassigned)</option>
+                                        {VOICE_ROOMS.map(room => (
+                                            <option key={room} value={room} className="bg-[#121212] text-white">
+                                                {room}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                             <div className="flex items-center gap-2">
                                 {/* Single START RACE button — auto-deploys server for multiplayer */}
@@ -882,6 +927,13 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                             return
                                         }
                                         setUnassignedRigErrors([])
+
+                                        // Ensure rigs in the group are synced to the group voice channel if set
+                                        if (selectedGroup.voice_channel) {
+                                            for (const rId of selectedGroup.rig_ids) {
+                                                setRigVoice(rId, selectedGroup.voice_channel)
+                                            }
+                                        }
 
                                         if (selectedGroup.mode === 'multiplayer' && !isSelectedServerRunning) {
                                             // Deploy server first — abort if it fails
@@ -1092,6 +1144,25 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                                 onToggleOpen={() => setOpenPickerRigId(prev => prev === rigId ? null : rigId)}
                                                 onClose={() => setOpenPickerRigId(null)}
                                             />
+
+                                            {/* Per-rig Voice Room Selector */}
+                                            <div className="flex items-center gap-1 bg-black/40 rounded-lg px-2 py-1 border border-white/5 text-[9px] shrink-0" title="Rig Voice Room">
+                                                <Volume2 size={10} className={rig?.mumble_channel ? 'text-indigo-400' : 'text-white/20'} />
+                                                <select
+                                                    value={rig?.mumble_channel || ''}
+                                                    onChange={(e) => setRigVoice(rigId, e.target.value)}
+                                                    className={`bg-transparent text-[9px] font-mono font-bold outline-none cursor-pointer hover:text-white transition-colors ${
+                                                        rig?.mumble_channel ? 'text-indigo-300' : 'text-white/30'
+                                                    }`}
+                                                >
+                                                    <option value="" className="bg-[#121212] text-white/50">None</option>
+                                                    {VOICE_ROOMS.map(room => (
+                                                        <option key={room} value={room} className="bg-[#121212] text-white">
+                                                            {room}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
 
                                             <button
                                                 onClick={() => {

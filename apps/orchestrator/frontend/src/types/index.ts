@@ -64,6 +64,7 @@ export interface RigGroup {
     ambient_temp?: number
     track_grip?: number
     freeplay?: boolean
+    voice_channel?: string | null
 }
 
 export interface Driver {
