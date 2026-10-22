@@ -662,21 +662,23 @@ class LeaderboardDB:
     ) -> dict[str, object]:
         """Insert or update a registered driver."""
         import uuid as _uuid
+        clean_email = email.strip() if email and isinstance(email, str) and email.strip() else None
+        clean_phone = phone.strip() if phone and isinstance(phone, str) and phone.strip() else None
         with self._lock:
             conn = self._connect()
             uuid_val = driver_uuid or f"drv_{_uuid.uuid4().hex[:8]}"
             now = time.time()
             # If email already exists with a different driver_uuid, update that row or handle gracefully
-            if email:
+            if clean_email:
                 existing_by_email = conn.execute(
-                    "SELECT driver_uuid FROM drivers WHERE email = ?", (email,)
+                    "SELECT driver_uuid FROM drivers WHERE email = ?", (clean_email,)
                 ).fetchone()
                 if existing_by_email and existing_by_email["driver_uuid"] != uuid_val:
                     if driver_uuid:
                         # Authoritative server UUID wins — update the existing row's driver_uuid
                         conn.execute(
                             "UPDATE drivers SET driver_uuid = ?, display_name = ?, phone = COALESCE(?, phone) WHERE email = ?",
-                            (uuid_val, display_name, phone, email),
+                            (uuid_val, display_name, clean_phone, clean_email),
                         )
                         conn.commit()
                         row = conn.execute("SELECT * FROM drivers WHERE driver_uuid = ?", (uuid_val,)).fetchone()
@@ -692,7 +694,7 @@ class LeaderboardDB:
                        display_name = excluded.display_name,
                        email = COALESCE(excluded.email, drivers.email),
                        phone = COALESCE(excluded.phone, drivers.phone)""",
-                (uuid_val, display_name, email, phone, now),
+                (uuid_val, display_name, clean_email, clean_phone, now),
             )
             conn.commit()
             row = conn.execute("SELECT * FROM drivers WHERE driver_uuid = ?", (uuid_val,)).fetchone()

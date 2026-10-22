@@ -16,6 +16,7 @@ Security:
 from __future__ import annotations
 
 import asyncio
+import datetime
 import json
 import logging
 import secrets
@@ -34,6 +35,25 @@ logger = logging.getLogger("ridge.api")
 
 MAX_BATCH_LAPS = 500
 MAX_PAYLOAD_BYTES = 1_800_000  # Safely below the 2 MiB server limit
+
+
+def _parse_timestamp(val: Any) -> float | None:
+    """Safely parse a timestamp that may be a float/int Unix epoch or a MySQL datetime string."""
+    if val is None or val == "":
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+    s = str(val).strip()
+    try:
+        return float(s)
+    except ValueError:
+        pass
+    # Try ISO 8601 / MySQL datetime formats (e.g. "2026-10-22 15:20:00" or "2026-10-22T15:20:00Z")
+    try:
+        dt = datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+        return dt.timestamp()
+    except ValueError:
+        return time.time()
 
 
 def generate_qr_token() -> str:
@@ -357,8 +377,8 @@ class RidgeApiService:
             driver_uuid = str(item.get("driver_uuid")) if item.get("driver_uuid") else None
             driver_name = str(item.get("driver_name")) if item.get("driver_name") else None
             driver_email = str(item.get("driver_email")) if item.get("driver_email") else None
-            claimed_at = float(item["claimed_at"]) if item.get("claimed_at") is not None else None
-            expires_at = float(item["expires_at"]) if item.get("expires_at") is not None else None
+            claimed_at = _parse_timestamp(item.get("claimed_at"))
+            expires_at = _parse_timestamp(item.get("expires_at"))
 
             prev = local_by_rig.get(rig_id)
             prev_status = prev.get("status") if prev else None
@@ -718,89 +738,102 @@ class RidgeApiService:
             "errors": [],
         }
 
-        has_key = bool(self._get_api_key())
+        try:
+            has_key = bool(self._get_api_key())
 
-        # Step 1 & 2: Poll & push local sessions if API key is configured
-        if has_key:
-            sessions = self.state.leaderboard_db.get_ridge_sessions(limit=25)
-            for s in sessions:
-                sid = str(s["session_id"])
-                st = str(s.get("status") or "")
-                if st in ("created", "registered", "receiving", "error"):
-                    poll_res = self.poll_session_checkins(sid)
-                    summary["sessions_polled"] += 1
-                    if poll_res.get("status") == "error" and poll_res.get("http_status") == 404:
-                        # Session wasn't registered on VPS yet (e.g. created before API key was set)
-                        continue
-                    unsynced = self.state.leaderboard_db.get_unsynced_laps(sid)
-                    if unsynced:
-                        sync_res = self.sync_session_laps(sid, finalize=False)
-                        summary["sessions_synced"] += 1
-                        summary["laps_pushed"] += int(sync_res.get("inserted_laps", 0))
-                        if sync_res.get("errors"):
-                            summary["errors"].extend(sync_res["errors"])
+            # Step 1 & 2: Poll & push local sessions if API key is configured
+            if has_key:
+                sessions = self.state.leaderboard_db.get_ridge_sessions(limit=25)
+                for s in sessions:
+                    sid = str(s["session_id"])
+                    st = str(s.get("status") or "")
+                    if st in ("created", "registered", "receiving", "error"):
+                        try:
+                            poll_res = self.poll_session_checkins(sid)
+                            summary["sessions_polled"] += 1
+                            if poll_res.get("status") == "error" and poll_res.get("http_status") == 404:
+                                continue
+                            unsynced = self.state.leaderboard_db.get_unsynced_laps(sid)
+                            if unsynced:
+                                sync_res = self.sync_session_laps(sid, finalize=False)
+                                summary["sessions_synced"] += 1
+                                summary["laps_pushed"] += int(sync_res.get("inserted_laps", 0))
+                                if sync_res.get("errors"):
+                                    summary["errors"].extend(sync_res["errors"])
+                        except Exception as se:
+                            logger.warning("Error syncing session %s: %s", sid, se)
+                            summary["errors"].append(f"Session {sid}: {se}")
 
-        # Step 3: Pull public leaderboard records & drivers from remote VPS into local DB
-        lb_res = self.fetch_remote_leaderboard(limit=100)
-        if lb_res.get("http_status") == 200 and isinstance(lb_res.get("data"), dict):
-            rows = lb_res["data"].get("leaderboard", [])
-            if isinstance(rows, list):
-                existing_raw = self.state.leaderboard_db.get_raw_laps(limit=1000)
-                existing_source_ids = {e.source_lap_id for e in existing_raw if e.source_lap_id}
+            # Step 3: Pull public leaderboard records & drivers from remote VPS into local DB
+            lb_res = self.fetch_remote_leaderboard(limit=100)
+            if lb_res.get("http_status") == 200 and isinstance(lb_res.get("data"), dict):
+                rows = lb_res["data"].get("leaderboard", [])
+                if isinstance(rows, list):
+                    existing_raw = self.state.leaderboard_db.get_raw_laps(limit=1000)
+                    existing_source_ids = {e.source_lap_id for e in existing_raw if e.source_lap_id}
 
-                for r in rows:
-                    if not isinstance(r, dict):
-                        continue
-                    d_uuid = str(r.get("driver_uuid") or "")
-                    d_name = str(r.get("display_name") or d_uuid or "Racer")
-                    track = str(r.get("track") or "")
-                    layout = str(r.get("track_layout") or "default")
-                    car = str(r.get("car") or "")
-                    lap_ms = int(r.get("fastest_lap_ms") or 0)
-                    ts = float(r.get("achieved_at") or time.time())
+                    for r in rows:
+                        if not isinstance(r, dict):
+                            continue
+                        try:
+                            d_uuid = str(r.get("driver_uuid") or "")
+                            d_name = str(r.get("display_name") or d_uuid or "Racer")
+                            track = str(r.get("track") or "")
+                            layout = str(r.get("track_layout") or "default")
+                            car = str(r.get("car") or "")
+                            try:
+                                lap_ms = int(float(str(r.get("fastest_lap_ms") or 0)))
+                            except (ValueError, TypeError):
+                                lap_ms = 0
+                            ts = _parse_timestamp(r.get("achieved_at")) or time.time()
 
-                    if d_uuid:
-                        # Pull full driver details if possible
-                        d_stats = self.fetch_remote_driver_stats(d_uuid)
-                        d_email: str | None = None
-                        if d_stats.get("http_status") == 200 and isinstance(d_stats.get("data"), dict):
-                            drv_obj = d_stats["data"].get("driver")
-                            if isinstance(drv_obj, dict) and drv_obj.get("display_name"):
-                                d_name = str(drv_obj["display_name"])
-                        self.state.leaderboard_db.upsert_driver(
-                            display_name=d_name,
-                            email=d_email,
-                            driver_uuid=d_uuid,
-                        )
-                        summary["remote_drivers_imported"] += 1
+                            if d_uuid:
+                                d_stats = self.fetch_remote_driver_stats(d_uuid)
+                                d_email: str | None = None
+                                if d_stats.get("http_status") == 200 and isinstance(d_stats.get("data"), dict):
+                                    drv_obj = d_stats["data"].get("driver")
+                                    if isinstance(drv_obj, dict) and drv_obj.get("display_name"):
+                                        d_name = str(drv_obj["display_name"])
+                                self.state.leaderboard_db.upsert_driver(
+                                    display_name=d_name,
+                                    email=d_email,
+                                    driver_uuid=d_uuid,
+                                )
+                                summary["remote_drivers_imported"] += 1
 
-                    if track and lap_ms > 0:
-                        src_id = f"vps-{d_uuid}-{track}-{layout}-{car}-{lap_ms}"[:128]
-                        if src_id not in existing_source_ids:
-                            from shared.models import LeaderboardEntry
+                            if track and lap_ms > 0:
+                                src_id = f"vps-{d_uuid}-{track}-{layout}-{car}-{lap_ms}"[:128]
+                                if src_id not in existing_source_ids:
+                                    from shared.models import LeaderboardEntry
 
-                            entry = LeaderboardEntry(
-                                rig_id="VPS-SYNC",
-                                driver_name=d_name,
-                                driver_uuid=d_uuid or None,
-                                car=car,
-                                track=track,
-                                track_layout=layout,
-                                group_name="Ridge VPS",
-                                lap=1,
-                                lap_time_ms=lap_ms,
-                                session_id="vps_imported",
-                                source_lap_id=src_id,
-                                timestamp=ts,
-                                is_valid=True,
-                                synced_to_ridge=True,
-                            )
-                            self.state.add_leaderboard_entry(entry)
-                            self.state.upsert_session_best(entry)
-                            existing_source_ids.add(src_id)
-                            summary["remote_laps_imported"] += 1
-        else:
-            summary["errors"].append(f"Leaderboard fetch returned HTTP {lb_res.get('http_status')}")
+                                    entry = LeaderboardEntry(
+                                        rig_id="VPS-SYNC",
+                                        driver_name=d_name,
+                                        driver_uuid=d_uuid or None,
+                                        car=car,
+                                        track=track,
+                                        track_layout=layout,
+                                        group_name="Ridge VPS",
+                                        lap=1,
+                                        lap_time_ms=lap_ms,
+                                        session_id="vps_imported",
+                                        source_lap_id=src_id,
+                                        timestamp=ts,
+                                        is_valid=True,
+                                        synced_to_ridge=True,
+                                    )
+                                    self.state.add_leaderboard_entry(entry)
+                                    self.state.upsert_session_best(entry)
+                                    existing_source_ids.add(src_id)
+                                    summary["remote_laps_imported"] += 1
+                        except Exception as re_err:
+                            logger.warning("Error importing remote leaderboard row: %s", re_err)
+                            summary["errors"].append(f"Row import error: {re_err}")
+            else:
+                summary["errors"].append(f"Leaderboard fetch returned HTTP {lb_res.get('http_status')}")
+        except Exception as e:
+            logger.exception("Unhandled error in sync_all_databases: %s", e)
+            summary["errors"].append(str(e))
 
         return {
             "status": "success" if not summary["errors"] else "partial",
