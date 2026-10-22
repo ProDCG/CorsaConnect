@@ -12,6 +12,7 @@ from fastapi import APIRouter
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from apps.orchestrator.services.qr_generator import generate_qr_matrix
 from apps.orchestrator.services.ridge_api import RidgeApiService, build_checkin_qr_url
 
 if TYPE_CHECKING:
@@ -47,74 +48,21 @@ class TestApiPayload(BaseModel):
 
 
 def _generate_qr_svg(data: str, border: int = 2) -> str:
-    """Generate a scannable SVG QR code string (uses `qrcode` if installed, or a clean fallback SVG)."""
-    try:
-        import qrcode  # type: ignore[import-untyped]
-        import qrcode.image.svg  # type: ignore[import-untyped]
-
-        qr = qrcode.QRCode(
-            version=None,
-            error_correction=qrcode.constants.ERROR_CORRECT_M,
-            box_size=8,
-            border=border,
-        )
-        qr.add_data(data)
-        qr.make(fit=True)
-        matrix = qr.get_matrix()
-        size = len(matrix)
-        rects: list[str] = []
-        for r_idx, row in enumerate(matrix):
-            for c_idx, val in enumerate(row):
-                if val:
-                    rects.append(f'<rect x="{c_idx}" y="{r_idx}" width="1" height="1" fill="#000000"/>')
-        return (
-            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size} {size}" '
-            f'shape-rendering="crispEdges" width="256" height="256">'
-            f'<rect width="100%" height="100%" fill="#FFFFFF"/>'
-            + "".join(rects)
-            + "</svg>"
-        )
-    except Exception:
-        # Fallback deterministic visual matrix if qrcode is not installed
-        import hashlib
-
-        digest = hashlib.sha256(data.encode("utf-8")).digest()
-        size = 25
-        rects = []
-        # Finder patterns at 3 corners
-        def _is_finder(r: int, c: int, fr: int, fc: int) -> bool | None:
-            dr, dc = r - fr, c - fc
-            if 0 <= dr < 7 and 0 <= dc < 7:
-                if dr in (0, 6) or dc in (0, 6) or (2 <= dr <= 4 and 2 <= dc <= 4):
-                    return True
-                return False
-            return None
-
-        for r in range(size):
-            for c in range(size):
-                f1 = _is_finder(r, c, 2, 2)
-                f2 = _is_finder(r, c, 2, size - 9)
-                f3 = _is_finder(r, c, size - 9, 2)
-                if f1 is not None:
-                    on = f1
-                elif f2 is not None:
-                    on = f2
-                elif f3 is not None:
-                    on = f3
-                elif 2 <= r < size - 2 and 2 <= c < size - 2:
-                    bit_idx = (r * size + c) % (len(digest) * 8)
-                    on = bool((digest[bit_idx // 8] >> (bit_idx % 8)) & 1)
-                else:
-                    on = False
-                if on:
-                    rects.append(f'<rect x="{c}" y="{r}" width="1" height="1" fill="#000000"/>')
-        return (
-            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size} {size}" '
-            f'shape-rendering="crispEdges" width="256" height="256">'
-            f'<rect width="100%" height="100%" fill="#FFFFFF"/>'
-            + "".join(rects)
-            + "</svg>"
-        )
+    """Generate a scannable ISO/IEC 18004 SVG QR code string with zero external dependencies."""
+    matrix = generate_qr_matrix(data, border=border)
+    size = len(matrix)
+    rects: list[str] = []
+    for r_idx, row in enumerate(matrix):
+        for c_idx, val in enumerate(row):
+            if val:
+                rects.append(f'<rect x="{c_idx}" y="{r_idx}" width="1" height="1" fill="#000000"/>')
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size} {size}" '
+        f'shape-rendering="crispEdges" width="256" height="256">'
+        f'<rect width="100%" height="100%" fill="#FFFFFF"/>'
+        + "".join(rects)
+        + "</svg>"
+    )
 
 
 def create_router(state: AppState, ridge_svc: RidgeApiService) -> APIRouter:
@@ -207,19 +155,9 @@ def create_router(state: AppState, ridge_svc: RidgeApiService) -> APIRouter:
 
     @router.get("/ridge/qr.png")
     async def get_qr_png(url: str) -> Response:
-        """Render a PNG QR code for Tkinter splash screens or kiosks."""
+        """Render a real scannable PNG QR code for Tkinter splash screens or kiosks (zero external deps)."""
         try:
-            import qrcode  # type: ignore[import-untyped]
-
-            qr = qrcode.QRCode(
-                version=None,
-                error_correction=qrcode.constants.ERROR_CORRECT_M,
-                box_size=8,
-                border=2,
-            )
-            qr.add_data(url)
-            qr.make(fit=True)
-            matrix = qr.get_matrix()
+            matrix = generate_qr_matrix(url, border=2)
             from PIL import Image
 
             size = len(matrix)
@@ -236,20 +174,9 @@ def create_router(state: AppState, ridge_svc: RidgeApiService) -> APIRouter:
             buf = io.BytesIO()
             img.save(buf, format="PNG")
             return Response(content=buf.getvalue(), media_type="image/png")
-        except Exception:
-            # Fallback using PIL if qrcode isn't installed
-            try:
-                from PIL import Image, ImageDraw
-
-                img = Image.new("RGB", (240, 240), "white")
-                draw = ImageDraw.Draw(img)
-                draw.rectangle([10, 10, 230, 230], outline="black", width=4)
-                draw.text((35, 105), "SCAN QR ON KIOSK", fill="black")
-                buf = io.BytesIO()
-                img.save(buf, format="PNG")
-                return Response(content=buf.getvalue(), media_type="image/png")
-            except Exception:
-                return Response(status_code=404, content="QR generator unavailable")
+        except Exception as e:
+            logger.error("Failed to render QR PNG: %s", e)
+            return Response(status_code=500, content="QR generator error")
 
     @router.get("/ridge/leaderboard")
     async def get_remote_leaderboard(

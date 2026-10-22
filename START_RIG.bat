@@ -31,6 +31,9 @@ if errorlevel 1 (
     git reset --hard origin/main 2>nul
 )
 
+REM --- Ensure Python dependencies are up to date ---
+venv\Scripts\pip.exe install -q -e . 2>nul
+
 REM --- Launch rig agent ---
 start "" /B "venv\Scripts\pythonw.exe" -m apps.sled.splash 2>"ridge_crash.log"
 exit

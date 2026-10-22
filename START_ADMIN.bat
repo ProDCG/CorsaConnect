@@ -32,6 +32,9 @@ if errorlevel 1 (
     git reset --hard origin/main 2>nul
 )
 
+REM --- Ensure Python dependencies are up to date ---
+venv\Scripts\pip.exe install -q -e . 2>nul
+
 REM --- Launch backend ---
 start "Ridge-Link Backend" /MIN cmd /c "venv\Scripts\python.exe apps\orchestrator\main.py 1>ridge_crash.log 2>&1"
 timeout /t 3 /nobreak >nul
