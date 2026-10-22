@@ -72,6 +72,7 @@ def create_router(state: AppState) -> APIRouter:
             state.update_rig_field(payload.rig_id, "driver_name", payload.driver_name)
             state.update_rig_field(payload.rig_id, "driver_email", payload.driver_email)
             state.update_rig_field(payload.rig_id, "driver_uuid", payload.driver_uuid)
+            state.update_rig_field(payload.rig_id, "driver_unbound", False)
 
         # Also upsert into drivers table so they are remembered
         state.leaderboard_db.upsert_driver(

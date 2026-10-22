@@ -444,6 +444,7 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
     // Spectator state
     const [spectatorGroupId, setSpectatorGroupId] = useState<string | null>(null)
     const [spectatorLoading, setSpectatorLoading] = useState(false)
+    const [groupQrShowingMap, setGroupQrShowingMap] = useState<Record<string, boolean>>({})
 
     useEffect(() => {
         setUnassignedRigErrors([])
@@ -923,47 +924,67 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                             </div>
                             <div className="flex items-center gap-2">
                                 {/* Check-In QR Button for Group */}
-                                <button
-                                    onClick={async () => {
-                                        if (selectedGroup.rig_ids.length === 0) {
-                                            alert('Add rigs to this group first to generate Check-In QR codes.')
-                                            return
-                                        }
-                                        const anyShowing = selectedGroup.rig_ids.some(rid => {
-                                            const r = rigs.find(x => x.rig_id === rid) as any
-                                            return Boolean(r?.show_qr)
-                                        })
-                                        if (anyShowing) {
-                                            await Promise.all(
-                                                selectedGroup.rig_ids.map(rid =>
-                                                    fetch('/api/ridge/qr/visibility', {
+                                {(() => {
+                                    const anyShowingFromRigs = selectedGroup.rig_ids.some(rid => {
+                                        const r = rigs.find(x => x.rig_id === rid) as any
+                                        return Boolean(r?.show_qr)
+                                    })
+                                    const isQrShowing =
+                                        groupQrShowingMap[selectedGroup.id] !== undefined
+                                            ? groupQrShowingMap[selectedGroup.id]
+                                            : anyShowingFromRigs
+
+                                    return (
+                                        <button
+                                            onClick={async () => {
+                                                if (selectedGroup.rig_ids.length === 0) {
+                                                    alert('Add rigs to this group first to generate Check-In QR codes.')
+                                                    return
+                                                }
+                                                if (isQrShowing) {
+                                                    setGroupQrShowingMap(prev => ({ ...prev, [selectedGroup.id]: false }))
+                                                    await Promise.all(
+                                                        selectedGroup.rig_ids.map(rid =>
+                                                            fetch('/api/ridge/qr/visibility', {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ rig_id: rid, show_qr: false }),
+                                                            })
+                                                        )
+                                                    )
+                                                } else {
+                                                    setGroupQrShowingMap(prev => ({ ...prev, [selectedGroup.id]: true }))
+                                                    await fetch('/api/ridge/session/start', {
                                                         method: 'POST',
                                                         headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({ rig_id: rid, show_qr: false }),
+                                                        body: JSON.stringify({
+                                                            rig_ids: selectedGroup.rig_ids,
+                                                            group_id: selectedGroup.id,
+                                                            group_name: selectedGroup.name,
+                                                            track: selectedGroup.track,
+                                                            track_layout: selectedGroup.track_layout,
+                                                            show_qr_on_rigs: true,
+                                                        }),
                                                     })
-                                                )
-                                            )
-                                        } else {
-                                            await fetch('/api/ridge/session/start', {
-                                                method: 'POST',
-                                                headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify({
-                                                    rig_ids: selectedGroup.rig_ids,
-                                                    group_id: selectedGroup.id,
-                                                    group_name: selectedGroup.name,
-                                                    track: selectedGroup.track,
-                                                    track_layout: selectedGroup.track_layout,
-                                                    show_qr_on_rigs: true,
-                                                }),
-                                            })
-                                        }
-                                        fetchGroups()
-                                    }}
-                                    className="bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-black uppercase"
-                                    title="Generate Check-In QR tokens for this group and toggle QR display on the group's rigs"
-                                >
-                                    <QrCode size={14} /> Check-In QR
-                                </button>
+                                                }
+                                                fetchGroups()
+                                            }}
+                                            className={`px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 text-xs font-black uppercase border ${
+                                                isQrShowing
+                                                    ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/40 text-emerald-300 shadow-lg shadow-emerald-500/10'
+                                                    : 'bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/30 text-indigo-300'
+                                            }`}
+                                            title={
+                                                isQrShowing
+                                                    ? 'QR codes are currently displayed on group rigs — click to hide'
+                                                    : 'Generate & display Check-In QR codes on this group’s rigs'
+                                            }
+                                        >
+                                            <QrCode size={14} className={isQrShowing ? 'animate-pulse' : ''} />
+                                            {isQrShowing ? 'Showing QR Codes (Click to Hide)' : 'Show QR Codes'}
+                                        </button>
+                                    )
+                                })()}
 
                                 {/* Single START RACE button — auto-deploys server for multiplayer */}
                                 <button
@@ -978,6 +999,7 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                             return
                                         }
                                         setUnassignedRigErrors([])
+                                        setGroupQrShowingMap(prev => ({ ...prev, [selectedGroup.id]: false }))
 
                                         // Ensure rigs in the group are synced to the group voice channel if set
                                         if (selectedGroup.voice_channel) {

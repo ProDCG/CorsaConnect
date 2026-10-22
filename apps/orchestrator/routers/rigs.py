@@ -408,14 +408,38 @@ def create_router(state: AppState) -> APIRouter:
 
     @router.post("/rigs/{rig_id}/driver_name")
     async def set_driver_name(rig_id: str, update: DriverNameUpdate) -> dict[str, str]:
-        """Set the display name for the driver on this rig."""
+        """Set or clear the display name for the driver on this rig."""
+        clean_name = update.driver_name.strip() if update.driver_name else ""
         rig = state.get_rig(rig_id)
+        if not clean_name:
+            # Explicit unbind from admin UI: clear driver fields and prevent old check-in from re-binding
+            if not rig:
+                state.upsert_rig(
+                    rig_id,
+                    {
+                        "driver_name": None,
+                        "driver_email": None,
+                        "driver_uuid": None,
+                        "checkin_status": None,
+                        "driver_unbound": True,
+                    },
+                )
+            else:
+                state.update_rig_field(rig_id, "driver_name", None)
+                state.update_rig_field(rig_id, "driver_email", None)
+                state.update_rig_field(rig_id, "driver_uuid", None)
+                state.update_rig_field(rig_id, "checkin_status", None)
+                state.update_rig_field(rig_id, "driver_unbound", True)
+            logger.info("Rig %s driver unbound by operator", rig_id)
+            return {"status": "success", "driver_name": ""}
+
         if not rig:
-            state.upsert_rig(rig_id, {"driver_name": update.driver_name})
+            state.upsert_rig(rig_id, {"driver_name": clean_name, "driver_unbound": False})
         else:
-            state.update_rig_field(rig_id, "driver_name", update.driver_name)
-        logger.info("Rig %s driver_name -> %s", rig_id, update.driver_name)
-        return {"status": "success", "driver_name": update.driver_name}
+            state.update_rig_field(rig_id, "driver_name", clean_name)
+            state.update_rig_field(rig_id, "driver_unbound", False)
+        logger.info("Rig %s driver_name -> %s", rig_id, clean_name)
+        return {"status": "success", "driver_name": clean_name}
 
     @router.post("/rigs/{rig_id}/spectate")
     async def spectate_rig(rig_id: str, action: str) -> dict[str, str]:

@@ -437,11 +437,11 @@ export const DriversModule: React.FC = () => {
                             onClick={() => handleSetQrVisibility('ALL', true)}
                             className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all ${
                                 showQrOnRigs
-                                    ? 'bg-indigo-600 text-white border-indigo-400 shadow-lg shadow-indigo-600/30'
+                                    ? 'bg-emerald-600 text-white border-emerald-400 shadow-lg shadow-emerald-600/30'
                                     : 'bg-white/5 hover:bg-white/10 text-white/80 border-white/10'
                             }`}
                         >
-                            <Eye size={14} /> Show QR on All Rigs
+                            <Eye size={14} /> {showQrOnRigs ? '✓ Showing QR Codes on Rigs' : 'Show QR on All Rigs'}
                         </button>
                         <button
                             onClick={() => handleSetQrVisibility('ALL', false)}
@@ -451,7 +451,7 @@ export const DriversModule: React.FC = () => {
                                     : 'bg-white/5 hover:bg-white/10 text-white/80 border-white/10'
                             }`}
                         >
-                            <EyeOff size={14} /> Hide QR on All Rigs
+                            <EyeOff size={14} /> {!showQrOnRigs ? 'QR Codes Hidden' : 'Hide QR on All Rigs'}
                         </button>
                     </div>
                 </div>

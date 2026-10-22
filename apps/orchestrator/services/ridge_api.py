@@ -220,6 +220,7 @@ class RidgeApiService:
             self.state.update_rig_field(rid, "checkin_url", qr_url)
             self.state.update_rig_field(rid, "checkin_status", "pending")
             self.state.update_rig_field(rid, "checkin_expires_at", expires_at)
+            self.state.update_rig_field(rid, "driver_unbound", False)
             if show_qr_on_rigs is not None:
                 self.state.update_rig_field(rid, "show_qr", bool(show_qr_on_rigs))
             else:
@@ -395,24 +396,32 @@ class RidgeApiService:
             )
 
             # Update in-memory rig state
-            self.state.upsert_rig(rig_id, {})
-            self.state.update_rig_field(rig_id, "checkin_status", c_status)
+            rig_obj = self.state.upsert_rig(rig_id, {})
+            is_manually_unbound = bool(rig_obj.get("driver_unbound", False))
 
             if c_status == "claimed" and driver_uuid:
                 display = driver_name or driver_uuid
-                self.state.update_rig_field(rig_id, "driver_uuid", driver_uuid)
-                self.state.update_rig_field(rig_id, "driver_name", display)
-                if driver_email:
-                    self.state.update_rig_field(rig_id, "driver_email", driver_email)
-                # Hide QR automatically on this rig once claimed!
-                self.state.update_rig_field(rig_id, "show_qr", False)
 
-                # Upsert authoritative server-issued driver_uuid into local drivers roster
+                # Always ensure the driver exists in the local drivers roster
                 self.state.leaderboard_db.upsert_driver(
                     display_name=display,
                     email=driver_email,
                     driver_uuid=driver_uuid,
                 )
+
+                # Only bind to the rig if the operator hasn't explicitly unbound this rig
+                # (or if this is a brand-new claim transition from pending -> claimed)
+                if not is_manually_unbound or prev_status != "claimed":
+                    self.state.update_rig_field(rig_id, "driver_unbound", False)
+                    self.state.update_rig_field(rig_id, "checkin_status", c_status)
+                    self.state.update_rig_field(rig_id, "driver_uuid", driver_uuid)
+                    self.state.update_rig_field(rig_id, "driver_name", display)
+                    if driver_email:
+                        self.state.update_rig_field(rig_id, "driver_email", driver_email)
+                    # Hide QR automatically on this rig once claimed!
+                    self.state.update_rig_field(rig_id, "show_qr", False)
+            else:
+                self.state.update_rig_field(rig_id, "checkin_status", c_status)
 
                 if prev_status != "claimed":
                     newly_claimed.append({
