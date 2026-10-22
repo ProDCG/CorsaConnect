@@ -375,9 +375,10 @@ class RidgeApiService:
             if not rig_id:
                 continue
             c_status = str(item.get("status") or "pending")
-            driver_uuid = str(item.get("driver_uuid")) if item.get("driver_uuid") else None
-            driver_name = str(item.get("driver_name")) if item.get("driver_name") else None
-            driver_email = str(item.get("driver_email")) if item.get("driver_email") else None
+            driver_uuid = str(item.get("driver_uuid") or item.get("uuid") or "") or None
+            raw_name = item.get("driver_name") or item.get("display_name") or item.get("driver")
+            driver_name = str(raw_name) if raw_name else None
+            driver_email = str(item.get("driver_email") or item.get("email") or "") or None
             claimed_at = _parse_timestamp(item.get("claimed_at"))
             expires_at = _parse_timestamp(item.get("expires_at"))
 
@@ -399,8 +400,8 @@ class RidgeApiService:
             rig_obj = self.state.upsert_rig(rig_id, {})
             is_manually_unbound = bool(rig_obj.get("driver_unbound", False))
 
-            if c_status == "claimed" and driver_uuid:
-                display = driver_name or driver_uuid
+            if c_status == "claimed" and (driver_uuid or driver_name):
+                display = driver_name or driver_uuid or "Racer"
 
                 # Always ensure the driver exists in the local drivers roster
                 self.state.leaderboard_db.upsert_driver(
@@ -420,8 +421,6 @@ class RidgeApiService:
                         self.state.update_rig_field(rig_id, "driver_email", driver_email)
                     # Hide QR automatically on this rig once claimed!
                     self.state.update_rig_field(rig_id, "show_qr", False)
-            else:
-                self.state.update_rig_field(rig_id, "checkin_status", c_status)
 
                 if prev_status != "claimed":
                     newly_claimed.append({
@@ -442,11 +441,13 @@ class RidgeApiService:
                         driver_info={
                             "Rig": rig_id,
                             "Driver": display,
-                            "Driver UUID": driver_uuid,
+                            "Driver UUID": driver_uuid or "N/A",
                             "Email": driver_email or "N/A",
                         },
                         session_info={"Session ID": session_id},
                     )
+            else:
+                self.state.update_rig_field(rig_id, "checkin_status", c_status)
 
         updated_rows = self.state.leaderboard_db.get_ridge_checkins(session_id)
         enriched_out = []
@@ -717,14 +718,14 @@ class RidgeApiService:
                     for s in sessions:
                         st = str(s.get("status") or "")
                         created_at = float(s.get("created_at") or 0)
-                        # Poll sessions created in the last 60 minutes that are registered or receiving
-                        if st in ("registered", "receiving") and (now - created_at) < 3600:
+                        # Poll sessions created in the last 2 hours that are not finalized
+                        if st in ("created", "registered", "receiving", "error") and (now - created_at) < 7200:
                             sid = str(s["session_id"])
                             await asyncio.to_thread(self.poll_session_checkins, sid)
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.debug("Ridge API background poll error: %s", e)
+                logger.warning("Ridge API background poll error: %s", e)
 
             await asyncio.sleep(interval)
 

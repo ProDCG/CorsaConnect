@@ -72,7 +72,23 @@ def create_router(state: AppState, ridge_svc: RidgeApiService) -> APIRouter:
     @router.get("/ridge/sessions")
     async def list_ridge_sessions(limit: int = 20) -> dict[str, Any]:
         """List recent Ridge API sessions and their active check-in tokens."""
+        import asyncio
+
         sessions = state.leaderboard_db.get_ridge_sessions(limit=limit)
+        has_key = bool(getattr(state.settings, "ridge_api_key", None))
+        now = time.time()
+
+        # Proactively poll the latest active session so dashboard refreshes always show live check-ins
+        if has_key and sessions:
+            for s in sessions[:2]:
+                st = str(s.get("status") or "")
+                created_at = float(s.get("created_at") or 0)
+                if st in ("created", "registered", "receiving", "error") and (now - created_at) < 7200:
+                    try:
+                        await asyncio.to_thread(ridge_svc.poll_session_checkins, str(s["session_id"]))
+                    except Exception:
+                        pass
+
         base_url = (getattr(state.settings, "ridge_api_url", None) or "https://theridge.fun/racing-api/").rstrip("/")
         for s in sessions:
             sid = str(s["session_id"])
@@ -88,7 +104,7 @@ def create_router(state: AppState, ridge_svc: RidgeApiService) -> APIRouter:
             "show_qr_on_rigs": bool(getattr(state.settings, "ridge_show_qr_on_rigs", False)),
             "ridge_test_mode": bool(getattr(state.settings, "ridge_test_mode", False)),
             "ridge_auto_sync": bool(getattr(state.settings, "ridge_auto_sync", True)),
-            "has_api_key": bool(getattr(state.settings, "ridge_api_key", None)),
+            "has_api_key": has_key,
         }
 
     @router.post("/ridge/session/start")

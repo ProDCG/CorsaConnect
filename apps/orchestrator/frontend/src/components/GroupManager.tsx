@@ -1193,6 +1193,11 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                                                 rig ? 'bg-white/20' : 'bg-red-500'
                                             }`} />
                                             <span className={`font-black italic text-xs ${hasCarError ? 'text-red-300' : 'text-white'}`}>{rigId}</span>
+                                            {rig?.driver_name && (
+                                                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[9px] font-bold truncate max-w-28" title={`Checked in: ${rig.driver_name}`}>
+                                                    {rig.driver_name}
+                                                </span>
+                                            )}
 
                                             {/* Per-rig searchable car picker */}
                                             <RigCarSearchPicker

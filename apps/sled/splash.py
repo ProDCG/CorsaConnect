@@ -623,7 +623,11 @@ class DesktopBlocker:
             self.stop_session_timer()
             if self._current_mode == "lockout":
                 self._restore_for_lockout()
-            self.update_status("SYSTEMS ONLINE — READY")
+            if self._driver_name:
+                self.update_status(f"WELCOME {self._driver_name.upper()} — READY TO RACE")
+            else:
+                self.update_status("SYSTEMS ONLINE — READY")
+            self.root.after(0, self._update_qr_overlay)
             logger.info("Idle detected — splash restored immediately")
 
     def _hide_for_racing(self) -> None:
@@ -968,7 +972,9 @@ def _boot_sled(splash: DesktopBlocker) -> None:
         time.sleep(3)
 
         if sled_proc.poll() is None:
-            splash.update_status("SYSTEMS ONLINE — READY")
+            if not splash._driver_name:
+                splash.update_status("SYSTEMS ONLINE — READY")
+            splash.root.after(0, splash._update_qr_overlay)
             logger.info("Sled agent running (PID: %d)", sled_proc.pid)
         else:
             splash.update_status("WARNING: AGENT FAILED TO START")
