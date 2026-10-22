@@ -28,6 +28,18 @@ def create_router(state: AppState) -> APIRouter:
         from shared.utils import get_local_ip
         return get_local_ip()
 
+    def _format_rigs_with_drivers(rig_ids: list[str]) -> str:
+        """Format a list of rig IDs as a vertical bulleted list with each racer's username in parentheses."""
+        if not rig_ids:
+            return "None"
+        lines: list[str] = []
+        for rid in rig_ids:
+            r_obj = state.get_rig(rid)
+            d_name = str(r_obj.get("driver_name") or "").strip() if r_obj else ""
+            racer_label = d_name if d_name else "Unassigned"
+            lines.append(f"• {rid} ({racer_label})")
+        return "\n".join(lines)
+
     action_status_map: dict[str, str] = {
         "SETUP_MODE": "setup",
         "KILL_RACE": "idle",
@@ -149,7 +161,7 @@ def create_router(state: AppState) -> APIRouter:
                 f"🛑 Race Stopped — {command.rig_id}",
                 f"Dispatched `KILL_RACE` to **{command.rig_id}**.",
                 None,
-                {"Rig": command.rig_id, "Driver": str(rig.get("driver_name") or "Unassigned")},
+                {"Rigs": _format_rigs_with_drivers([command.rig_id])},
                 {"Sessions Finished": ", ".join(finished_sids) if finished_sids else "None"},
             )
         elif command.action == "LAUNCH_RACE":
@@ -176,7 +188,7 @@ def create_router(state: AppState) -> APIRouter:
                 f"🟢 Race Launched — {command.rig_id}",
                 f"Launching race on **{command.rig_id}** at **{track}**.",
                 {"Track": track, "Car": str(rig.get("selected_car") or command.car or "N/A")},
-                {"Rig": command.rig_id, "Driver": str(rig.get("driver_name") or "Unassigned"), "UUID": str(rig.get("driver_uuid") or "N/A")},
+                {"Rigs": _format_rigs_with_drivers([command.rig_id]), "UUID": str(rig.get("driver_uuid") or "N/A")},
                 {"Session ID": sid, "Group": gname},
             )
 
@@ -209,10 +221,11 @@ def create_router(state: AppState) -> APIRouter:
                 "🟢 Global Race Launched",
                 f"Launching global race across **{len(all_rids)}** rig(s) at **{track}**.",
                 {"Track": track},
-                {"Rigs": ", ".join(all_rids) or "None"},
+                {"Rigs": _format_rigs_with_drivers(all_rids)},
                 {"Session ID": sid, "Group": "Global Race"},
             )
         elif command.action == "KILL_RACE":
+            all_rids = [str(r["rig_id"]) for r in state.get_rigs()]
             finished_sids = state.finish_race_session()
             _check_and_notify_podiums(finished_sids, background_tasks)
             background_tasks.add_task(
@@ -222,7 +235,7 @@ def create_router(state: AppState) -> APIRouter:
                 "🛑 Global Race Stopped",
                 "Dispatched global `KILL_RACE` to all rigs.",
                 None,
-                None,
+                {"Rigs": _format_rigs_with_drivers(all_rids)},
                 {"Sessions Finished": ", ".join(finished_sids) if finished_sids else "None"},
             )
 
@@ -314,7 +327,7 @@ def create_router(state: AppState) -> APIRouter:
                 f"🛑 Group Race Stopped — {group.name}",
                 f"Stopped race for group **{group.name}** ({len(group.rig_ids)} rigs).",
                 {"Track": group.track},
-                {"Rigs": ", ".join(group.rig_ids) or "None"},
+                {"Rigs": _format_rigs_with_drivers(list(group.rig_ids))},
                 {"Group": group.name, "Sessions Finished": ", ".join(finished_sids) if finished_sids else "None"},
             )
             logger.info("KILL_RACE: set %d rigs to idle for group '%s'", len(group.rig_ids), group.name)
@@ -339,7 +352,7 @@ def create_router(state: AppState) -> APIRouter:
                 f"🟢 Group Race Launched — {group.name}",
                 f"Launching **{group.mode}** session for group **{group.name}** at **{track}**.",
                 {"Track": track, "Layout": group.track_layout or "default", "Weather": group.weather},
-                {"Rigs": ", ".join(group.rig_ids) or "None"},
+                {"Rigs": _format_rigs_with_drivers(list(group.rig_ids))},
                 {"Session ID": sid, "Group": group.name, "Mode": group.mode},
             )
             logger.info("LAUNCH_RACE: cleared kill guard, started session, and reset lap counts for %d rigs in group '%s'", len(group.rig_ids), group.name)

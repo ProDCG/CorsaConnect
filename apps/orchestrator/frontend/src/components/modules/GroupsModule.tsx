@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Zap, Play, Flag, Users, Check, Sparkles, Plus, Trash2, ShieldCheck, CheckCircle2 } from 'lucide-react'
+import { Zap, Play, Flag, Users, Check, Sparkles, Plus, Trash2, ShieldCheck, CheckCircle2, GripVertical } from 'lucide-react'
 import GroupManager from '../GroupManager'
 import { useLiveStream } from '../../context/LiveStreamContext'
 import { Preset } from '../../types'
@@ -24,6 +24,8 @@ export const GroupsModule: React.FC<{
     const [carPool, setCarPool] = useState<string[]>([])
     const [mapPool, setMapPool] = useState<string[]>([])
     const [savedLineups, setSavedLineups] = useState<Preset[]>([])
+    const [draggedLineupId, setDraggedLineupId] = useState<string | null>(null)
+    const [dragOverLineupId, setDragOverLineupId] = useState<string | null>(null)
     const [showSaveLineupModal, setShowSaveLineupModal] = useState<boolean>(false)
     const [newLineupName, setNewLineupName] = useState<string>('')
     const [statusMsg, setStatusMsg] = useState<string | null>(null)
@@ -188,6 +190,36 @@ export const GroupsModule: React.FC<{
         }
     }
 
+    const handleDropSavedLineup = async (targetId: string) => {
+        if (!draggedLineupId || draggedLineupId === targetId) {
+            setDraggedLineupId(null)
+            setDragOverLineupId(null)
+            return
+        }
+        const fromIdx = savedLineups.findIndex(p => p.id === draggedLineupId)
+        const toIdx = savedLineups.findIndex(p => p.id === targetId)
+        if (fromIdx === -1 || toIdx === -1) {
+            setDraggedLineupId(null)
+            setDragOverLineupId(null)
+            return
+        }
+        const updated = [...savedLineups]
+        const [moved] = updated.splice(fromIdx, 1)
+        updated.splice(toIdx, 0, moved)
+        setSavedLineups(updated)
+        setDraggedLineupId(null)
+        setDragOverLineupId(null)
+        try {
+            await fetch('/presets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updated),
+            })
+        } catch (e) {
+            console.error('Failed to reorder lineup presets:', e)
+        }
+    }
+
     return (
         <div className="space-y-6">
             {/* Status Alert Banner */}
@@ -226,41 +258,79 @@ export const GroupsModule: React.FC<{
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {savedLineups.map(lineup => (
-                            <div
-                                key={lineup.id}
-                                className="bg-[#181818] border border-white/10 hover:border-white/20 rounded-xl p-4 flex flex-col justify-between transition-all group"
-                            >
-                                <div>
-                                    <div className="flex items-center justify-between mb-1.5">
-                                        <h4 className="font-black text-white text-sm group-hover:text-emerald-400 transition-colors">
-                                            {lineup.name}
-                                        </h4>
+                        {savedLineups.map(lineup => {
+                            const isDragging = draggedLineupId === lineup.id
+                            const isDragOver = dragOverLineupId === lineup.id && draggedLineupId !== lineup.id
+                            return (
+                                <div
+                                    key={lineup.id}
+                                    draggable
+                                    onDragStart={e => {
+                                        setDraggedLineupId(lineup.id)
+                                        e.dataTransfer.effectAllowed = 'move'
+                                    }}
+                                    onDragOver={e => {
+                                        e.preventDefault()
+                                        e.dataTransfer.dropEffect = 'move'
+                                        if (dragOverLineupId !== lineup.id) {
+                                            setDragOverLineupId(lineup.id)
+                                        }
+                                    }}
+                                    onDragLeave={() => {
+                                        if (dragOverLineupId === lineup.id) {
+                                            setDragOverLineupId(null)
+                                        }
+                                    }}
+                                    onDrop={e => {
+                                        e.preventDefault()
+                                        handleDropSavedLineup(lineup.id)
+                                    }}
+                                    onDragEnd={() => {
+                                        setDraggedLineupId(null)
+                                        setDragOverLineupId(null)
+                                    }}
+                                    className={`bg-[#181818] border rounded-xl p-4 flex flex-col justify-between transition-all group cursor-grab active:cursor-grabbing ${
+                                        isDragging
+                                            ? 'opacity-40 scale-95 border-ridge-brand'
+                                            : isDragOver
+                                                ? 'border-ridge-brand bg-ridge-brand/10 ring-2 ring-ridge-brand/40'
+                                                : 'border-white/10 hover:border-white/20'
+                                    }`}
+                                >
+                                    <div>
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <GripVertical size={14} className="text-white/25 group-hover:text-white/60 shrink-0 transition-colors" />
+                                                <h4 className="font-black text-white text-sm group-hover:text-emerald-400 transition-colors truncate">
+                                                    {lineup.name}
+                                                </h4>
+                                            </div>
+                                            <button
+                                                onClick={() => handleDeleteSavedLineup(lineup.id)}
+                                                className="text-white/30 hover:text-red-400 p-1 rounded transition-colors shrink-0"
+                                                title="Delete lineup"
+                                            >
+                                                <Trash2 size={13} />
+                                            </button>
+                                        </div>
+                                        <div className="text-[11px] text-white/50 space-y-1 mb-3 pl-5">
+                                            <div>Circuit: <strong className="text-white/80 uppercase">{lineup.track}</strong></div>
+                                            <div>Laps: <strong className="text-white/80">{lineup.race_laps}</strong> | Qualy: <strong className="text-white/80">{lineup.qualy_time}m</strong></div>
+                                            <div>Cars: <strong className="text-white/80">{lineup.car_pool?.length || 0} vehicle models</strong></div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-2 border-t border-white/5 flex justify-end">
                                         <button
-                                            onClick={() => handleDeleteSavedLineup(lineup.id)}
-                                            className="text-white/30 hover:text-red-400 p-1 rounded transition-colors"
-                                            title="Delete lineup"
+                                            onClick={() => handleApplySavedLineup(lineup)}
+                                            className="px-3 py-1.5 bg-white/10 hover:bg-emerald-600 text-white text-xs font-bold uppercase tracking-wider rounded-lg flex items-center gap-1.5 transition-all"
                                         >
-                                            <Trash2 size={13} />
+                                            <Zap size={13} /> Arm Lineup
                                         </button>
                                     </div>
-                                    <div className="text-[11px] text-white/50 space-y-1 mb-3">
-                                        <div>Circuit: <strong className="text-white/80 uppercase">{lineup.track}</strong></div>
-                                        <div>Laps: <strong className="text-white/80">{lineup.race_laps}</strong> | Qualy: <strong className="text-white/80">{lineup.qualy_time}m</strong></div>
-                                        <div>Cars: <strong className="text-white/80">{lineup.car_pool?.length || 0} vehicle models</strong></div>
-                                    </div>
                                 </div>
-
-                                <div className="pt-2 border-t border-white/5 flex justify-end">
-                                    <button
-                                        onClick={() => handleApplySavedLineup(lineup)}
-                                        className="px-3 py-1.5 bg-white/10 hover:bg-emerald-600 text-white text-xs font-bold uppercase tracking-wider rounded-lg flex items-center gap-1.5 transition-all"
-                                    >
-                                        <Zap size={13} /> Arm Lineup
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 )}
             </div>

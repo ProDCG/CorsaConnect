@@ -171,17 +171,21 @@ def send_debug_notification(
     if driver_info and getattr(settings, "discord_debug_include_driver", True):
         for k, v in driver_info.items():
             if v is not None and str(v) != "":
-                fields.append({"name": k.upper(), "value": str(v), "inline": True})
+                val_str = str(v)
+                is_multiline = "\n" in val_str or k.upper() in ("RIGS", "RIG LIST")
+                fields.append({"name": k.upper(), "value": val_str, "inline": not is_multiline})
 
     if telemetry_info and getattr(settings, "discord_debug_include_telemetry", True):
         for k, v in telemetry_info.items():
             if v is not None and str(v) != "":
-                fields.append({"name": k.upper(), "value": str(v), "inline": True})
+                val_str = str(v)
+                fields.append({"name": k.upper(), "value": val_str, "inline": "\n" not in val_str})
 
     if session_info and getattr(settings, "discord_debug_include_session", True):
         for k, v in session_info.items():
             if v is not None and str(v) != "":
-                fields.append({"name": k.upper(), "value": str(v), "inline": True})
+                val_str = str(v)
+                fields.append({"name": k.upper(), "value": val_str, "inline": "\n" not in val_str})
 
     if extra_fields:
         fields.extend(extra_fields)

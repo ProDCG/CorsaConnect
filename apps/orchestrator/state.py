@@ -279,6 +279,20 @@ class AppState:
         with self._lock:
             return list(self._groups.values())
 
+    def reorder_groups(self, ordered_ids: list[str]) -> list[RigGroup]:
+        """Reorder groups in memory and persist the new order to disk."""
+        with self._lock:
+            new_dict: dict[str, RigGroup] = {}
+            for gid in ordered_ids:
+                if gid in self._groups:
+                    new_dict[gid] = self._groups[gid]
+            for gid, grp in self._groups.items():
+                if gid not in new_dict:
+                    new_dict[gid] = grp
+            self._groups = new_dict
+            self._save_groups()
+            return list(self._groups.values())
+
     def get_group(self, group_id: str) -> RigGroup | None:
         with self._lock:
             return self._groups.get(group_id)

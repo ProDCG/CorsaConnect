@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap, Filter, X, Download, RefreshCw, Eye, Search, AlertTriangle, Check, Volume2, QrCode, EyeOff } from 'lucide-react'
+import { Users, Plus, Trash2, UserPlus, UserMinus, Play, Power, Server, Settings, Cpu, Gauge, Cloud, Map, Car, Trophy, Timer, Flag, Sun, Clock, ChevronRight, ChevronDown, Zap, Filter, X, Download, RefreshCw, Eye, Search, AlertTriangle, Check, Volume2, QrCode, EyeOff, GripVertical } from 'lucide-react'
 
 const VOICE_ROOMS = ['Room 1', 'Room 2', 'Room 3', 'Room 4', 'Room 5', 'Room 6']
 
@@ -255,11 +255,12 @@ function RigCarSearchPicker({
     })
 
     return (
-        <div className={`relative ${isOpen ? 'z-50' : 'z-10'}`} ref={containerRef}>
+        <div className={`relative shrink-0 ${isOpen ? 'z-50' : 'z-10'}`} ref={containerRef} style={{ width: '9.5rem' }}>
             <button
                 type="button"
                 onClick={onToggleOpen}
-                className={`flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all max-w-48 cursor-pointer select-none ${
+                style={{ width: '9.5rem', maxWidth: '9.5rem' }}
+                className={`w-full flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all overflow-hidden cursor-pointer select-none ${
                     hasError
                         ? 'bg-red-500/20 border border-red-500 text-red-300 ring-2 ring-red-500/40 animate-pulse'
                         : isCarSelected
@@ -268,7 +269,7 @@ function RigCarSearchPicker({
                 }`}
                 title={isCarSelected ? currentDisplayName : 'No car selected'}
             >
-                <span className="truncate">
+                <span className="truncate block min-w-0 flex-1 text-left">
                     {hasError && !isCarSelected ? 'None (Required)' : currentDisplayName}
                 </span>
                 <ChevronDown size={10} className={`text-white/40 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -445,6 +446,8 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
     const [spectatorGroupId, setSpectatorGroupId] = useState<string | null>(null)
     const [spectatorLoading, setSpectatorLoading] = useState(false)
     const [groupQrShowingMap, setGroupQrShowingMap] = useState<Record<string, boolean>>({})
+    const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null)
+    const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null)
 
     useEffect(() => {
         setUnassignedRigErrors([])
@@ -590,6 +593,36 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
         await fetch(`/api/groups/${groupId}`, { method: 'DELETE' })
         if (selectedGroupId === groupId) setSelectedGroupId(null)
         fetchGroups()
+    }
+
+    const handleDropGroup = async (targetGroupId: string) => {
+        if (!draggedGroupId || draggedGroupId === targetGroupId) {
+            setDraggedGroupId(null)
+            setDragOverGroupId(null)
+            return
+        }
+        const fromIdx = groups.findIndex(g => g.id === draggedGroupId)
+        const toIdx = groups.findIndex(g => g.id === targetGroupId)
+        if (fromIdx === -1 || toIdx === -1) {
+            setDraggedGroupId(null)
+            setDragOverGroupId(null)
+            return
+        }
+        const reordered = [...groups]
+        const [moved] = reordered.splice(fromIdx, 1)
+        reordered.splice(toIdx, 0, moved)
+        setGroups(reordered)
+        setDraggedGroupId(null)
+        setDragOverGroupId(null)
+        try {
+            await fetch('/api/groups/reorder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ group_ids: reordered.map(g => g.id) }),
+            })
+        } catch (e) {
+            console.error('Failed to reorder groups:', e)
+        }
     }
 
     const updateGroup = async (groupId: string, updates: Partial<RigGroup>) => {
@@ -817,17 +850,50 @@ export default function GroupManager({ rigs, activeCarPool, activeMapPool }: Gro
                         const isActive = selectedGroupId === group.id
                         const isRunning = serverInfo?.status === 'running'
                         const isLive = group.rig_ids.some(rid => rigs.find(r => r.rig_id === rid && r.status === 'racing'))
+                        const isDragging = draggedGroupId === group.id
+                        const isDragOver = dragOverGroupId === group.id && draggedGroupId !== group.id
                         return (
                             <button
                                 key={group.id}
+                                draggable
+                                onDragStart={e => {
+                                    setDraggedGroupId(group.id)
+                                    e.dataTransfer.effectAllowed = 'move'
+                                }}
+                                onDragOver={e => {
+                                    e.preventDefault()
+                                    e.dataTransfer.dropEffect = 'move'
+                                    if (dragOverGroupId !== group.id) {
+                                        setDragOverGroupId(group.id)
+                                    }
+                                }}
+                                onDragLeave={() => {
+                                    if (dragOverGroupId === group.id) {
+                                        setDragOverGroupId(null)
+                                    }
+                                }}
+                                onDrop={e => {
+                                    e.preventDefault()
+                                    handleDropGroup(group.id)
+                                }}
+                                onDragEnd={() => {
+                                    setDraggedGroupId(null)
+                                    setDragOverGroupId(null)
+                                }}
                                 onClick={() => setSelectedGroupId(group.id)}
-                                className={`w-full text-left p-4 border-b border-white/5 transition-all group ${isActive
-                                        ? 'bg-ridge-brand/10 border-l-2 border-l-ridge-brand'
-                                        : 'hover:bg-white/5 border-l-2 border-l-transparent'
-                                    }`}
+                                className={`w-full text-left p-4 border-b border-white/5 transition-all group cursor-grab active:cursor-grabbing ${
+                                    isDragging
+                                        ? 'opacity-40 bg-ridge-brand/10'
+                                        : isDragOver
+                                            ? 'bg-ridge-brand/20 border-t-2 border-t-ridge-brand'
+                                            : isActive
+                                                ? 'bg-ridge-brand/10 border-l-2 border-l-ridge-brand'
+                                                : 'hover:bg-white/5 border-l-2 border-l-transparent'
+                                }`}
                             >
                                 <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 min-w-0">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <GripVertical size={13} className="text-white/20 group-hover:text-white/50 shrink-0 transition-colors" />
                                         {isRunning && <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shrink-0" />}
                                         <span className="font-black italic text-sm uppercase tracking-tight truncate">{group.name}</span>
                                     </div>

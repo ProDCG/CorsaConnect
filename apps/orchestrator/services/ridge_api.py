@@ -277,13 +277,17 @@ class RidgeApiService:
                 last_error=None,
             )
             logger.info("Registered %d QR tokens with Ridge API for session %s", registered_count, session_id)
+            rigs_formatted = "\n".join(
+                f"• {rid} ({(self.state.get_rig(rid) or {}).get('driver_name') or 'Unassigned'})"
+                for rid in rig_ids
+            ) or "None"
             send_debug_notification(
                 self.state.settings,
                 event_type="api_sync",
                 title="🔑 Ridge API: QR Check-in Tokens Registered",
                 description=f"Registered **{registered_count}** rig check-in token(s) for session `{session_id}`.",
                 session_info={"Session ID": session_id, "Group": group_name or "N/A", "Track": track or "N/A"},
-                extra_fields=[{"name": "RIGS", "value": ", ".join(rig_ids), "inline": False}],
+                extra_fields=[{"name": "RIGS", "value": rigs_formatted, "inline": False}],
             )
             return {
                 "status": "success",

@@ -59,6 +59,9 @@ export const DriversModule: React.FC = () => {
     const [assignRigId, setAssignRigId] = useState<string>('')
     const [selectedDriverForRig, setSelectedDriverForRig] = useState<Driver | null>(null)
 
+    // Active tab switcher ('qr' for QR Check-In & Sessions, 'drivers' for Driver Roster)
+    const [activeSubTab, setActiveSubTab] = useState<'qr' | 'drivers'>('qr')
+
     // Ridge QR Check-in & API state
     const [ridgeSessions, setRidgeSessions] = useState<RidgeSessionRecord[]>([])
     const [activeSessionId, setActiveSessionId] = useState<string>('')
@@ -407,6 +410,48 @@ export const DriversModule: React.FC = () => {
                 </div>
             )}
 
+            {/* Sub-Tab Switcher: QR Check-In Codes vs. Registered Drivers */}
+            <div className="flex items-center gap-2 bg-black/40 border border-white/10 p-1.5 rounded-2xl w-fit">
+                <button
+                    type="button"
+                    onClick={() => setActiveSubTab('qr')}
+                    className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all ${
+                        activeSubTab === 'qr'
+                            ? 'bg-ridge-brand text-white shadow-lg shadow-ridge-brand/30'
+                            : 'text-white/50 hover:text-white hover:bg-white/5'
+                    }`}
+                >
+                    <QrCode size={15} />
+                    QR Check-In &amp; Sessions
+                    {activeSessionObj?.checkins && (
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
+                            activeSubTab === 'qr' ? 'bg-black/30 text-white' : 'bg-white/10 text-white/60'
+                        }`}>
+                            {activeSessionObj.checkins.filter(c => c.status === 'claimed').length}/{activeSessionObj.checkins.length}
+                        </span>
+                    )}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveSubTab('drivers')}
+                    className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all ${
+                        activeSubTab === 'drivers'
+                            ? 'bg-ridge-brand text-white shadow-lg shadow-ridge-brand/30'
+                            : 'text-white/50 hover:text-white hover:bg-white/5'
+                    }`}
+                >
+                    <Users size={15} />
+                    Driver Roster
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
+                        activeSubTab === 'drivers' ? 'bg-black/30 text-white' : 'bg-white/10 text-white/60'
+                    }`}>
+                        {drivers.length}
+                    </span>
+                </button>
+            </div>
+
+            {activeSubTab === 'qr' && (
+            <>
             {/* Ridge QR Check-In & Rig Screen Visibility Control Center */}
             <div className="bg-ridge-panel/70 border border-indigo-500/20 rounded-2xl p-5 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
@@ -642,6 +687,8 @@ export const DriversModule: React.FC = () => {
                     </div>
                 )}
             </div>
+            </>
+            )}
 
             {/* Optional Remote VPS Leaderboard & Driver Statistics Explorer */}
             {showExplorer && (
@@ -724,6 +771,8 @@ export const DriversModule: React.FC = () => {
                 </div>
             )}
 
+            {activeSubTab === 'drivers' && (
+            <>
             {/* Search Bar */}
             <div className="relative">
                 <Search size={16} className="absolute left-3.5 top-3.5 text-white/40 pointer-events-none" />
@@ -832,6 +881,8 @@ export const DriversModule: React.FC = () => {
                     </table>
                 </div>
             </div>
+            </>
+            )}
 
             {/* Quick Add / Edit Driver Modal */}
             {showAddModal && (

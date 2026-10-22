@@ -29,6 +29,12 @@ def create_router(state: AppState, mumble_service: MumbleService | None = None) 
         """Create a new rig group."""
         return state.create_group(name=body.name, mode=body.mode, voice_channel=body.voice_channel)
 
+    @router.post("/reorder")
+    async def reorder_groups(body: dict[str, list[str]]) -> list[RigGroup]:
+        """Reorder rig groups according to the provided list of group_ids."""
+        group_ids = body.get("group_ids", [])
+        return state.reorder_groups(group_ids)
+
     @router.get("/{group_id}")
     async def get_group(group_id: str) -> dict[str, object]:
         """Get a group with its member rigs."""

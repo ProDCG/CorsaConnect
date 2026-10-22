@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Car, Check, Zap, Plus, Trash2, Search, Filter, ShieldCheck, Sparkles, RefreshCw, CheckCircle2 } from 'lucide-react'
+import { Car, Check, Zap, Plus, Trash2, Search, Filter, ShieldCheck, Sparkles, RefreshCw, CheckCircle2, GripVertical } from 'lucide-react'
 
 interface CatalogCar {
     id: string
@@ -25,6 +25,8 @@ export const CarsModule: React.FC = () => {
 
     // Car Subtype Presets (empty by default)
     const [presets, setPresets] = useState<CarPreset[]>([])
+    const [draggedPresetId, setDraggedPresetId] = useState<string | null>(null)
+    const [dragOverPresetId, setDragOverPresetId] = useState<string | null>(null)
 
     const [showNewPresetModal, setShowNewPresetModal] = useState<boolean>(false)
     const [newPresetName, setNewPresetName] = useState<string>('')
@@ -170,6 +172,36 @@ export const CarsModule: React.FC = () => {
         }).catch(err => console.error('Failed to delete car preset from backend:', err))
     }
 
+    const handleDropPreset = (targetId: string) => {
+        if (!draggedPresetId || draggedPresetId === targetId) {
+            setDraggedPresetId(null)
+            setDragOverPresetId(null)
+            return
+        }
+        const fromIdx = presets.findIndex(p => p.id === draggedPresetId)
+        const toIdx = presets.findIndex(p => p.id === targetId)
+        if (fromIdx === -1 || toIdx === -1) {
+            setDraggedPresetId(null)
+            setDragOverPresetId(null)
+            return
+        }
+        const updated = [...presets]
+        const [moved] = updated.splice(fromIdx, 1)
+        updated.splice(toIdx, 0, moved)
+
+        setPresets(updated)
+        setDraggedPresetId(null)
+        setDragOverPresetId(null)
+        localStorage.setItem('corsa_car_presets', JSON.stringify(updated))
+        fetch('/car_presets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updated),
+        }).catch(err => console.error('Failed to save reordered car presets:', err))
+        setStatusMsg(`Reordered preset "${moved.name}"`)
+        setTimeout(() => setStatusMsg(null), 2500)
+    }
+
     // Filter cars
     const filteredCars = cars.filter(car => {
         return (
@@ -238,7 +270,7 @@ export const CarsModule: React.FC = () => {
                             Car Subtype Presets & Categories
                         </h3>
                     </div>
-                    <span className="text-xs text-white/40">1-click switch between GT3, Hypercars, or custom packs</span>
+                    <span className="text-xs text-white/40">Drag cards to reorder · 1-click switch between presets</span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -249,42 +281,80 @@ export const CarsModule: React.FC = () => {
                             <p className="text-[11px] text-white/30 mt-1">Select cars from the catalog below and click "Save Selection as Preset" to add your first preset.</p>
                         </div>
                     ) : (
-                        presets.map(preset => (
-                            <div
-                                key={preset.id}
-                                className="bg-[#181818] border border-white/10 hover:border-white/20 rounded-xl p-4 flex flex-col justify-between transition-all group"
-                            >
-                                <div>
-                                    <div className="flex items-center justify-between mb-1.5">
-                                        <h4 className="font-black text-white text-sm group-hover:text-ridge-brand transition-colors">
-                                            {preset.name}
-                                        </h4>
+                        presets.map(preset => {
+                            const isDragging = draggedPresetId === preset.id
+                            const isDragOver = dragOverPresetId === preset.id && draggedPresetId !== preset.id
+                            return (
+                                <div
+                                    key={preset.id}
+                                    draggable
+                                    onDragStart={e => {
+                                        setDraggedPresetId(preset.id)
+                                        e.dataTransfer.effectAllowed = 'move'
+                                    }}
+                                    onDragOver={e => {
+                                        e.preventDefault()
+                                        e.dataTransfer.dropEffect = 'move'
+                                        if (dragOverPresetId !== preset.id) {
+                                            setDragOverPresetId(preset.id)
+                                        }
+                                    }}
+                                    onDragLeave={() => {
+                                        if (dragOverPresetId === preset.id) {
+                                            setDragOverPresetId(null)
+                                        }
+                                    }}
+                                    onDrop={e => {
+                                        e.preventDefault()
+                                        handleDropPreset(preset.id)
+                                    }}
+                                    onDragEnd={() => {
+                                        setDraggedPresetId(null)
+                                        setDragOverPresetId(null)
+                                    }}
+                                    className={`bg-[#181818] border rounded-xl p-4 flex flex-col justify-between transition-all group cursor-grab active:cursor-grabbing ${
+                                        isDragging
+                                            ? 'opacity-40 scale-95 border-ridge-brand'
+                                            : isDragOver
+                                                ? 'border-ridge-brand bg-ridge-brand/10 ring-2 ring-ridge-brand/40'
+                                                : 'border-white/10 hover:border-white/20'
+                                    }`}
+                                >
+                                    <div>
+                                        <div className="flex items-center justify-between mb-1.5">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <GripVertical size={14} className="text-white/25 group-hover:text-white/60 shrink-0 transition-colors" />
+                                                <h4 className="font-black text-white text-sm group-hover:text-ridge-brand transition-colors truncate">
+                                                    {preset.name}
+                                                </h4>
+                                            </div>
+                                            <button
+                                                onClick={() => handleDeletePreset(preset.id)}
+                                                className="text-white/30 hover:text-red-400 p-1 rounded transition-colors shrink-0"
+                                                title="Delete preset"
+                                            >
+                                                <Trash2 size={13} />
+                                            </button>
+                                        </div>
+                                        <p className="text-[11px] text-white/50 leading-relaxed mb-3 pl-5">
+                                            {preset.description || `${preset.car_ids.length} cars configured.`}
+                                        </p>
+                                    </div>
+
+                                    <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                                        <span className="text-[10px] font-mono text-white/40 font-bold pl-5">
+                                            {preset.car_ids.length} Cars
+                                        </span>
                                         <button
-                                            onClick={() => handleDeletePreset(preset.id)}
-                                            className="text-white/30 hover:text-red-400 p-1 rounded transition-colors"
-                                            title="Delete preset"
+                                            onClick={() => handleApplyPreset(preset)}
+                                            className="px-3 py-1.5 bg-white/10 hover:bg-ridge-brand text-white text-xs font-bold uppercase tracking-wider rounded-lg flex items-center gap-1.5 transition-all"
                                         >
-                                            <Trash2 size={13} />
+                                            <Zap size={13} /> Activate Preset
                                         </button>
                                     </div>
-                                    <p className="text-[11px] text-white/50 leading-relaxed mb-3">
-                                        {preset.description || `${preset.car_ids.length} cars configured.`}
-                                    </p>
                                 </div>
-
-                                <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                                    <span className="text-[10px] font-mono text-white/40 font-bold">
-                                        {preset.car_ids.length} Cars
-                                    </span>
-                                    <button
-                                        onClick={() => handleApplyPreset(preset)}
-                                        className="px-3 py-1.5 bg-white/10 hover:bg-ridge-brand text-white text-xs font-bold uppercase tracking-wider rounded-lg flex items-center gap-1.5 transition-all"
-                                    >
-                                        <Zap size={13} /> Activate Preset
-                                    </button>
-                                </div>
-                            </div>
-                        ))
+                            )
+                        })
                     )}
                 </div>
             </div>
