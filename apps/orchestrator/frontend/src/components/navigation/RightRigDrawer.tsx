@@ -14,6 +14,7 @@ import {
     Cpu,
     Zap,
     Volume2,
+    QrCode,
 } from 'lucide-react'
 import { useLiveStream } from '../../context/LiveStreamContext'
 import { Rig, Driver } from '../../types'
@@ -63,6 +64,34 @@ export const RightRigDrawer: React.FC = () => {
             refresh()
         } catch (e) {
             console.error('Failed to toggle rig mode:', e)
+        }
+    }
+
+    const handleToggleRigQr = async (rig: Rig) => {
+        try {
+            if (!rig.checkin_url) {
+                // Generate a QR token for this rig if it doesn't have one yet
+                await fetch('/ridge/session/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        rig_ids: [rig.rig_id],
+                        show_qr_on_rigs: true,
+                    }),
+                })
+            } else {
+                await fetch('/ridge/qr/visibility', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        rig_id: rig.rig_id,
+                        show_qr: !rig.show_qr,
+                    }),
+                })
+            }
+            refresh()
+        } catch (e) {
+            console.error('Failed to toggle rig QR visibility:', e)
         }
     }
 
@@ -227,6 +256,18 @@ export const RightRigDrawer: React.FC = () => {
                                                 >
                                                     {rig.status}
                                                 </span>
+
+                                                <button
+                                                    onClick={() => handleToggleRigQr(rig)}
+                                                    className={`p-1 rounded transition-colors ${
+                                                        rig.show_qr
+                                                            ? 'text-ridge-brand bg-ridge-brand/20 hover:bg-ridge-brand/30'
+                                                            : 'text-white/40 hover:text-ridge-brand hover:bg-white/10'
+                                                    }`}
+                                                    title={rig.show_qr ? 'Hide Check-in QR on Rig Screen' : 'Show Check-in QR on Rig Screen'}
+                                                >
+                                                    <QrCode size={12} />
+                                                </button>
 
                                                 <button
                                                     onClick={() => handleToggleMode(rig)}

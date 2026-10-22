@@ -8,6 +8,7 @@ import time
 
 from fastapi import APIRouter, BackgroundTasks
 
+from apps.orchestrator.services.discord import send_debug_notification
 from apps.orchestrator.services.dispatcher import dispatch_command
 from apps.orchestrator.state import AppState
 from shared.models import Command
@@ -57,14 +58,71 @@ def create_router(state: AppState) -> APIRouter:
     def _check_and_notify_podiums(finished_sids: list[str], bg_tasks: BackgroundTasks) -> None:
         webhook_url = getattr(state.settings, "discord_webhook_url", None)
         notify_podiums = getattr(state.settings, "discord_notify_podiums", False)
-        if not webhook_url or not notify_podiums or not finished_sids:
-            return
+        ridge_svc = getattr(state, "ridge_service", None)
 
-        from apps.orchestrator.services.discord import notify_session_podium
         for sid in finished_sids:
-            standings = state.leaderboard_db.get_session_standings(sid)
-            if standings:
-                bg_tasks.add_task(notify_session_podium, str(webhook_url), standings)
+            # Finalize & sync laps with Ridge API if auto-sync is enabled
+            if ridge_svc and getattr(state.settings, "ridge_auto_sync", True) and getattr(state.settings, "ridge_api_key", None):
+                bg_tasks.add_task(ridge_svc.sync_session_laps, sid, True)
+
+            if webhook_url and notify_podiums:
+                from apps.orchestrator.services.discord import notify_session_podium
+                standings = state.leaderboard_db.get_session_standings(sid)
+                if standings:
+                    bg_tasks.add_task(notify_session_podium, str(webhook_url), standings)
+
+    def _reuse_or_start_session(
+        track: str,
+        group_name: str,
+        group_id: str | None,
+        rig_ids: list[str],
+        track_layout: str | None = None,
+        bg_tasks: BackgroundTasks | None = None,
+    ) -> str:
+        """Reuse an existing pre-registered check-in session for these rigs, or create a new one."""
+        existing_sid: str | None = None
+        for rid in rig_ids:
+            r_obj = state.get_rig(rid)
+            if r_obj and r_obj.get("current_session_id"):
+                cand = str(r_obj["current_session_id"])
+                s_meta = state.leaderboard_db.get_ridge_session(cand)
+                if s_meta and s_meta.get("status") in ("created", "registered", "receiving", "local_only"):
+                    existing_sid = cand
+                    break
+
+        if existing_sid:
+            sid = state.start_race_session(
+                track=track,
+                group_name=group_name,
+                group_id=group_id,
+                rig_ids=rig_ids,
+                session_id=existing_sid,
+            )
+        else:
+            sid = state.start_race_session(
+                track=track,
+                group_name=group_name,
+                group_id=group_id,
+                rig_ids=rig_ids,
+            )
+            ridge_svc = getattr(state, "ridge_service", None)
+            if ridge_svc and getattr(state.settings, "ridge_auto_sync", True) and getattr(state.settings, "ridge_api_key", None):
+                if bg_tasks:
+                    bg_tasks.add_task(
+                        ridge_svc.register_session_tokens,
+                        sid,
+                        rig_ids,
+                        None,
+                        group_id,
+                        group_name,
+                        track,
+                        track_layout,
+                        False,  # Don't show QR on top of launching race
+                    )
+        # Hide QR on rigs now that the race is launching
+        for rid in rig_ids:
+            state.update_rig_field(rid, "show_qr", False)
+        return sid
 
     @router.post("/command")
     async def send_command(command: Command, background_tasks: BackgroundTasks) -> dict[str, str]:
@@ -84,15 +142,43 @@ def create_router(state: AppState) -> APIRouter:
             state.update_rig_field(command.rig_id, "kill_requested_at", time.time())
             finished_sids = state.finish_race_session(rig_ids=[command.rig_id])
             _check_and_notify_podiums(finished_sids, background_tasks)
+            background_tasks.add_task(
+                send_debug_notification,
+                state.settings,
+                "race_stop",
+                f"🛑 Race Stopped — {command.rig_id}",
+                f"Dispatched `KILL_RACE` to **{command.rig_id}**.",
+                None,
+                {"Rig": command.rig_id, "Driver": str(rig.get("driver_name") or "Unassigned")},
+                {"Sessions Finished": ", ".join(finished_sids) if finished_sids else "None"},
+            )
         elif command.action == "LAUNCH_RACE":
             # Clear any previous kill guard so the sled's "racing" heartbeat
             # isn't blocked — we're intentionally starting a new race.
             state.update_rig_field(command.rig_id, "kill_requested_at", None)
             rig_group = next((g for g in state.get_groups() if command.rig_id in g.rig_ids), None)
             track = command.track or (rig_group.track if rig_group else "monza")
+            t_layout = rig_group.track_layout if rig_group else None
             gname = rig_group.name if rig_group else f"Solo ({command.rig_id})"
             gid = rig_group.id if rig_group else None
-            state.start_race_session(track=track, group_name=gname, group_id=gid, rig_ids=[command.rig_id])
+            sid = _reuse_or_start_session(
+                track=track,
+                group_name=gname,
+                group_id=gid,
+                rig_ids=[command.rig_id],
+                track_layout=t_layout,
+                bg_tasks=background_tasks,
+            )
+            background_tasks.add_task(
+                send_debug_notification,
+                state.settings,
+                "race_start",
+                f"🟢 Race Launched — {command.rig_id}",
+                f"Launching race on **{command.rig_id}** at **{track}**.",
+                {"Track": track, "Car": str(rig.get("selected_car") or command.car or "N/A")},
+                {"Rig": command.rig_id, "Driver": str(rig.get("driver_name") or "Unassigned"), "UUID": str(rig.get("driver_uuid") or "N/A")},
+                {"Session ID": sid, "Group": gname},
+            )
 
         if command.action == "SETUP_MODE":
             state.update_rig_field(command.rig_id, "selected_car", None)
@@ -115,10 +201,30 @@ def create_router(state: AppState) -> APIRouter:
         if command.action == "LAUNCH_RACE":
             all_rids = [str(r["rig_id"]) for r in state.get_rigs()]
             track = command.track or "monza"
-            state.start_race_session(track=track, group_name="Global Race", rig_ids=all_rids)
+            sid = _reuse_or_start_session(track=track, group_name="Global Race", group_id=None, rig_ids=all_rids, bg_tasks=background_tasks)
+            background_tasks.add_task(
+                send_debug_notification,
+                state.settings,
+                "race_start",
+                "🟢 Global Race Launched",
+                f"Launching global race across **{len(all_rids)}** rig(s) at **{track}**.",
+                {"Track": track},
+                {"Rigs": ", ".join(all_rids) or "None"},
+                {"Session ID": sid, "Group": "Global Race"},
+            )
         elif command.action == "KILL_RACE":
             finished_sids = state.finish_race_session()
             _check_and_notify_podiums(finished_sids, background_tasks)
+            background_tasks.add_task(
+                send_debug_notification,
+                state.settings,
+                "race_stop",
+                "🛑 Global Race Stopped",
+                "Dispatched global `KILL_RACE` to all rigs.",
+                None,
+                None,
+                {"Sessions Finished": ", ".join(finished_sids) if finished_sids else "None"},
+            )
 
         for rig in state.get_rigs():
             rig_id = str(rig["rig_id"])
@@ -201,6 +307,16 @@ def create_router(state: AppState) -> APIRouter:
                 state.update_rig_field(rid, "race_armed", False)
             finished_sids = state.finish_race_session(rig_ids=list(group.rig_ids))
             _check_and_notify_podiums(finished_sids, background_tasks)
+            background_tasks.add_task(
+                send_debug_notification,
+                state.settings,
+                "race_stop",
+                f"🛑 Group Race Stopped — {group.name}",
+                f"Stopped race for group **{group.name}** ({len(group.rig_ids)} rigs).",
+                {"Track": group.track},
+                {"Rigs": ", ".join(group.rig_ids) or "None"},
+                {"Group": group.name, "Sessions Finished": ", ".join(finished_sids) if finished_sids else "None"},
+            )
             logger.info("KILL_RACE: set %d rigs to idle for group '%s'", len(group.rig_ids), group.name)
         elif command.action == "LAUNCH_RACE":
             for rid in group.rig_ids:
@@ -208,7 +324,24 @@ def create_router(state: AppState) -> APIRouter:
                 state.update_rig_field(rid, "last_lap_count", 0)
                 state.update_rig_field(rid, "race_armed", False)
             track = command.track or group.track or "monza"
-            state.start_race_session(track=track, group_name=group.name, group_id=group.id, rig_ids=list(group.rig_ids))
+            sid = _reuse_or_start_session(
+                track=track,
+                group_name=group.name,
+                group_id=group.id,
+                rig_ids=list(group.rig_ids),
+                track_layout=group.track_layout,
+                bg_tasks=background_tasks,
+            )
+            background_tasks.add_task(
+                send_debug_notification,
+                state.settings,
+                "race_start",
+                f"🟢 Group Race Launched — {group.name}",
+                f"Launching **{group.mode}** session for group **{group.name}** at **{track}**.",
+                {"Track": track, "Layout": group.track_layout or "default", "Weather": group.weather},
+                {"Rigs": ", ".join(group.rig_ids) or "None"},
+                {"Session ID": sid, "Group": group.name, "Mode": group.mode},
+            )
             logger.info("LAUNCH_RACE: cleared kill guard, started session, and reset lap counts for %d rigs in group '%s'", len(group.rig_ids), group.name)
 
 

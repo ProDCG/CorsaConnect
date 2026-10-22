@@ -515,10 +515,13 @@ class AppState:
         group_name: str | None = None,
         group_id: str | None = None,
         rig_ids: list[str] | None = None,
+        session_id: str | None = None,
     ) -> str:
         """Create and start a new unique race session."""
         import uuid
-        session_id = f"sess_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+        if not session_id:
+            prefix = "test_sess" if getattr(self._settings, "ridge_test_mode", False) else "sess"
+            session_id = f"{prefix}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
         with self._lock:
             if not hasattr(self, "_sessions"):
                 self._sessions = {}

@@ -47,6 +47,28 @@ def create_router(state: AppState) -> APIRouter:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    @router.post("/settings/discord/test_debug")
+    async def test_discord_debug_webhook(payload: dict[str, str] | None = None) -> dict[str, object]:
+        url = (payload.get("webhook_url") if payload else None) or getattr(state.settings, "discord_debug_webhook_url", None)
+        if not url:
+            return {"status": "error", "message": "No debug webhook URL provided or configured"}
+        from apps.orchestrator.services.discord import send_discord_webhook
+        try:
+            send_discord_webhook(
+                str(url),
+                title="🛠️ Ridge-Link Debug Webhook Test",
+                description="Your Discord Debug Webhook is connected and ready to stream filtered telemetry & API events.",
+                fields=[
+                    {"name": "CHANNEL", "value": str(getattr(state.settings, "discord_debug_channel_name", "#debug-logs")), "inline": True},
+                    {"name": "RACE START/STOP", "value": "Enabled" if state.settings.discord_debug_race_start else "Muted", "inline": True},
+                    {"name": "LAP STREAM", "value": "Enabled" if state.settings.discord_debug_lap_complete else "Muted", "inline": True},
+                    {"name": "RIDGE API SYNC", "value": "Enabled" if state.settings.discord_debug_api_sync else "Muted", "inline": True},
+                ],
+            )
+            return {"status": "success", "message": "Debug test notification dispatched"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     @router.get("/carpool")
     async def get_carpool() -> list[str]:
         return state.car_pool

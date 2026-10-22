@@ -12,9 +12,10 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from apps.orchestrator.routers import commands, drivers, groups, leaderboard, mumble, rigs, server, settings, stream
+from apps.orchestrator.routers import commands, drivers, groups, leaderboard, mumble, ridge, rigs, server, settings, stream
 from apps.orchestrator.services.heartbeat import stale_rig_reaper, start_heartbeat_listener
 from apps.orchestrator.services.mumble_service import MumbleService
+from apps.orchestrator.services.ridge_api import RidgeApiService
 from apps.orchestrator.state import AppState
 from shared.constants import HEARTBEAT_PORT, UI_PORT
 
@@ -33,6 +34,8 @@ logger = logging.getLogger("ridge.main")
 # ---------------------------------------------------------------------------
 state = AppState()
 mumble_svc = MumbleService(state)
+ridge_svc = RidgeApiService(state)
+state.ridge_service = ridge_svc  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
@@ -52,12 +55,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Start Mumble voice chat service
     mumble_svc.start()
 
+    # Start Ridge API check-in poller
+    ridge_svc.start()
+
     yield
 
     # Cleanup
     reaper_task.cancel()
     transport.close()
     mumble_svc.stop()
+    ridge_svc.stop()
     logger.info("Background services stopped")
 
 
@@ -89,6 +96,7 @@ _routers = [
     leaderboard.create_router(state),
     mumble.create_router(state, mumble_svc),
     drivers.create_router(state),
+    ridge.create_router(state, ridge_svc),
     stream.create_router(state),
 ]
 for r in _routers:

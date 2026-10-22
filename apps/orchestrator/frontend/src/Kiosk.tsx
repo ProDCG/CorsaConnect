@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Zap, Check, Shield } from 'lucide-react'
+import { Zap, Check, Shield, QrCode } from 'lucide-react'
 
 interface Branding {
     logo_url: string
@@ -11,6 +11,10 @@ interface Rig {
     ip: string
     status: string
     selected_car?: string | null
+    driver_name?: string | null
+    checkin_url?: string | null
+    checkin_status?: string | null
+    show_qr?: boolean
     cpu_temp: number
     mod_version: string
 }
@@ -21,6 +25,10 @@ export default function Kiosk() {
     const [ready, setReady] = useState(false)
     const [selectedCar, setSelectedCar] = useState<string | null>(null)
     const [carPool, setCarPool] = useState<string[]>([])
+    const [checkinUrl, setCheckinUrl] = useState<string | null>(null)
+    const [checkinStatus, setCheckinStatus] = useState<string | null>(null)
+    const [driverName, setDriverName] = useState<string | null>(null)
+    const [showQr, setShowQr] = useState<boolean>(false)
     const [branding, setBranding] = useState<Branding>({
         logo_url: '/assets/ridge_logo.png',
         video_url: '/assets/idle_race.mp4'
@@ -103,6 +111,10 @@ export default function Kiosk() {
                     const myRig = rigs.find((r: Rig) => r && r.rig_id === id)
                     if (myRig) {
                         setStatus(myRig.status || 'idle')
+                        setCheckinUrl(myRig.checkin_url || null)
+                        setCheckinStatus(myRig.checkin_status || null)
+                        setDriverName(myRig.driver_name || null)
+                        setShowQr(Boolean(myRig.show_qr))
                         if (myRig.status === 'idle') {
                             setReady(false)
                         }
@@ -128,6 +140,10 @@ export default function Kiosk() {
                         const myRig = snapshot.rigs.find((r: Rig) => r && r.rig_id === id)
                         if (myRig) {
                             setStatus(myRig.status || 'idle')
+                            setCheckinUrl(myRig.checkin_url || null)
+                            setCheckinStatus(myRig.checkin_status || null)
+                            setDriverName(myRig.driver_name || null)
+                            setShowQr(Boolean(myRig.show_qr))
                             if (myRig.status === 'idle') setReady(false)
                         }
                     }
@@ -236,13 +252,54 @@ export default function Kiosk() {
             </video>
 
             {/* Logo Overlay */}
-            <div className="absolute top-12 left-12 z-50 pointer-events-none">
+            <div className="absolute top-12 left-12 z-50 pointer-events-none flex items-center gap-4">
                 <img
                     src={branding.logo_url || "/assets/ridge_logo.png"}
                     alt="Facility Logo"
                     className="h-16 w-auto object-contain"
                 />
+                {driverName && (
+                    <div className="px-4 py-2 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 backdrop-blur-md">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300 block">Checked In Driver</span>
+                        <span className="text-lg font-black text-white uppercase tracking-wider">{driverName}</span>
+                    </div>
+                )}
             </div>
+
+            {/* QR Check-in Overlay (Controlled from Admin Dashboard) */}
+            {showQr && checkinUrl && status?.toLowerCase() !== 'racing' && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xl animate-in fade-in duration-300">
+                    <div className="bg-[#0d0d0d] border-2 border-ridge-brand/60 rounded-3xl p-8 max-w-md w-full text-center shadow-[0_0_80px_rgba(0,136,255,0.25)] space-y-5">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-ridge-brand/20 border border-ridge-brand/40 text-ridge-brand text-xs font-black uppercase tracking-widest">
+                            <QrCode size={14} /> Mobile Racer Check-In
+                        </div>
+                        <div>
+                            <h2 className="text-3xl font-black uppercase tracking-tight text-white">{rigId}</h2>
+                            <p className="text-xs text-white/60 mt-1">
+                                Scan with your phone camera to link your Ridge Racing profile &amp; 4-digit PIN
+                            </p>
+                        </div>
+                        <div className="bg-white p-4 rounded-2xl inline-block mx-auto shadow-xl">
+                            <img
+                                src={`/api/ridge/qr.svg?url=${encodeURIComponent(checkinUrl)}`}
+                                alt="Check-in QR Code"
+                                className="w-56 h-56 object-contain"
+                            />
+                        </div>
+                        <div className="pt-2">
+                            {checkinStatus === 'claimed' && driverName ? (
+                                <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-black uppercase tracking-wider text-sm">
+                                    ✓ Checked In: {driverName}
+                                </div>
+                            ) : (
+                                <div className="text-xs font-bold uppercase tracking-widest text-white/50 animate-pulse">
+                                    Waiting for mobile scan...
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Setup Overlay */}
             {(status?.toLowerCase() === 'setup' || status?.toLowerCase() === 'ready') && (

@@ -104,6 +104,11 @@ class DesktopBlocker:
         self._car_pool: list[str] = []
         self._hide_scheduled: bool = False
         self._locally_unlocked: bool = False  # True when rig-side unlock overrides orchestrator
+        self._qr_url: str | None = None
+        self._show_qr: bool = False
+        self._checkin_status: str | None = None
+        self._driver_name: str | None = None
+        self._qr_photo: tk.PhotoImage | None = None
 
         # Session countdown timer
         self._timer_end: float | None = None  # Unix timestamp when session ends
@@ -512,9 +517,26 @@ class DesktopBlocker:
             new_status = str(data.get("status", "idle"))
             car_pool = data.get("car_pool", [])
             session_duration = int(data.get("session_duration_min", 0))
+            qr_url = str(data["checkin_url"]) if data.get("checkin_url") else None
+            show_qr = bool(data.get("show_qr", False))
+            checkin_status = str(data["checkin_status"]) if data.get("checkin_status") else None
+            driver_name = str(data["driver_name"]) if data.get("driver_name") else None
 
             logger.debug("Poll result: mode=%s status=%s (current: mode=%s status=%s locally_unlocked=%s)",
                          new_mode, new_status, self._current_mode, self._current_status, self._locally_unlocked)
+
+            # Check if QR check-in overlay state changed
+            if (
+                qr_url != self._qr_url
+                or show_qr != self._show_qr
+                or checkin_status != self._checkin_status
+                or driver_name != self._driver_name
+            ):
+                self._qr_url = qr_url
+                self._show_qr = show_qr
+                self._checkin_status = checkin_status
+                self._driver_name = driver_name
+                self.root.after(0, self._update_qr_overlay)
 
             # Mode change
             if new_mode != self._current_mode:
@@ -683,6 +705,78 @@ class DesktopBlocker:
     def update_status(self, text: str) -> None:
         """Update the status message from another thread."""
         self.root.after(0, lambda: self.canvas.itemconfig(self.status_text, text=text))
+
+    def _update_qr_overlay(self) -> None:
+        """Render or hide the centered QR Check-in card on the splash canvas."""
+        self.canvas.delete("qr_overlay")
+        if not self._show_qr or not self._qr_url or self._current_status == "racing":
+            return
+
+        cx, cy = self.sw // 2, self.sh // 2
+        box_w, box_h = 420, 480
+        x1, y1 = cx - box_w // 2, cy - box_h // 2
+        x2, y2 = cx + box_w // 2, cy + box_h // 2
+
+        # Card background & border
+        self.canvas.create_rectangle(
+            x1, y1, x2, y2,
+            fill="#0d0d0d", outline=BRAND_COLOR, width=3,
+            tags="qr_overlay",
+        )
+        self.canvas.create_text(
+            cx, y1 + 38,
+            text=f"SCAN TO CHECK IN — {self.rig_id}",
+            font=("Arial", 15, "bold"),
+            fill="#FFFFFF",
+            tags="qr_overlay",
+        )
+        self.canvas.create_text(
+            cx, y1 + 65,
+            text="Enter your email & 4-digit PIN on your phone",
+            font=("Arial", 10),
+            fill="#999999",
+            tags="qr_overlay",
+        )
+
+        # Fetch QR PNG asynchronously from orchestrator if PIL is available
+        if HAS_PIL:
+            qr_url_target = self._qr_url
+
+            def _fetch_qr() -> None:
+                try:
+                    from urllib.parse import quote
+                    img_url = f"http://{self.orchestrator_ip}:8000/ridge/qr.png?url={quote(qr_url_target, safe='')}"
+                    with urlrequest.urlopen(img_url, timeout=4) as resp:
+                        raw_bytes = resp.read()
+                    import io
+                    pil_img = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
+                    pil_img = pil_img.resize((260, 260), Image.NEAREST)
+                    tk_img = _pil_to_tk(pil_img)
+
+                    def _draw_img() -> None:
+                        if self._show_qr and self._qr_url == qr_url_target:
+                            self._qr_photo = tk_img
+                            self.canvas.create_image(cx, cy + 10, image=tk_img, tags="qr_overlay")
+
+                    self.root.after(0, _draw_img)
+                except Exception as e:
+                    logger.debug("Could not load QR PNG from orchestrator: %s", e)
+
+            threading.Thread(target=_fetch_qr, daemon=True).start()
+
+        status_label = (
+            f"CHECKED IN: {self._driver_name}"
+            if self._checkin_status == "claimed" and self._driver_name
+            else "WAITING FOR RACER CHECK-IN..."
+        )
+        status_color = "#00CC66" if self._checkin_status == "claimed" else BRAND_COLOR
+        self.canvas.create_text(
+            cx, y2 - 40,
+            text=status_label,
+            font=("Arial", 11, "bold"),
+            fill=status_color,
+            tags="qr_overlay",
+        )
 
     # ------------------------------------------------------------------
     # Exit / Close

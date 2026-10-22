@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 import time
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, BackgroundTasks, Request
 from pydantic import BaseModel
 
+from apps.orchestrator.services.discord import format_lap_time, send_debug_notification
 from apps.orchestrator.state import AppState
 from shared.models import LeaderboardEntry, RigStatusUpdate
 
@@ -117,7 +118,9 @@ def create_router(state: AppState) -> APIRouter:
         return state.get_rigs()
 
     @router.post("/rigs/{rig_id}/status")
-    async def update_rig_status(rig_id: str, update: RigStatusUpdate, request: Request) -> dict[str, str]:
+    async def update_rig_status(
+        rig_id: str, update: RigStatusUpdate, request: Request, background_tasks: BackgroundTasks
+    ) -> dict[str, str]:
         """Allows kiosks and sleds to register or update their status/selection."""
 
         # Robust IP discovery
@@ -215,37 +218,84 @@ def create_router(state: AppState) -> APIRouter:
                         if is_valid is None:
                             is_valid = update.telemetry.get("is_lap_valid", True)
 
+                        # Look up track/group context from the rig's group
+                        rig_group = next(
+                            (g for g in state.get_groups() if rig_id in g.rig_ids), None
+                        )
+                        track_name = rig_group.track if rig_group else None
+                        track_layout = rig_group.track_layout if rig_group else None
+
+                        # Parse lap time from telemetry
+                        lap_time_ms: int | None = None
+                        raw_time = update.telemetry.get("last_lap_time")
+                        if raw_time is not None:
+                            lap_time_ms = _parse_lap_time_ms(raw_time)
+
                         if is_valid is False or is_valid == 0:
                             logger.info("Rig %s lap %d completed but marked INVALID (out-lap/cut) — skipping leaderboard", rig_id, completed)
-                        else:
-                            # Look up track/group context from the rig's group
-                            rig_group = next(
-                                (g for g in state.get_groups() if rig_id in g.rig_ids), None
-                            )
-
-                            # Parse lap time from telemetry
-                            lap_time_ms: int | None = None
-                            raw_time = update.telemetry.get("last_lap_time")
-                            if raw_time is not None:
-                                lap_time_ms = _parse_lap_time_ms(raw_time)
-
+                            # Record invalid lap in raw laps DB if lap_time_ms is valid so it can be synced/inspected
                             if lap_time_ms and lap_time_ms > 0:
-                                track_name = rig_group.track if rig_group else None
+                                inv_entry = LeaderboardEntry(
+                                    rig_id=rig_id,
+                                    driver_name=str(rig.get("driver_name", "")) or None,
+                                    driver_email=str(rig.get("driver_email", "")) or None,
+                                    driver_uuid=str(rig.get("driver_uuid", "")) or None,
+                                    car=str(rig.get("selected_car", "")),
+                                    track=track_name,
+                                    track_layout=track_layout,
+                                    group_name=rig_group.name if rig_group else None,
+                                    lap=int(completed),
+                                    lap_time_ms=lap_time_ms,
+                                    session_id=str(rig.get("current_session_id") or state.get_latest_session_id() or (rig_group.id if rig_group else "session")),
+                                    is_valid=False,
+                                )
+                                state.add_leaderboard_entry(inv_entry)
+                            # Optional Discord debug notification for invalid lap
+                            background_tasks.add_task(
+                                send_debug_notification,
+                                state.settings,
+                                "invalid_lap",
+                                f"⚠️ Invalid Lap Completed ({rig_id})",
+                                f"Lap #{int(completed)} on **{rig_id}** was marked invalid (cut/out-lap).",
+                                {
+                                    "Lap": int(completed),
+                                    "Lap Time": format_lap_time(lap_time_ms),
+                                    "Car": str(rig.get("selected_car") or "N/A"),
+                                    "Track": track_name or "N/A",
+                                    "Valid": "False",
+                                },
+                                {
+                                    "Rig": rig_id,
+                                    "Driver": str(rig.get("driver_name") or "Unassigned"),
+                                    "UUID": str(rig.get("driver_uuid") or "N/A"),
+                                },
+                                {
+                                    "Session ID": str(rig.get("current_session_id") or "N/A"),
+                                    "Group": rig_group.name if rig_group else "N/A",
+                                },
+                            )
+                        else:
+                            if lap_time_ms and lap_time_ms > 0:
                                 prev_best_ms: int | None = None
                                 if track_name:
                                     existing_bests = state.leaderboard_db.get_by_track(track_name, limit=1)
                                     if existing_bests and existing_bests[0].lap_time_ms:
                                         prev_best_ms = existing_bests[0].lap_time_ms
 
+                                active_sid = str(rig.get("current_session_id") or state.get_latest_session_id() or (rig_group.id if rig_group else "session"))
                                 entry = LeaderboardEntry(
                                     rig_id=rig_id,
                                     driver_name=str(rig.get("driver_name", "")) or None,
+                                    driver_email=str(rig.get("driver_email", "")) or None,
+                                    driver_uuid=str(rig.get("driver_uuid", "")) or None,
                                     car=str(rig.get("selected_car", "")),
                                     track=track_name,
+                                    track_layout=track_layout,
                                     group_name=rig_group.name if rig_group else None,
                                     lap=int(completed),
                                     lap_time_ms=lap_time_ms,
-                                    session_id=str(rig.get("current_session_id") or state.get_latest_session_id() or (rig_group.id if rig_group else "session")),
+                                    session_id=active_sid,
+                                    is_valid=True,
                                 )
                                 state.add_leaderboard_entry(entry)
                                 # Also upsert into session_best (peak performance per driver)
@@ -254,6 +304,37 @@ def create_router(state: AppState) -> APIRouter:
                                     "Recorded lap for %s (driver: %s): lap %d, time: %d ms",
                                     rig_id, entry.driver_name, completed, lap_time_ms
                                 )
+
+                                # Send Discord Debug Notification for completed lap if enabled
+                                background_tasks.add_task(
+                                    send_debug_notification,
+                                    state.settings,
+                                    "lap_complete",
+                                    f"⏱️ Lap #{int(completed)} Completed — {rig_id}",
+                                    f"**{entry.driver_name or rig_id}** completed lap #{int(completed)} in **{format_lap_time(lap_time_ms)}**.",
+                                    {
+                                        "Lap Time": format_lap_time(lap_time_ms),
+                                        "Lap #": int(completed),
+                                        "Car": entry.car or "N/A",
+                                        "Track": track_name or "N/A",
+                                        "Valid": "True",
+                                    },
+                                    {
+                                        "Rig": rig_id,
+                                        "Driver": entry.driver_name or "Unassigned",
+                                        "UUID": entry.driver_uuid or "N/A",
+                                    },
+                                    {
+                                        "Session ID": active_sid,
+                                        "Group": rig_group.name if rig_group else "N/A",
+                                    },
+                                )
+
+                                # Auto-sync lap batch to Ridge API if enabled
+                                if getattr(state.settings, "ridge_auto_sync", True) and getattr(state.settings, "ridge_api_key", None):
+                                    ridge_svc = getattr(state, "ridge_service", None)
+                                    if ridge_svc:
+                                        background_tasks.add_task(ridge_svc.sync_session_laps, active_sid, False)
 
                                 # Check Discord notification for new all-time track record
                                 webhook_url = getattr(state.settings, "discord_webhook_url", None)
@@ -308,6 +389,11 @@ def create_router(state: AppState) -> APIRouter:
             "selected_car": rig.get("selected_car"),
             "car_pool": car_pool,
             "session_duration_min": session_duration_min,
+            "driver_name": rig.get("driver_name"),
+            "driver_uuid": rig.get("driver_uuid"),
+            "checkin_url": rig.get("checkin_url"),
+            "checkin_status": rig.get("checkin_status"),
+            "show_qr": bool(rig.get("show_qr", False)),
         }
 
     @router.post("/rigs/{rig_id}/mode")

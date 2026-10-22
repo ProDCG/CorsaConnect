@@ -7,6 +7,11 @@ export interface Rig {
     driver_name?: string | null
     driver_email?: string | null
     driver_uuid?: string | null
+    current_session_id?: string | null
+    checkin_url?: string | null
+    checkin_status?: 'pending' | 'claimed' | 'expired' | null
+    checkin_expires_at?: number | null
+    show_qr?: boolean
     cpu_temp: number
     mod_version: string
     last_seen: number
@@ -111,6 +116,28 @@ export interface GlobalSettings {
     discord_channel_name?: string | null
     discord_notify_records?: boolean
     discord_notify_podiums?: boolean
+
+    // Discord Debug Webhook & Granular Filters
+    discord_debug_webhook_url?: string | null
+    discord_debug_channel_name?: string | null
+    discord_debug_race_start?: boolean
+    discord_debug_race_stop?: boolean
+    discord_debug_lap_complete?: boolean
+    discord_debug_invalid_laps?: boolean
+    discord_debug_checkin?: boolean
+    discord_debug_api_sync?: boolean
+    discord_debug_include_telemetry?: boolean
+    discord_debug_include_driver?: boolean
+    discord_debug_include_session?: boolean
+
+    // Ridge Sim Racing API
+    ridge_api_url?: string
+    ridge_api_key?: string | null
+    ridge_test_mode?: boolean
+    ridge_auto_sync?: boolean
+    ridge_poll_interval_sec?: number
+    ridge_qr_ttl_sec?: number
+    ridge_show_qr_on_rigs?: boolean
 }
 
 export interface Branding {

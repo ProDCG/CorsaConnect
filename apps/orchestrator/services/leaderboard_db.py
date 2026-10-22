@@ -20,10 +20,12 @@ CREATE TABLE IF NOT EXISTS laps (
     driver_name   TEXT,
     car           TEXT,
     track         TEXT,
+    track_layout  TEXT,
     group_name    TEXT,
     lap           INTEGER NOT NULL DEFAULT 0,
     lap_time_ms   INTEGER,
     session_id    TEXT,
+    source_lap_id TEXT,
     timestamp     REAL NOT NULL,
     driver_email  TEXT,
     driver_phone  TEXT,
@@ -31,7 +33,8 @@ CREATE TABLE IF NOT EXISTS laps (
     weather       TEXT,
     session_type  TEXT,
     notification_pending BOOLEAN DEFAULT 0,
-    is_valid      BOOLEAN DEFAULT 1
+    is_valid      BOOLEAN DEFAULT 1,
+    synced_to_ridge BOOLEAN DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_laps_track ON laps(track);
 CREATE INDEX IF NOT EXISTS idx_laps_session ON laps(session_id);
@@ -58,6 +61,35 @@ CREATE TABLE IF NOT EXISTS drivers (
     phone         TEXT,
     created_at    REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS ridge_sessions (
+    session_id    TEXT PRIMARY KEY,
+    group_id      TEXT,
+    group_name    TEXT,
+    track         TEXT,
+    track_layout  TEXT,
+    status        TEXT NOT NULL DEFAULT 'created',
+    last_error    TEXT,
+    synced_laps   INTEGER DEFAULT 0,
+    duplicate_laps INTEGER DEFAULT 0,
+    created_at    REAL NOT NULL,
+    updated_at    REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ridge_checkins (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id    TEXT NOT NULL,
+    rig_id        TEXT NOT NULL,
+    raw_token     TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'pending',
+    driver_uuid   TEXT,
+    driver_name   TEXT,
+    driver_email  TEXT,
+    expires_at    REAL,
+    claimed_at    REAL,
+    created_at    REAL NOT NULL,
+    UNIQUE(session_id, rig_id)
+);
 """
 
 
@@ -82,6 +114,9 @@ class LeaderboardDB:
                 ("session_type", "TEXT"),
                 ("notification_pending", "BOOLEAN DEFAULT 0"),
                 ("is_valid", "BOOLEAN DEFAULT 1"),
+                ("track_layout", "TEXT"),
+                ("source_lap_id", "TEXT"),
+                ("synced_to_ridge", "BOOLEAN DEFAULT 0"),
             ]:
                 try:
                     conn.execute(f"ALTER TABLE laps ADD COLUMN {col} {col_type}")
@@ -97,21 +132,30 @@ class LeaderboardDB:
 
     def insert(self, entry: LeaderboardEntry) -> None:
         """Insert a new lap record."""
+        source_lap_id = entry.source_lap_id
+        if not source_lap_id:
+            sid_clean = (entry.session_id or "nosess")[:24]
+            source_lap_id = f"lap-{entry.rig_id}-{sid_clean}-L{entry.lap}-{int(entry.timestamp * 1000)}"[:128]
+            entry.source_lap_id = source_lap_id
+
         with self._lock:
             conn = self._connect()
             conn.execute(
-                """INSERT INTO laps (rig_id, driver_name, car, track, group_name, lap, lap_time_ms, session_id, timestamp,
-                                     driver_email, driver_phone, driver_uuid, weather, session_type, notification_pending, is_valid)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO laps (rig_id, driver_name, car, track, track_layout, group_name, lap, lap_time_ms,
+                                     session_id, source_lap_id, timestamp, driver_email, driver_phone, driver_uuid,
+                                     weather, session_type, notification_pending, is_valid, synced_to_ridge)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     entry.rig_id,
                     entry.driver_name,
                     entry.car,
                     entry.track,
+                    entry.track_layout,
                     entry.group_name,
                     entry.lap,
                     entry.lap_time_ms,
                     entry.session_id,
+                    entry.source_lap_id,
                     entry.timestamp,
                     entry.driver_email,
                     entry.driver_phone,
@@ -120,6 +164,7 @@ class LeaderboardDB:
                     entry.session_type,
                     1 if entry.notification_pending else 0,
                     1 if entry.is_valid else 0,
+                    1 if entry.synced_to_ridge else 0,
                 ),
             )
             conn.commit()
@@ -176,15 +221,18 @@ class LeaderboardDB:
                 driver_uuid=dict(r).get("driver_uuid"),
                 car=r["car"],
                 track=r["track"],
+                track_layout=dict(r).get("track_layout"),
                 weather=dict(r).get("weather"),
                 group_name=r["group_name"],
                 session_type=dict(r).get("session_type"),
                 lap=r["lap"],
                 lap_time_ms=r["lap_time_ms"],
                 session_id=r["session_id"],
+                source_lap_id=dict(r).get("source_lap_id"),
                 timestamp=r["timestamp"],
                 notification_pending=bool(dict(r).get("notification_pending", 0)),
                 is_valid=bool(dict(r).get("is_valid", 1) if dict(r).get("is_valid") is not None else True),
+                synced_to_ridge=bool(dict(r).get("synced_to_ridge", 0)),
             )
             for r in rows
         ]
@@ -614,22 +662,42 @@ class LeaderboardDB:
     ) -> dict[str, object]:
         """Insert or update a registered driver."""
         import uuid as _uuid
-        conn = self._connect()
-        uuid_val = driver_uuid or f"drv_{_uuid.uuid4().hex[:8]}"
-        now = time.time()
-        conn.execute(
-            """INSERT INTO drivers (driver_uuid, display_name, email, phone, created_at)
-               VALUES (?, ?, ?, ?, ?)
-               ON CONFLICT(driver_uuid) DO UPDATE SET
-                   display_name = excluded.display_name,
-                   email = excluded.email,
-                   phone = excluded.phone""",
-            (uuid_val, display_name, email, phone, now),
-        )
-        conn.commit()
-        row = conn.execute("SELECT * FROM drivers WHERE driver_uuid = ?", (uuid_val,)).fetchone()
-        conn.close()
-        return dict(row) if row else {"driver_uuid": uuid_val, "display_name": display_name}
+        with self._lock:
+            conn = self._connect()
+            uuid_val = driver_uuid or f"drv_{_uuid.uuid4().hex[:8]}"
+            now = time.time()
+            # If email already exists with a different driver_uuid, update that row or handle gracefully
+            if email:
+                existing_by_email = conn.execute(
+                    "SELECT driver_uuid FROM drivers WHERE email = ?", (email,)
+                ).fetchone()
+                if existing_by_email and existing_by_email["driver_uuid"] != uuid_val:
+                    if driver_uuid:
+                        # Authoritative server UUID wins — update the existing row's driver_uuid
+                        conn.execute(
+                            "UPDATE drivers SET driver_uuid = ?, display_name = ?, phone = COALESCE(?, phone) WHERE email = ?",
+                            (uuid_val, display_name, phone, email),
+                        )
+                        conn.commit()
+                        row = conn.execute("SELECT * FROM drivers WHERE driver_uuid = ?", (uuid_val,)).fetchone()
+                        conn.close()
+                        return dict(row) if row else {"driver_uuid": uuid_val, "display_name": display_name}
+                    else:
+                        uuid_val = str(existing_by_email["driver_uuid"])
+
+            conn.execute(
+                """INSERT INTO drivers (driver_uuid, display_name, email, phone, created_at)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(driver_uuid) DO UPDATE SET
+                       display_name = excluded.display_name,
+                       email = COALESCE(excluded.email, drivers.email),
+                       phone = COALESCE(excluded.phone, drivers.phone)""",
+                (uuid_val, display_name, email, phone, now),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM drivers WHERE driver_uuid = ?", (uuid_val,)).fetchone()
+            conn.close()
+            return dict(row) if row else {"driver_uuid": uuid_val, "display_name": display_name}
 
     def delete_driver(self, driver_uuid: str) -> bool:
         """Delete a registered driver by UUID."""
@@ -683,4 +751,190 @@ class LeaderboardDB:
         conn.commit()
         conn.close()
         return True
+
+    # ------------------------------------------------------------------
+    # Ridge Sim Racing API Sync & Check-in Persistence
+    # ------------------------------------------------------------------
+
+    def upsert_ridge_session(
+        self,
+        session_id: str,
+        group_id: str | None = None,
+        group_name: str | None = None,
+        track: str | None = None,
+        track_layout: str | None = None,
+        status: str = "created",
+        last_error: str | None = None,
+    ) -> dict[str, object]:
+        now = time.time()
+        with self._lock:
+            conn = self._connect()
+            conn.execute(
+                """INSERT INTO ridge_sessions (session_id, group_id, group_name, track, track_layout, status, last_error, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(session_id) DO UPDATE SET
+                       group_id = COALESCE(excluded.group_id, ridge_sessions.group_id),
+                       group_name = COALESCE(excluded.group_name, ridge_sessions.group_name),
+                       track = COALESCE(excluded.track, ridge_sessions.track),
+                       track_layout = COALESCE(excluded.track_layout, ridge_sessions.track_layout),
+                       status = excluded.status,
+                       last_error = excluded.last_error,
+                       updated_at = excluded.updated_at""",
+                (session_id, group_id, group_name, track, track_layout, status, last_error, now, now),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM ridge_sessions WHERE session_id = ?", (session_id,)).fetchone()
+            conn.close()
+            return dict(row) if row else {"session_id": session_id, "status": status}
+
+    def update_ridge_session_counts(self, session_id: str, inserted_laps: int = 0, duplicate_laps: int = 0, status: str | None = None, last_error: str | None = None) -> None:
+        now = time.time()
+        with self._lock:
+            conn = self._connect()
+            if status:
+                conn.execute(
+                    """UPDATE ridge_sessions SET
+                           synced_laps = COALESCE(synced_laps, 0) + ?,
+                           duplicate_laps = COALESCE(duplicate_laps, 0) + ?,
+                           status = ?,
+                           last_error = ?,
+                           updated_at = ?
+                       WHERE session_id = ?""",
+                    (inserted_laps, duplicate_laps, status, last_error, now, session_id),
+                )
+            else:
+                conn.execute(
+                    """UPDATE ridge_sessions SET
+                           synced_laps = COALESCE(synced_laps, 0) + ?,
+                           duplicate_laps = COALESCE(duplicate_laps, 0) + ?,
+                           last_error = ?,
+                           updated_at = ?
+                       WHERE session_id = ?""",
+                    (inserted_laps, duplicate_laps, last_error, now, session_id),
+                )
+            conn.commit()
+            conn.close()
+
+    def get_ridge_sessions(self, limit: int = 25) -> list[dict[str, object]]:
+        conn = self._connect()
+        rows = conn.execute("SELECT * FROM ridge_sessions ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+    def get_ridge_session(self, session_id: str) -> dict[str, object] | None:
+        conn = self._connect()
+        row = conn.execute("SELECT * FROM ridge_sessions WHERE session_id = ?", (session_id,)).fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def upsert_ridge_checkin(
+        self,
+        session_id: str,
+        rig_id: str,
+        raw_token: str,
+        status: str = "pending",
+        expires_at: float | None = None,
+    ) -> None:
+        now = time.time()
+        with self._lock:
+            conn = self._connect()
+            conn.execute(
+                """INSERT INTO ridge_checkins (session_id, rig_id, raw_token, status, expires_at, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(session_id, rig_id) DO UPDATE SET
+                       raw_token = excluded.raw_token,
+                       status = excluded.status,
+                       expires_at = excluded.expires_at""",
+                (session_id, rig_id, raw_token, status, expires_at, now),
+            )
+            conn.commit()
+            conn.close()
+
+    def update_ridge_checkin_status(
+        self,
+        session_id: str,
+        rig_id: str,
+        status: str,
+        driver_uuid: str | None = None,
+        driver_name: str | None = None,
+        driver_email: str | None = None,
+        claimed_at: float | None = None,
+        expires_at: float | None = None,
+    ) -> None:
+        with self._lock:
+            conn = self._connect()
+            conn.execute(
+                """UPDATE ridge_checkins SET
+                       status = ?,
+                       driver_uuid = COALESCE(?, driver_uuid),
+                       driver_name = COALESCE(?, driver_name),
+                       driver_email = COALESCE(?, driver_email),
+                       claimed_at = COALESCE(?, claimed_at),
+                       expires_at = COALESCE(?, expires_at)
+                   WHERE session_id = ? AND rig_id = ?""",
+                (status, driver_uuid, driver_name, driver_email, claimed_at, expires_at, session_id, rig_id),
+            )
+            conn.commit()
+            conn.close()
+
+    def get_ridge_checkins(self, session_id: str) -> list[dict[str, object]]:
+        conn = self._connect()
+        rows = conn.execute(
+            "SELECT * FROM ridge_checkins WHERE session_id = ? ORDER BY rig_id ASC",
+            (session_id,),
+        ).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+    def get_latest_checkin_for_rig(self, rig_id: str) -> dict[str, object] | None:
+        conn = self._connect()
+        row = conn.execute(
+            "SELECT * FROM ridge_checkins WHERE rig_id = ? ORDER BY created_at DESC LIMIT 1",
+            (rig_id,),
+        ).fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def get_unsynced_laps(self, session_id: str, only_claimed_rigs: list[str] | None = None) -> list[LeaderboardEntry]:
+        """Return laps for session_id that have not yet been acknowledged by the Ridge API."""
+        conn = self._connect()
+        query = """SELECT * FROM laps
+                   WHERE session_id = ?
+                     AND (synced_to_ridge IS NULL OR synced_to_ridge = 0)
+                     AND lap_time_ms IS NOT NULL AND lap_time_ms > 0 AND lap_time_ms <= 86400000"""
+        params: list[object] = [session_id]
+        if only_claimed_rigs is not None:
+            if not only_claimed_rigs:
+                conn.close()
+                return []
+            placeholders = ",".join("?" for _ in only_claimed_rigs)
+            query += f" AND rig_id IN ({placeholders})"
+            params.extend(only_claimed_rigs)
+        query += " ORDER BY id ASC"
+        rows = conn.execute(query, tuple(params)).fetchall()
+        conn.close()
+        entries = self._rows_to_entries(rows)
+        # Ensure every entry has a source_lap_id
+        for e in entries:
+            if not e.source_lap_id:
+                sid_clean = (e.session_id or "nosess")[:24]
+                e.source_lap_id = f"lap-{e.rig_id}-{sid_clean}-L{e.lap}-{int(e.timestamp * 1000)}"[:128]
+                if e.id is not None:
+                    with self._lock:
+                        c2 = self._connect()
+                        c2.execute("UPDATE laps SET source_lap_id = ? WHERE id = ?", (e.source_lap_id, e.id))
+                        c2.commit()
+                        c2.close()
+        return entries
+
+    def mark_laps_synced(self, lap_ids: list[int]) -> None:
+        if not lap_ids:
+            return
+        with self._lock:
+            conn = self._connect()
+            placeholders = ",".join("?" for _ in lap_ids)
+            conn.execute(f"UPDATE laps SET synced_to_ridge = 1 WHERE id IN ({placeholders})", tuple(lap_ids))
+            conn.commit()
+            conn.close()
+
 

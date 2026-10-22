@@ -128,3 +128,64 @@ def notify_session_podium(
 
     send_discord_webhook(webhook_url, title, description, fields)
 
+
+def send_debug_notification(
+    settings: Any,
+    event_type: str,
+    title: str,
+    description: str,
+    telemetry_info: dict[str, Any] | None = None,
+    driver_info: dict[str, Any] | None = None,
+    session_info: dict[str, Any] | None = None,
+    extra_fields: list[dict[str, Any]] | None = None,
+) -> None:
+    """Dispatch a granular debug log embed to the Discord Debug Webhook if enabled.
+
+    event_type can be:
+      - 'race_start'
+      - 'race_stop'
+      - 'lap_complete'
+      - 'invalid_lap'
+      - 'checkin'
+      - 'api_sync'
+    """
+    debug_url = getattr(settings, "discord_debug_webhook_url", None)
+    if not debug_url or not str(debug_url).strip():
+        return
+
+    # Check event-level filter checkboxes
+    event_toggle_map = {
+        "race_start": getattr(settings, "discord_debug_race_start", True),
+        "race_stop": getattr(settings, "discord_debug_race_stop", True),
+        "lap_complete": getattr(settings, "discord_debug_lap_complete", True),
+        "invalid_lap": getattr(settings, "discord_debug_invalid_laps", False),
+        "checkin": getattr(settings, "discord_debug_checkin", True),
+        "api_sync": getattr(settings, "discord_debug_api_sync", True),
+    }
+    if not event_toggle_map.get(event_type, True):
+        return
+
+    fields: list[dict[str, Any]] = []
+
+    # Check payload field filter checkboxes
+    if driver_info and getattr(settings, "discord_debug_include_driver", True):
+        for k, v in driver_info.items():
+            if v is not None and str(v) != "":
+                fields.append({"name": k.upper(), "value": str(v), "inline": True})
+
+    if telemetry_info and getattr(settings, "discord_debug_include_telemetry", True):
+        for k, v in telemetry_info.items():
+            if v is not None and str(v) != "":
+                fields.append({"name": k.upper(), "value": str(v), "inline": True})
+
+    if session_info and getattr(settings, "discord_debug_include_session", True):
+        for k, v in session_info.items():
+            if v is not None and str(v) != "":
+                fields.append({"name": k.upper(), "value": str(v), "inline": True})
+
+    if extra_fields:
+        fields.extend(extra_fields)
+
+    send_discord_webhook(str(debug_url).strip(), title, description, fields)
+
+

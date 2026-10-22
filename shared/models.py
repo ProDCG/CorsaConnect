@@ -172,6 +172,28 @@ class GlobalSettings(BaseModel):
     discord_notify_records: bool = True
     discord_notify_podiums: bool = False
 
+    # Discord Debug Webhook & Granular Filters
+    discord_debug_webhook_url: str | None = None
+    discord_debug_channel_name: str | None = "#debug-logs"
+    discord_debug_race_start: bool = True
+    discord_debug_race_stop: bool = True
+    discord_debug_lap_complete: bool = True
+    discord_debug_invalid_laps: bool = False
+    discord_debug_checkin: bool = True
+    discord_debug_api_sync: bool = True
+    discord_debug_include_telemetry: bool = True
+    discord_debug_include_driver: bool = True
+    discord_debug_include_session: bool = True
+
+    # Ridge Sim Racing API (https://theridge.fun/racing-api/)
+    ridge_api_url: str = "https://theridge.fun/racing-api/"
+    ridge_api_key: str | None = None
+    ridge_test_mode: bool = False
+    ridge_auto_sync: bool = True
+    ridge_poll_interval_sec: int = 3
+    ridge_qr_ttl_sec: int = 600
+    ridge_show_qr_on_rigs: bool = False
+
 
 class Branding(BaseModel):
     """Facility branding assets."""
@@ -233,15 +255,18 @@ class LeaderboardEntry(BaseModel):
     driver_uuid: str | None = None
     car: str | None = None
     track: str | None = None
+    track_layout: str | None = None
     weather: str | None = None
     group_name: str | None = None
     session_type: str | None = None  # race, qualify, practice
     lap: int = 0
     lap_time_ms: int | None = None  # Per-lap time in milliseconds
     session_id: str | None = None
+    source_lap_id: str | None = None
     timestamp: float = Field(default_factory=time.time)
     notification_pending: bool = False
     is_valid: bool = True
+    synced_to_ridge: bool = False
 
 
 class Driver(BaseModel):

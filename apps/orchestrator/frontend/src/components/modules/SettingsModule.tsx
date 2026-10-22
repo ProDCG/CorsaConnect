@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Settings, Save, HardDrive, Shield, Video, Image, CheckCircle2, AlertTriangle, RefreshCw, Send, Trash2, RotateCcw } from 'lucide-react'
+import { Settings, Save, HardDrive, Shield, Video, Image, CheckCircle2, AlertTriangle, RefreshCw, Send, Trash2, RotateCcw, Globe, Key, Eye, EyeOff, QrCode } from 'lucide-react'
 import { GlobalSettings, Branding } from '../../types'
 
 export const SettingsModule: React.FC = () => {
@@ -23,6 +23,17 @@ export const SettingsModule: React.FC = () => {
     const [logoUrl, setLogoUrl] = useState('')
     const [videoUrl, setVideoUrl] = useState('')
 
+    // Ridge Sim Racing API settings
+    const [ridgeApiUrl, setRidgeApiUrl] = useState('https://theridge.fun/racing-api/')
+    const [ridgeApiKey, setRidgeApiKey] = useState('')
+    const [showApiKey, setShowApiKey] = useState(false)
+    const [ridgeTestMode, setRidgeTestMode] = useState(false)
+    const [ridgeAutoSync, setRidgeAutoSync] = useState(true)
+    const [ridgePollInterval, setRidgePollInterval] = useState(3)
+    const [ridgeQrTtl, setRidgeQrTtl] = useState(600)
+    const [ridgeShowQrOnRigs, setRidgeShowQrOnRigs] = useState(false)
+    const [isTestingRidge, setIsTestingRidge] = useState(false)
+
     const fetchData = async () => {
         setIsLoading(true)
         try {
@@ -43,6 +54,13 @@ export const SettingsModule: React.FC = () => {
                 setRaceLaps(s.race_laps || 5)
                 setRaceTime(s.race_time || 15)
                 setAllowDrs(s.allow_drs !== false)
+                setRidgeApiUrl(s.ridge_api_url || 'https://theridge.fun/racing-api/')
+                setRidgeApiKey(s.ridge_api_key || '')
+                setRidgeTestMode(Boolean(s.ridge_test_mode))
+                setRidgeAutoSync(s.ridge_auto_sync !== false)
+                setRidgePollInterval(s.ridge_poll_interval_sec || 3)
+                setRidgeQrTtl(s.ridge_qr_ttl_sec || 600)
+                setRidgeShowQrOnRigs(Boolean(s.ridge_show_qr_on_rigs))
             }
 
             if (brandRes.ok) {
@@ -77,6 +95,13 @@ export const SettingsModule: React.FC = () => {
                 race_laps: raceLaps,
                 race_time: raceTime,
                 allow_drs: allowDrs,
+                ridge_api_url: ridgeApiUrl.trim() || 'https://theridge.fun/racing-api/',
+                ridge_api_key: ridgeApiKey.trim() || null,
+                ridge_test_mode: ridgeTestMode,
+                ridge_auto_sync: ridgeAutoSync,
+                ridge_poll_interval_sec: Math.max(2, Number(ridgePollInterval) || 3),
+                ridge_qr_ttl_sec: Math.max(60, Math.min(3600, Number(ridgeQrTtl) || 600)),
+                ridge_show_qr_on_rigs: ridgeShowQrOnRigs,
             }
 
             const updatedBranding: Branding = {
@@ -349,7 +374,172 @@ export const SettingsModule: React.FC = () => {
                     </div>
                 </div>
 
-                {/* 4. Danger Zone */}
+                {/* 4. Ridge Sim Racing VPS API Integration */}
+                <div className="bg-ridge-panel/80 border border-indigo-500/20 rounded-2xl p-5 space-y-4 backdrop-blur-md lg:col-span-2">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                            <Globe className="w-4 h-4 text-indigo-400" />
+                            Ridge Sim Racing — VPS API Integration (`theridge.fun/racing-api`)
+                        </h3>
+                        <button
+                            type="button"
+                            disabled={isTestingRidge}
+                            onClick={async () => {
+                                setIsTestingRidge(true)
+                                try {
+                                    const res = await fetch('/ridge/test', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            api_url: ridgeApiUrl.trim(),
+                                            api_key: ridgeApiKey.trim() || null,
+                                        }),
+                                    })
+                                    const data = await res.json()
+                                    if (data.status === 'success') {
+                                        setStatusMsg({
+                                            type: 'success',
+                                            text: `Ridge VPS Connection Verified! Public HTTP ${data.public_endpoint?.http_status}, Auth HTTP ${data.authenticated_endpoint?.http_status || 'N/A'}.`,
+                                        })
+                                    } else {
+                                        setStatusMsg({
+                                            type: 'error',
+                                            text: `Ridge VPS Test Warning: Public=${data.public_endpoint?.http_status}, Auth=${JSON.stringify(data.authenticated_endpoint)}`,
+                                        })
+                                    }
+                                } catch (err: any) {
+                                    setStatusMsg({ type: 'error', text: `Ridge API probe error: ${err.message}` })
+                                } finally {
+                                    setIsTestingRidge(false)
+                                }
+                            }}
+                            className="px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 rounded-xl text-indigo-300 text-xs font-bold flex items-center gap-1.5 transition-all"
+                        >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isTestingRidge ? 'animate-spin' : ''}`} />
+                            Test Ridge API Connection
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-[11px] font-bold text-white/60 uppercase tracking-wider mb-1">
+                                Service Base URL
+                            </label>
+                            <input
+                                type="url"
+                                value={ridgeApiUrl}
+                                onChange={e => setRidgeApiUrl(e.target.value)}
+                                placeholder="https://theridge.fun/racing-api/"
+                                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-white/20 focus:outline-none focus:border-indigo-500 font-mono"
+                            />
+                            <p className="text-[10px] text-white/40 mt-1">
+                                Uses standalone PHP query routing (`index.php?r=api/...`).
+                            </p>
+                        </div>
+
+                        <div>
+                            <label className="block text-[11px] font-bold text-white/60 uppercase tracking-wider mb-1">
+                                Machine API Key (`X-API-Key`)
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type={showApiKey ? 'text' : 'password'}
+                                    value={ridgeApiKey}
+                                    onChange={e => setRidgeApiKey(e.target.value)}
+                                    placeholder="Enter operator API key (checkins:write,checkins:read,sessions:sync)"
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-3 pr-9 py-2 text-xs text-white placeholder-white/20 focus:outline-none focus:border-indigo-500 font-mono"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowApiKey(!showApiKey)}
+                                    className="absolute right-2.5 top-2 text-white/40 hover:text-white"
+                                >
+                                    {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                                </button>
+                            </div>
+                            <p className="text-[10px] text-white/40 mt-1">
+                                Kept strictly on the Admin PC backend; never exposed in QR URLs or logs.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label className="block text-[11px] font-bold text-white/60 uppercase tracking-wider mb-1">
+                                QR Claim Token Expiration (60–3600 sec)
+                            </label>
+                            <input
+                                type="number"
+                                min={60}
+                                max={3600}
+                                value={ridgeQrTtl}
+                                onChange={e => setRidgeQrTtl(Number(e.target.value))}
+                                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-[11px] font-bold text-white/60 uppercase tracking-wider mb-1">
+                                Check-in Poll Interval (sec)
+                            </label>
+                            <input
+                                type="number"
+                                min={2}
+                                max={30}
+                                value={ridgePollInterval}
+                                onChange={e => setRidgePollInterval(Number(e.target.value))}
+                                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                        <label className="flex items-start gap-2.5 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 cursor-pointer transition-all">
+                            <input
+                                type="checkbox"
+                                checked={ridgeTestMode}
+                                onChange={e => setRidgeTestMode(e.target.checked)}
+                                className="rounded border-white/20 text-indigo-500 focus:ring-0 mt-0.5"
+                            />
+                            <div>
+                                <span className="text-xs font-bold text-white block">Test Session Prefix (`test_`)</span>
+                                <span className="text-[10px] text-white/50">
+                                    Prefixes session IDs with `test_` so they are excluded from public leaderboards.
+                                </span>
+                            </div>
+                        </label>
+
+                        <label className="flex items-start gap-2.5 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 cursor-pointer transition-all">
+                            <input
+                                type="checkbox"
+                                checked={ridgeAutoSync}
+                                onChange={e => setRidgeAutoSync(e.target.checked)}
+                                className="rounded border-white/20 text-indigo-500 focus:ring-0 mt-0.5"
+                            />
+                            <div>
+                                <span className="text-xs font-bold text-white block">Automatic Lap Sync &amp; Finalize</span>
+                                <span className="text-[10px] text-white/50">
+                                    Automatically uploads laps for claimed rigs and finalizes when races stop.
+                                </span>
+                            </div>
+                        </label>
+
+                        <label className="flex items-start gap-2.5 p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 cursor-pointer transition-all">
+                            <input
+                                type="checkbox"
+                                checked={ridgeShowQrOnRigs}
+                                onChange={e => setRidgeShowQrOnRigs(e.target.checked)}
+                                className="rounded border-white/20 text-indigo-500 focus:ring-0 mt-0.5"
+                            />
+                            <div>
+                                <span className="text-xs font-bold text-white block">Show QR on Rigs by Default</span>
+                                <span className="text-[10px] text-white/50">
+                                    Displays check-in QR overlay on rig screens when new tokens are generated.
+                                </span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                {/* 5. Danger Zone */}
                 <div className="bg-ridge-panel/80 border border-rose-500/20 rounded-2xl p-5 space-y-4 backdrop-blur-md">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-rose-400 flex items-center gap-2">
                         <Trash2 className="w-4 h-4 text-rose-400" />
