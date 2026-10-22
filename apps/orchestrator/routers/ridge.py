@@ -123,6 +123,11 @@ def create_router(state: AppState, ridge_svc: RidgeApiService) -> APIRouter:
         finalize = payload.finalize if payload else False
         return ridge_svc.sync_session_laps(session_id=session_id, finalize=finalize)
 
+    @router.post("/ridge/sync-all")
+    async def sync_all_databases() -> dict[str, Any]:
+        """Two-way database sync: polls active check-ins, pushes unsynced local laps, and pulls remote drivers/records."""
+        return ridge_svc.sync_all_databases()
+
     @router.post("/ridge/qr/visibility")
     async def set_qr_visibility(payload: ToggleRigQrPayload) -> dict[str, Any]:
         """Explicitly show or hide QR codes on a specific rig or across all rigs."""

@@ -79,7 +79,7 @@ export const DriversModule: React.FC = () => {
 
     const fetchDrivers = async () => {
         try {
-            const res = await fetch('/drivers')
+            const res = await fetch('/api/drivers')
             if (res.ok) {
                 const data = await res.json()
                 setDrivers(data)
@@ -91,7 +91,7 @@ export const DriversModule: React.FC = () => {
 
     const fetchRidgeSessions = async () => {
         try {
-            const res = await fetch('/ridge/sessions')
+            const res = await fetch('/api/ridge/sessions')
             if (res.ok) {
                 const data = await res.json()
                 const list: RidgeSessionRecord[] = data.sessions || []
@@ -142,7 +142,7 @@ export const DriversModule: React.FC = () => {
 
         setIsBusy(true)
         try {
-            const res = await fetch('/ridge/session/start', {
+            const res = await fetch('/api/ridge/session/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -178,7 +178,7 @@ export const DriversModule: React.FC = () => {
         if (!sid) return
         setIsBusy(true)
         try {
-            const res = await fetch(`/ridge/session/${encodeURIComponent(sid)}/checkins`)
+            const res = await fetch(`/api/ridge/session/${encodeURIComponent(sid)}/checkins`)
             const data = await res.json()
             const claimedCount = (data.checkins || []).filter((c: any) => c.status === 'claimed').length
             setStatusBanner({
@@ -199,7 +199,7 @@ export const DriversModule: React.FC = () => {
         if (!sid) return
         setIsBusy(true)
         try {
-            const res = await fetch(`/ridge/session/${encodeURIComponent(sid)}/sync`, {
+            const res = await fetch(`/api/ridge/session/${encodeURIComponent(sid)}/sync`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ finalize }),
@@ -226,9 +226,32 @@ export const DriversModule: React.FC = () => {
         }
     }
 
+    const handleSyncAllDatabases = async () => {
+        setIsBusy(true)
+        try {
+            const res = await fetch('/api/ridge/sync-all', { method: 'POST' })
+            const data = await res.json()
+            setStatusBanner({
+                type: data.status === 'error' ? 'error' : 'success',
+                text: `Database Sync Complete: Polled ${data.sessions_polled || 0} session(s), pushed ${
+                    data.laps_pushed || 0
+                } local lap(s), imported ${data.remote_drivers_imported || 0} remote driver(s) & ${
+                    data.remote_laps_imported || 0
+                } remote record(s).`,
+            })
+            await fetchRidgeSessions()
+            await fetchDrivers()
+            refreshRigs()
+        } catch (e: any) {
+            setStatusBanner({ type: 'error', text: `Database sync failed: ${e.message}` })
+        } finally {
+            setIsBusy(false)
+        }
+    }
+
     const handleSetQrVisibility = async (rigId: string | null, show: boolean) => {
         try {
-            await fetch('/ridge/qr/visibility', {
+            await fetch('/api/ridge/qr/visibility', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -335,6 +358,15 @@ export const DriversModule: React.FC = () => {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                        disabled={isBusy}
+                        onClick={handleSyncAllDatabases}
+                        className="px-3.5 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 rounded-xl text-xs font-black uppercase tracking-wider text-emerald-300 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                        title="Sync local SQLite database with remote Ridge VPS database"
+                    >
+                        <UploadCloud size={15} className={isBusy ? 'animate-bounce' : ''} />
+                        Sync Local &amp; Remote DB
+                    </button>
                     <button
                         onClick={() => setShowExplorer(!showExplorer)}
                         className="px-3.5 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold uppercase tracking-wider text-white/80 flex items-center gap-1.5 transition-all"
@@ -560,7 +592,7 @@ export const DriversModule: React.FC = () => {
                                     {/* Scannable SVG QR Code */}
                                     <div className="bg-white p-2.5 rounded-xl mx-auto shadow-md">
                                         <img
-                                            src={`/ridge/qr.svg?url=${encodeURIComponent(chk.checkin_url)}`}
+                                            src={`/api/ridge/qr.svg?url=${encodeURIComponent(chk.checkin_url)}`}
                                             alt={`QR for ${chk.rig_id}`}
                                             className="w-36 h-36 object-contain"
                                         />
@@ -651,7 +683,7 @@ export const DriversModule: React.FC = () => {
                                         car: lookupCar,
                                         limit: '10',
                                     })
-                                    const res = await fetch(`/ridge/leaderboard?${params.toString()}`)
+                                    const res = await fetch(`/api/ridge/leaderboard?${params.toString()}`)
                                     setExplorerResult(await res.json())
                                 }}
                                 className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold"
@@ -673,7 +705,7 @@ export const DriversModule: React.FC = () => {
                                 <button
                                     onClick={async () => {
                                         if (!lookupDriverUuid.trim()) return
-                                        const res = await fetch(`/ridge/driver/${encodeURIComponent(lookupDriverUuid.trim())}`)
+                                        const res = await fetch(`/api/ridge/driver/${encodeURIComponent(lookupDriverUuid.trim())}`)
                                         setExplorerResult(await res.json())
                                     }}
                                     className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold"

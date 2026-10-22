@@ -15,7 +15,7 @@ export default defineConfig({
                 target: 'http://127.0.0.1:8000',
                 changeOrigin: true,
             },
-            '^/(rigs|groups|server|settings|catalogs|carpool|mappool|presets|car_presets|branding|telem_config|sync|command|leaderboard|drivers|mumble|update|cars)': {
+            '^/(rigs|groups|server|settings|catalogs|carpool|mappool|presets|car_presets|branding|telem_config|sync|command|leaderboard|drivers|mumble|update|cars|ridge|tracks)': {
                 target: 'http://127.0.0.1:8000',
                 changeOrigin: true,
             }

@@ -698,3 +698,112 @@ class RidgeApiService:
                 logger.debug("Ridge API background poll error: %s", e)
 
             await asyncio.sleep(interval)
+
+    # ------------------------------------------------------------------
+    # 5. Full Two-Way Database Sync (Local <-> Remote VPS)
+    # ------------------------------------------------------------------
+
+    def sync_all_databases(self) -> dict[str, Any]:
+        """Synchronize local SQLite and remote Ridge VPS databases:
+        1. Poll all active/recent check-in sessions and bind claimed drivers.
+        2. Push all unsynced local laps across all registered/receiving sessions to the VPS.
+        3. Pull top leaderboard records & driver profiles from the VPS into local SQLite.
+        """
+        summary: dict[str, Any] = {
+            "sessions_polled": 0,
+            "sessions_synced": 0,
+            "laps_pushed": 0,
+            "remote_drivers_imported": 0,
+            "remote_laps_imported": 0,
+            "errors": [],
+        }
+
+        has_key = bool(self._get_api_key())
+
+        # Step 1 & 2: Poll & push local sessions if API key is configured
+        if has_key:
+            sessions = self.state.leaderboard_db.get_ridge_sessions(limit=25)
+            for s in sessions:
+                sid = str(s["session_id"])
+                st = str(s.get("status") or "")
+                if st in ("created", "registered", "receiving", "error"):
+                    poll_res = self.poll_session_checkins(sid)
+                    summary["sessions_polled"] += 1
+                    if poll_res.get("status") == "error" and poll_res.get("http_status") == 404:
+                        # Session wasn't registered on VPS yet (e.g. created before API key was set)
+                        continue
+                    unsynced = self.state.leaderboard_db.get_unsynced_laps(sid)
+                    if unsynced:
+                        sync_res = self.sync_session_laps(sid, finalize=False)
+                        summary["sessions_synced"] += 1
+                        summary["laps_pushed"] += int(sync_res.get("inserted_laps", 0))
+                        if sync_res.get("errors"):
+                            summary["errors"].extend(sync_res["errors"])
+
+        # Step 3: Pull public leaderboard records & drivers from remote VPS into local DB
+        lb_res = self.fetch_remote_leaderboard(limit=100)
+        if lb_res.get("http_status") == 200 and isinstance(lb_res.get("data"), dict):
+            rows = lb_res["data"].get("leaderboard", [])
+            if isinstance(rows, list):
+                existing_raw = self.state.leaderboard_db.get_raw_laps(limit=1000)
+                existing_source_ids = {e.source_lap_id for e in existing_raw if e.source_lap_id}
+
+                for r in rows:
+                    if not isinstance(r, dict):
+                        continue
+                    d_uuid = str(r.get("driver_uuid") or "")
+                    d_name = str(r.get("display_name") or d_uuid or "Racer")
+                    track = str(r.get("track") or "")
+                    layout = str(r.get("track_layout") or "default")
+                    car = str(r.get("car") or "")
+                    lap_ms = int(r.get("fastest_lap_ms") or 0)
+                    ts = float(r.get("achieved_at") or time.time())
+
+                    if d_uuid:
+                        # Pull full driver details if possible
+                        d_stats = self.fetch_remote_driver_stats(d_uuid)
+                        d_email: str | None = None
+                        if d_stats.get("http_status") == 200 and isinstance(d_stats.get("data"), dict):
+                            drv_obj = d_stats["data"].get("driver")
+                            if isinstance(drv_obj, dict) and drv_obj.get("display_name"):
+                                d_name = str(drv_obj["display_name"])
+                        self.state.leaderboard_db.upsert_driver(
+                            display_name=d_name,
+                            email=d_email,
+                            driver_uuid=d_uuid,
+                        )
+                        summary["remote_drivers_imported"] += 1
+
+                    if track and lap_ms > 0:
+                        src_id = f"vps-{d_uuid}-{track}-{layout}-{car}-{lap_ms}"[:128]
+                        if src_id not in existing_source_ids:
+                            from shared.models import LeaderboardEntry
+
+                            entry = LeaderboardEntry(
+                                rig_id="VPS-SYNC",
+                                driver_name=d_name,
+                                driver_uuid=d_uuid or None,
+                                car=car,
+                                track=track,
+                                track_layout=layout,
+                                group_name="Ridge VPS",
+                                lap=1,
+                                lap_time_ms=lap_ms,
+                                session_id="vps_imported",
+                                source_lap_id=src_id,
+                                timestamp=ts,
+                                is_valid=True,
+                                synced_to_ridge=True,
+                            )
+                            self.state.add_leaderboard_entry(entry)
+                            self.state.upsert_session_best(entry)
+                            existing_source_ids.add(src_id)
+                            summary["remote_laps_imported"] += 1
+        else:
+            summary["errors"].append(f"Leaderboard fetch returned HTTP {lb_res.get('http_status')}")
+
+        return {
+            "status": "success" if not summary["errors"] else "partial",
+            **summary,
+        }
+

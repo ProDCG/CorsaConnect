@@ -351,12 +351,20 @@ class DesktopBlocker:
             tags="branding",
         )
 
-        # --- Bottom-left: rig identifier ---
+        # --- Bottom-left: rig identifier & driver name ---
         self.canvas.create_text(
             30, sh - 55,
             text=self.rig_id,
             font=("Arial", 18, "bold italic"),
             fill="#FFFFFF",
+            anchor="w",
+            tags="branding",
+        )
+        self.driver_badge_text = self.canvas.create_text(
+            30, sh - 85,
+            text="",
+            font=("Arial", 14, "bold"),
+            fill="#00CC66",
             anchor="w",
             tags="branding",
         )
@@ -707,12 +715,58 @@ class DesktopBlocker:
         self.root.after(0, lambda: self.canvas.itemconfig(self.status_text, text=text))
 
     def _update_qr_overlay(self) -> None:
-        """Render or hide the centered QR Check-in card on the splash canvas."""
+        """Render or hide the centered QR Check-in card and update the driver name display."""
+        # Always update the persistent driver name badge & status text when checked in
+        if hasattr(self, "driver_badge_text"):
+            if self._driver_name:
+                self.canvas.itemconfig(self.driver_badge_text, text=f"DRIVER: {self._driver_name.upper()}")
+                if self._current_status == "idle":
+                    self.update_status(f"WELCOME {self._driver_name.upper()} — READY TO RACE")
+            else:
+                self.canvas.itemconfig(self.driver_badge_text, text="")
+
         self.canvas.delete("qr_overlay")
-        if not self._show_qr or not self._qr_url or self._current_status == "racing":
+        if self._current_status == "racing":
             return
 
         cx, cy = self.sw // 2, self.sh // 2
+
+        # If the driver just checked in (or is bound), show a prominent Welcome card in the center when idle/setup
+        if self._driver_name and not self._show_qr:
+            box_w, box_h = 520, 180
+            x1, y1 = cx - box_w // 2, cy - box_h // 2
+            x2, y2 = cx + box_w // 2, cy + box_h // 2
+            self.canvas.create_rectangle(
+                x1, y1, x2, y2,
+                fill="#0d0d0d", outline="#00CC66", width=3,
+                tags="qr_overlay",
+            )
+            self.canvas.create_text(
+                cx, y1 + 45,
+                text="DRIVER CHECKED IN",
+                font=("Arial", 12, "bold"),
+                fill="#00CC66",
+                tags="qr_overlay",
+            )
+            self.canvas.create_text(
+                cx, cy + 5,
+                text=self._driver_name.upper(),
+                font=("Arial", 26, "bold italic"),
+                fill="#FFFFFF",
+                tags="qr_overlay",
+            )
+            self.canvas.create_text(
+                cx, y2 - 30,
+                text=f"Assigned to {self.rig_id} — Stand by for green light",
+                font=("Arial", 10),
+                fill="#999999",
+                tags="qr_overlay",
+            )
+            return
+
+        if not self._show_qr or not self._qr_url:
+            return
+
         box_w, box_h = 420, 480
         x1, y1 = cx - box_w // 2, cy - box_h // 2
         x2, y2 = cx + box_w // 2, cy + box_h // 2

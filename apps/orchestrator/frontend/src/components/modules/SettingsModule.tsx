@@ -387,7 +387,7 @@ export const SettingsModule: React.FC = () => {
                             onClick={async () => {
                                 setIsTestingRidge(true)
                                 try {
-                                    const res = await fetch('/ridge/test', {
+                                    const res = await fetch('/api/ridge/test', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({

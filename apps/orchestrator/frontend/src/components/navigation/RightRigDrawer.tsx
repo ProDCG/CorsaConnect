@@ -71,7 +71,7 @@ export const RightRigDrawer: React.FC = () => {
         try {
             if (!rig.checkin_url) {
                 // Generate a QR token for this rig if it doesn't have one yet
-                await fetch('/ridge/session/start', {
+                await fetch('/api/ridge/session/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -80,7 +80,7 @@ export const RightRigDrawer: React.FC = () => {
                     }),
                 })
             } else {
-                await fetch('/ridge/qr/visibility', {
+                await fetch('/api/ridge/qr/visibility', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
