@@ -829,6 +829,51 @@ class LeaderboardDB:
         conn.close()
         return dict(row) if row else None
 
+    def close_stale_ridge_sessions(self, before_ts: float | None = None) -> int:
+        """Mark any unfinalized sessions in ridge_sessions as 'closed' so they are not polled after a reboot."""
+        now = time.time()
+        cutoff = before_ts if before_ts is not None else now + 1.0
+        with self._lock:
+            conn = self._connect()
+            cur = conn.execute(
+                """UPDATE ridge_sessions
+                   SET status = 'closed', updated_at = ?
+                   WHERE status IN ('created', 'registered', 'receiving', 'local_only', 'error')
+                     AND created_at <= ?""",
+                (now, cutoff),
+            )
+            count = cur.rowcount
+            conn.commit()
+            conn.close()
+            return count
+
+    def mark_rig_checkins_unbound(
+        self,
+        rig_id: str | None = None,
+        driver_uuid: str | None = None,
+        session_id: str | None = None,
+    ) -> None:
+        """Persistently mark check-in rows as 'unbound' so background polling never re-binds or resurrects them."""
+        with self._lock:
+            conn = self._connect()
+            if rig_id and session_id:
+                conn.execute(
+                    "UPDATE ridge_checkins SET status = 'unbound' WHERE rig_id = ? AND session_id = ?",
+                    (rig_id, session_id),
+                )
+            elif rig_id:
+                conn.execute(
+                    "UPDATE ridge_checkins SET status = 'unbound' WHERE rig_id = ?",
+                    (rig_id,),
+                )
+            if driver_uuid:
+                conn.execute(
+                    "UPDATE ridge_checkins SET status = 'unbound' WHERE driver_uuid = ?",
+                    (driver_uuid,),
+                )
+            conn.commit()
+            conn.close()
+
     def upsert_ridge_checkin(
         self,
         session_id: str,

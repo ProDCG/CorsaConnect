@@ -74,9 +74,18 @@ class RidgeApiService:
         self.state = state
         self._poll_task: asyncio.Task[None] | None = None
         self._running = False
+        self.boot_time: float = time.time()
 
     def start(self) -> None:
-        """Start the background check-in polling loop."""
+        """Start the background check-in polling loop and close any leftover sessions from prior boots."""
+        self.boot_time = time.time()
+        try:
+            closed_count = self.state.leaderboard_db.close_stale_ridge_sessions(before_ts=self.boot_time)
+            if closed_count > 0:
+                logger.info("Closed %d leftover Ridge check-in session(s) from prior run on startup", closed_count)
+        except Exception as e:
+            logger.warning("Could not close stale Ridge sessions on startup: %s", e)
+
         if self._poll_task is None or self._poll_task.done():
             self._running = True
             self._poll_task = asyncio.create_task(self._poll_loop())
@@ -389,6 +398,25 @@ class RidgeApiService:
             prev = local_by_rig.get(rig_id)
             prev_status = prev.get("status") if prev else None
 
+            # Update in-memory rig state
+            rig_obj = self.state.upsert_rig(rig_id, {})
+            is_manually_unbound = bool(rig_obj.get("driver_unbound", False)) or (prev_status == "unbound")
+
+            # If this rig check-in was explicitly unbound or the driver was deleted by the operator,
+            # keep it as 'unbound' and do not resurrect the deleted driver or re-bind the rig.
+            if is_manually_unbound and c_status == "claimed":
+                self.state.leaderboard_db.update_ridge_checkin_status(
+                    session_id=session_id,
+                    rig_id=rig_id,
+                    status="unbound",
+                    driver_uuid=driver_uuid,
+                    driver_name=driver_name,
+                    driver_email=driver_email,
+                    claimed_at=claimed_at,
+                    expires_at=expires_at,
+                )
+                continue
+
             self.state.leaderboard_db.update_ridge_checkin_status(
                 session_id=session_id,
                 rig_id=rig_id,
@@ -400,10 +428,6 @@ class RidgeApiService:
                 expires_at=expires_at,
             )
 
-            # Update in-memory rig state
-            rig_obj = self.state.upsert_rig(rig_id, {})
-            is_manually_unbound = bool(rig_obj.get("driver_unbound", False))
-
             if c_status == "claimed" and (driver_uuid or driver_name):
                 display = driver_name or driver_uuid or "Racer"
 
@@ -414,17 +438,14 @@ class RidgeApiService:
                     driver_uuid=driver_uuid,
                 )
 
-                # Only bind to the rig if the operator hasn't explicitly unbound this rig
-                # (or if this is a brand-new claim transition from pending -> claimed)
-                if not is_manually_unbound or prev_status != "claimed":
-                    self.state.update_rig_field(rig_id, "driver_unbound", False)
-                    self.state.update_rig_field(rig_id, "checkin_status", c_status)
-                    self.state.update_rig_field(rig_id, "driver_uuid", driver_uuid)
-                    self.state.update_rig_field(rig_id, "driver_name", display)
-                    if driver_email:
-                        self.state.update_rig_field(rig_id, "driver_email", driver_email)
-                    # Hide QR automatically on this rig once claimed!
-                    self.state.update_rig_field(rig_id, "show_qr", False)
+                self.state.update_rig_field(rig_id, "driver_unbound", False)
+                self.state.update_rig_field(rig_id, "checkin_status", c_status)
+                self.state.update_rig_field(rig_id, "driver_uuid", driver_uuid)
+                self.state.update_rig_field(rig_id, "driver_name", display)
+                if driver_email:
+                    self.state.update_rig_field(rig_id, "driver_email", driver_email)
+                # Hide QR automatically on this rig once claimed!
+                self.state.update_rig_field(rig_id, "show_qr", False)
 
                 if prev_status != "claimed":
                     newly_claimed.append({
@@ -722,8 +743,12 @@ class RidgeApiService:
                     for s in sessions:
                         st = str(s.get("status") or "")
                         created_at = float(s.get("created_at") or 0)
-                        # Poll sessions created in the last 2 hours that are not finalized
-                        if st in ("created", "registered", "receiving", "error") and (now - created_at) < 7200:
+                        # Only auto-poll sessions created during this orchestrator run that are still active
+                        if (
+                            st in ("created", "registered", "receiving")
+                            and created_at >= self.boot_time
+                            and (now - created_at) < 7200
+                        ):
                             sid = str(s["session_id"])
                             await asyncio.to_thread(self.poll_session_checkins, sid)
             except asyncio.CancelledError:
@@ -755,18 +780,20 @@ class RidgeApiService:
         try:
             has_key = bool(self._get_api_key())
 
-            # Step 1 & 2: Poll & push local sessions if API key is configured
+            # Step 1 & 2: Poll active sessions from this boot & push unsynced local laps across sessions
             if has_key:
                 sessions = self.state.leaderboard_db.get_ridge_sessions(limit=25)
                 for s in sessions:
                     sid = str(s["session_id"])
                     st = str(s.get("status") or "")
-                    if st in ("created", "registered", "receiving", "error"):
+                    created_at = float(s.get("created_at") or 0)
+                    if st in ("created", "registered", "receiving", "closed", "error"):
                         try:
-                            poll_res = self.poll_session_checkins(sid)
-                            summary["sessions_polled"] += 1
-                            if poll_res.get("status") == "error" and poll_res.get("http_status") == 404:
-                                continue
+                            if st in ("created", "registered", "receiving") and created_at >= self.boot_time:
+                                poll_res = self.poll_session_checkins(sid)
+                                summary["sessions_polled"] += 1
+                                if poll_res.get("status") == "error" and poll_res.get("http_status") == 404:
+                                    continue
                             unsynced = self.state.leaderboard_db.get_unsynced_laps(sid)
                             if unsynced:
                                 sync_res = self.sync_session_laps(sid, finalize=False)

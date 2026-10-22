@@ -78,12 +78,16 @@ def create_router(state: AppState, ridge_svc: RidgeApiService) -> APIRouter:
         has_key = bool(getattr(state.settings, "ridge_api_key", None))
         now = time.time()
 
-        # Proactively poll the latest active session so dashboard refreshes always show live check-ins
+        # Proactively poll the latest active session created since boot so dashboard refreshes show live check-ins
         if has_key and sessions:
             for s in sessions[:2]:
                 st = str(s.get("status") or "")
                 created_at = float(s.get("created_at") or 0)
-                if st in ("created", "registered", "receiving", "error") and (now - created_at) < 7200:
+                if (
+                    st in ("created", "registered", "receiving")
+                    and created_at >= getattr(ridge_svc, "boot_time", 0)
+                    and (now - created_at) < 7200
+                ):
                     try:
                         await asyncio.to_thread(ridge_svc.poll_session_checkins, str(s["session_id"]))
                     except Exception:

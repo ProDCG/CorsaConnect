@@ -412,7 +412,8 @@ def create_router(state: AppState) -> APIRouter:
         clean_name = update.driver_name.strip() if update.driver_name else ""
         rig = state.get_rig(rig_id)
         if not clean_name:
-            # Explicit unbind from admin UI: clear driver fields and prevent old check-in from re-binding
+            # Explicit unbind from admin UI: clear driver fields and persistently mark check-ins as unbound
+            state.leaderboard_db.mark_rig_checkins_unbound(rig_id=rig_id)
             if not rig:
                 state.upsert_rig(
                     rig_id,

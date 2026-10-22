@@ -51,8 +51,27 @@ def create_router(state: AppState) -> APIRouter:
 
     @router.delete("/drivers/{driver_uuid}")
     async def delete_driver(driver_uuid: str) -> dict[str, str]:
-        """Delete a driver by UUID."""
+        """Delete a driver by UUID, unbind them from any active rigs, and mark their check-ins unbound."""
+        all_drivers = state.leaderboard_db.get_drivers()
+        target_driver = next((d for d in all_drivers if d.get("driver_uuid") == driver_uuid), None)
+        target_name = str(target_driver.get("display_name") or "") if target_driver else ""
+
         state.leaderboard_db.delete_driver(driver_uuid)
+        state.leaderboard_db.mark_rig_checkins_unbound(driver_uuid=driver_uuid)
+
+        # Also unbind from any rig currently holding this driver
+        for r in state.get_rigs():
+            rid = str(r.get("rig_id") or "")
+            if not rid:
+                continue
+            if r.get("driver_uuid") == driver_uuid or (target_name and r.get("driver_name") == target_name):
+                state.update_rig_field(rid, "driver_name", None)
+                state.update_rig_field(rid, "driver_email", None)
+                state.update_rig_field(rid, "driver_uuid", None)
+                state.update_rig_field(rid, "checkin_status", None)
+                state.update_rig_field(rid, "driver_unbound", True)
+                state.leaderboard_db.mark_rig_checkins_unbound(rig_id=rid)
+
         return {"status": "success"}
 
     @router.post("/drivers/assign")

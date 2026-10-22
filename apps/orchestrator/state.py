@@ -590,16 +590,38 @@ class AppState:
                             sdata["finished_at"] = now
                             finished_sids.append(sid)
                             logger.info("Finished race session for rigs %s: %s", rig_ids, sid)
+                for rid in rig_ids:
+                    r_obj = self._rigs.get(rid)
+                    if r_obj and r_obj.get("current_session_id"):
+                        csid = str(r_obj["current_session_id"])
+                        if csid not in finished_sids:
+                            finished_sids.append(csid)
+                        r_obj["current_session_id"] = None
             else:
                 for sid, sdata in self._sessions.items():
                     if sdata.get("status") == "racing":
                         sdata["status"] = "finished"
                         sdata["finished_at"] = now
                         finished_sids.append(sid)
+                for r_obj in self._rigs.values():
+                    if r_obj.get("current_session_id"):
+                        csid = str(r_obj["current_session_id"])
+                        if csid not in finished_sids:
+                            finished_sids.append(csid)
+                        r_obj["current_session_id"] = None
                 if self._active_session:
                     self._active_session["status"] = "finished"
                     self._active_session["finished_at"] = now
                 logger.info("Finished all active race sessions: %s", finished_sids)
+
+        # Also mark finished sessions as closed/completed in ridge_sessions so background check-in polling stops
+        for fsid in finished_sids:
+            try:
+                s_row = self._leaderboard_db.get_ridge_session(fsid)
+                if s_row and s_row.get("status") in ("created", "registered", "receiving", "local_only"):
+                    self._leaderboard_db.update_ridge_session_counts(fsid, status="completed")
+            except Exception:
+                pass
         return finished_sids
 
     def clear_active_session(self, session_id: str | None = None) -> None:
